@@ -3,8 +3,9 @@ name: Setup app
 # Builds APL Launcher Setup.exe and the launcher package on every push; a v* tag also publishes
 # both in a GitHub Release.
 #  - APL-Launcher-Setup.exe: the Windows installer.
-#  - apl-launcher-vX.Y.Z.wgt: the launcher alone, signed with the Tizen SDK's default certificate,
-#    for Apps2Samsung, which re-signs it for each screen (packaging/apps2samsung/).
+#  - apl-launcher-vX.Y.Z.wgt: the launcher alone; apl-launcher-full-vX.Y.Z.wgt: with APL Overlay, for
+#    Apps2Samsung (packaging/apps2samsung/). Signed with the Tizen SDK's default certificate,
+#    re-signed for each screen.
 on:
   push:
     branches: [main]
@@ -72,8 +73,28 @@ jobs:
           chmod +x "$TIZEN_SDK"/tools/tizen-core/{tz,tgn,ninja,web-privilege-checker}
           "$TIZEN_SDK/tools/tizen-core/tz" --version
 
-      - name: Build the package
-        run: bash tools/make-package.sh dist
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # APL Overlay targets net6.0-tizen9.0, which needs Samsung's Tizen workload.
+      - name: Install the Tizen .NET workload
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/workload-install.sh" \
+            https://raw.githubusercontent.com/Samsung/Tizen.NET/main/workload/scripts/workload-install.sh
+          sudo bash "$RUNNER_TEMP/workload-install.sh" -d "$DOTNET_ROOT"
+          dotnet workload list
+
+      - name: Build APL Overlay
+        run: |
+          mkdir -p dist
+          bash tools/make-overlay.sh dist/APLOverlay.tpk
+
+      # The launcher alone (as APL Launcher Setup installs it), then the full package for Apps2Samsung.
+      - name: Build the packages
+        run: |
+          bash tools/make-package.sh dist
+          bash tools/make-package.sh --overlay dist/APLOverlay.tpk dist
 
       - uses: actions/upload-artifact@v4
         with:
@@ -96,5 +117,6 @@ jobs:
           files: |
             dist/APL-Launcher-Setup.exe
             dist/apl-launcher-v*.wgt
+            dist/apl-launcher-full-v*.wgt
             dist/SHA256SUMS-wgt.txt
           generate_release_notes: true

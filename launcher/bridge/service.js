@@ -37,7 +37,8 @@ var APP_ID = "APLauncher.Home", REPLY_PORT = "APL_BRIDGE_REPLY";
 var HOSTS = ["::ffff:127.0.0.1", "127.0.0.1"].concat(lanAddresses()), VETRO_PORT = 8099, hostIndex = 0;
 /* req.setTimeout never fires on these screens: own timers, one to connect, one for the answer. */
 var CONNECT_MS = 5000;
-var ALLOWED = /^\/(status|screen|tv-settings|tv-menu|exec|components\/action|control|apps)(\/|\?|$)/;
+// remap: the launcher repairs the Home rule without APL Overlay (overlay.js); quick: Alexa's microphone (services.js)
+var ALLOWED = /^\/(status|screen|tv-settings|tv-menu|exec|components\/action|control|apps|remap|quick)(\/|\?|$)/;
 var IDLE_MS = 15 * 60 * 1000;
 var CHUNK = 4000;                       // characters per message (at most 12 KB once encoded)
 var BOOT_WINDOW_S = 240, LAUNCH_TRIES = 5;

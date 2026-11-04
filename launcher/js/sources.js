@@ -35,7 +35,47 @@
         return e;
     }
 
-    /* The screen's inputs: the ones Tizen announces, otherwise the Smart Monitor M8's. */
+    /* The screen's HDMI ports. Tizen 9 no longer lists the inputs (tvwindow.getAvailableSources is
+       gone): they are read from the screen through Vetro. memory/sysman/hdmiN is 2 for a port the screen
+       doesn't have, and db/Canalysis-service/hdmiN gives the device Samsung recognized on it. Kept for
+       the next time; before the first reading, a guess from the model. */
+    var PORTS_KEY = "sourcePorts", PIN_KEY = "pinnedSources";
+    // Smart Monitors M7, M8, M9: one HDMI port and a USB-C input
+    function isMonitor() { return /^LS\d\d[A-Z]M[789]/i.test(String(sys.product().model || "")); }
+    function guessPorts() {
+        return isMonitor() ? [{ type: "HDMI", number: 1 }, { type: "USBC", number: 1 }]
+                           : [1, 2, 3, 4].map(function (n) { return { type: "HDMI", number: n }; });
+    }
+    function readPorts() {
+        if (sys.PREVIEW) return Promise.resolve(null);
+        var cmd = [1, 2, 3, 4].map(function (n) {
+            return "vconftool get memory/sysman/hdmi" + n + "; vconftool get db/Canalysis-service/hdmi" + n + "/manufacturer_name; " +
+                   "vconftool get db/Canalysis-service/hdmi" + n + "/model_name";
+        }).join("; ");
+        return sys.exec(cmd + " 2>/dev/null; true").then(function (r) {
+            var out = String((r && r.output) || ""), ports = [];
+            function text(key) { return ((new RegExp(key + ", value = ([^\\n]*) \\(String\\)").exec(out) || [])[1] || "").trim(); }
+            for (var n = 1; n <= 4; n++) {
+                var state = (new RegExp("memory/sysman/hdmi" + n + ", value = (\\d+)").exec(out) || [])[1];
+                if (state === undefined || state === "2") continue;
+                var hdmi = "db/Canalysis-service/hdmi" + n;
+                ports.push({ type: "HDMI", number: n, label: (text(hdmi + "/manufacturer_name") + " " + text(hdmi + "/model_name")).trim() });
+            }
+            if (!ports.length) return null;
+            if (isMonitor()) ports.push({ type: "USBC", number: 1 });
+            return ports;
+        }, function () { return null; });
+    }
+    /* Reads the ports again; resolves true when they changed. */
+    function refreshPorts() {
+        return readPorts().then(function (ports) {
+            if (!ports || JSON.stringify(ports) === JSON.stringify(sys.pref(PORTS_KEY))) return false;
+            sys.setPref(PORTS_KEY, ports);
+            return true;
+        });
+    }
+
+    /* The screen's inputs: the ones Tizen announces (before Tizen 9), otherwise the HDMI ports read above. */
     function inputs() {
         var list = [];
         try {
@@ -45,7 +85,7 @@
                     .map(function (s) { return { type: s.type, number: s.number || 1, label: s.name || s.label || "" }; });
             }
         } catch (e) {}
-        if (!list.length) list = [{ type: "HDMI", number: 1 }, { type: "USBC", number: 1 }];
+        if (!list.length) list = sys.pref(PORTS_KEY) || guessPorts();
         var hdmiCount = list.filter(function (s) { return s.type === "HDMI"; }).length;
         var chosen = sys.pref("sourceDevices") || {};
         return list.map(function (s) {
@@ -125,27 +165,50 @@
     function render(focus) {
         cards = inputs().concat(extras());
         titleEl.textContent = "Sources";
-        hintEl.textContent = APL.t("OK: switch to the input · Hold OK: choose the connected device · Back: Home");
+        hintEl.textContent = APL.t("OK: switch to the input · Hold OK: choose the device, or add it to the Home Screen · Back: Home");
         fill(cards, focus);
     }
 
-    /* Choose the device connected to an input (Switch 2, Steam Deck, PS5…) */
+    /* Choose the device connected to an input (Switch 2, Steam Deck, PS5…), or pin the input to the Home Screen */
+    function pinned() { return sys.pref(PIN_KEY) || []; }
     function pick(c) {
         picking = c;
         titleEl.textContent = APL.t("What's connected to {port}?", { port: c.port });
         hintEl.textContent = APL.t("OK to choose · Back to cancel");
+        var onHome = pinned().indexOf(c.id) !== -1;
         cards = DEVICES.map(function (d) { return { device: d, name: APL.t(d.name), sub: "", key: d.key }; })
-            .concat([{ device: null, icon: c.icon, name: APL.t("Nothing Specific"), sub: APL.t("Show “{port}”", { port: c.port }), key: "none" }]);
+            .concat([{ device: null, icon: c.icon, name: APL.t("Nothing Specific"), sub: APL.t("Show “{port}”", { port: c.port }), key: "none" },
+                     { device: null, icon: onHome ? "minus" : "plus", name: onHome ? APL.t("Remove from Home Screen") : APL.t("Add to Home Screen"),
+                       sub: c.name, key: "pin" }]);
         var cur = (sys.pref("sourceDevices") || {})[c.id], at = 0;
         cards.forEach(function (x, i) { if (x.key === cur) at = i; });
         fill(cards, at);
     }
+    function togglePin(c) {
+        var list = pinned().filter(function (id) { return id !== c.id; }), adding = list.length === pinned().length;
+        if (adding) list.push(c.id);
+        sys.setPref(PIN_KEY, list);
+        // Removed, then added again later: shown again even if it had been hidden
+        sys.setPref("hiddenApps", sys.pref("hiddenApps").filter(function (id) { return id !== "apl.source." + c.id; }));
+        if (APL.refreshHome) APL.refreshHome();
+        APL.toast(adding ? APL.t("{name} is on the Home Screen: hold OK on it to move it.", { name: c.name })
+                         : APL.t("{name} is no longer on the Home Screen.", { name: c.name }), true);
+    }
     function choose(i) {
+        if (cards[i] && cards[i].key === "pin") {
+            var input = picking;
+            picking = null;
+            togglePin(input);
+            render();
+            cards.forEach(function (x, k) { if (x.id === input.id) nav.focus(k); });
+            return;
+        }
         var map = {}, prev = sys.pref("sourceDevices") || {};
         Object.keys(prev).forEach(function (k) { map[k] = prev[k]; });
         map[picking.id] = cards[i].key;
         sys.setPref("sourceDevices", map);
         var id = picking.id;
+        if (pinned().indexOf(id) !== -1 && APL.refreshHome) APL.refreshHome();     // its tile takes the device's logo
         picking = null;
         render();
         cards.forEach(function (x, k) { if (x.id === id) nav.focus(k); });
@@ -159,7 +222,28 @@
         root.classList.add("is-open");
         APL.pushNav(nav);
         isOpen = true;
+        refreshPorts().then(function (changed) {
+            if (changed && isOpen && !picking) render(nav.index);
+            if (changed && pinned().length && APL.refreshHome) APL.refreshHome();
+        });
     }
+
+    /* Inputs pinned to the Home Screen (hold OK › Add to Home Screen): tiles like the apps. */
+    function homeTiles() {
+        var ids = pinned();
+        if (!ids.length) return [];
+        return inputs().filter(function (c) { return ids.indexOf(c.id) !== -1; }).map(function (c) {
+            return { id: "apl.source." + c.id, name: c.name, virtual: true, accent: "#2c5cc5", eyebrow: "SOURCE",
+                     tile: c.device ? asset(c.device.tile) : null,
+                     tileHtml: c.device ? null : '<div class="vtile vtile--sources">' + APL.icon(c.icon, 92, 1.6) + '</div>',
+                     shelfHtml: '<div class="brandcard__glyph vtile--sources">' + APL.icon(c.icon, 180, 1.3) + '</div>',
+                     run: function () { switchTo(c); } };
+        });
+    }
+    // Once after start-up: the ports and the devices Samsung recognized may have changed since last time
+    setTimeout(function () {
+        refreshPorts().then(function (changed) { if (changed && pinned().length && APL.refreshHome) APL.refreshHome(); });
+    }, 20000);
 
     function close() {
         if (!isOpen) return;
@@ -169,5 +253,5 @@
         isOpen = false;
     }
 
-    APL.sources = { open: open, close: close, isOpen: function () { return isOpen; } };
+    APL.sources = { open: open, close: close, isOpen: function () { return isOpen; }, homeTiles: homeTiles };
 })(window);

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- APLauncher.Bridge in the hybrid package: the launcher's relay to Vetro, in .NET. The web
+       service (launcher/bridge/service.js) never runs inside a hybrid package on the screen, so
+       tools/make-package.sh drops it from config.xml and ships this one under the same id. Built
+       into the Overlay's .tpk through the ProjectReference in ../APLOverlay.csproj; the app id is
+       the package id plus this assembly name. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0-tizen9.0</TargetFramework>
+    <AssemblyName>Bridge</AssemblyName>
+    <RootNamespace>APL.Bridge</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <DebugType>None</DebugType>
+    <TizenCreateTpkOnBuild>false</TizenCreateTpkOnBuild>
+  </PropertyGroup>
+
+</Project>

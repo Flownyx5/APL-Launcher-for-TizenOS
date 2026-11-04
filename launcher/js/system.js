@@ -43,6 +43,8 @@
         hiddenApps: [],
         appOrder: [],
         sourceDevices: {},          // device chosen for each input (Sources screen)
+        sourcePorts: null,          // the screen's HDMI ports, read through Vetro (sources.js)
+        pinnedSources: [],          // inputs shown on the Home Screen as tiles (sources.js)
         autoUpdate: true,           // launcher updates from GitHub, on their own
         autoArt: true,              // logos, backgrounds and content found automatically (App Store, TMDB)
         shelfArt: "logo",           // Top Shelf of apps without artwork: "logo" | "colors" | "wallpaper" (genart.js)

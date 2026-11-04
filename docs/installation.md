@@ -34,13 +34,13 @@ Your keys and websites stay on your PC (`%APPDATA%\APL-Launcher\keys.local.js`) 
 
 ### Without a Windows PC: Apps2Samsung
 
-Every release also has the launcher alone as `apl-launcher-vX.Y.Z.wgt`, for [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung). It is signed with the Tizen SDK's default certificate, and Apps2Samsung re-signs it for your screen. Vetro is still required.
+Every release also has the whole package as `apl-launcher-full-vX.Y.Z.wgt`, for [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung): the launcher, APL Overlay, the bridge to Vetro and the start-up service, in one hybrid package. It is signed with the Tizen SDK's default certificate, and Apps2Samsung re-signs it for your screen. Vetro is still required.
 
-1. Download `apl-launcher-vX.Y.Z.wgt` from the [latest release](https://github.com/Knikt/APL-Launcher-for-TizenOS/releases/latest) and install it in Apps2Samsung as a custom `.wgt` (or send it to TV-Store at `http://<screen-ip>:8077/upload`). Apps2Samsung asks for the optional API keys below and writes them into the package.
+1. Install `apl-launcher-full-vX.Y.Z.wgt` from the [latest release](https://github.com/Knikt/APL-Launcher-for-TizenOS/releases/latest) in Apps2Samsung as a custom `.wgt` (or send it to TV-Store at `http://<screen-ip>:8077/upload`). Apps2Samsung asks for the optional API keys below and writes them into the package.
 2. If the launcher is already installed with another certificate, uninstall it first: the screen refuses a package signed with a different certificate.
-3. Do [3. Replace Samsung's home screen](#3-replace-samsungs-home-screen) by hand: in Vetro's **Remapper**, Home → **APL Launcher** (`APLauncher.Home`), and **Remote interception** on. Skip step 5 there.
+3. In Vetro's **Remapper**, Home (and ⏯) → **APL Overlay** (`APLauncher.Overlay`), and **Remote interception** on. Vetro's app list hides apps without an icon, so APL Overlay is not in it: on the Remapper page, add it from the browser's console with `document.getElementById('targetApp').add(new Option('APL Overlay', 'APLauncher.Overlay'))`, then pick it.
 
-This package has no APL Overlay (a separate native package that only APL Launcher Setup installs): Home opens the launcher, but there is no app switcher on Home twice, no Control Center over videos (hold Home or ⏯), no Alexa glow and no closing of unused apps. No personal websites, Memoji or SF Pro fonts either. Automatic updates work the same way.
+After a full restart, the screen comes back on its last input or on Smart Hub; the start-up service puts the launcher on screen about 80 s after power-on. No personal websites, Memoji or SF Pro fonts in this package. Automatic updates work the same way. (`apl-launcher-vX.Y.Z.wgt`, next to it, is the launcher alone, without the overlay.)
 
 ### Optional API keys
 

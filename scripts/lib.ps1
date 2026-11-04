@@ -160,6 +160,34 @@ function Invoke-VetroExec {
     return [string]$r.output
 }
 
+# Expiry of the certificates a .wgt is signed with (the first, signer's, certificate of author-signature.xml
+# and signature1.xml): the earliest date, or $null if the package can't be read.
+function Get-WgtCertExpiry {
+    param([string]$Wgt)
+    if (-not (Test-Path -LiteralPath $Wgt)) { return $null }
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $zip = [IO.Compression.ZipFile]::OpenRead($Wgt)
+        try {
+            $dates = @()
+            foreach ($name in @('author-signature.xml', 'signature1.xml')) {
+                $entry = $zip.GetEntry($name)
+                if (-not $entry) { continue }
+                $reader = New-Object IO.StreamReader($entry.Open())
+                $xml = $reader.ReadToEnd()
+                $reader.Close()
+                $m = [regex]::Match($xml, '<X509Certificate>\s*([A-Za-z0-9+/=\s]+?)\s*</X509Certificate>')
+                if ($m.Success) {
+                    $bytes = [Convert]::FromBase64String(($m.Groups[1].Value -replace '\s', ''))
+                    $dates += (New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(, $bytes)).NotAfter
+                }
+            }
+            if ($dates.Count) { return ($dates | Sort-Object | Select-Object -First 1) }
+        } finally { $zip.Dispose() }
+    } catch {}
+    return $null
+}
+
 function Install-ViaVetro {
     param([string]$Ip, [string]$Wgt, [string]$AppId = "APLauncher.Home", [string]$Name = "APL Launcher", [switch]$NoLaunch)
     $base = "http://$Ip`:8099"

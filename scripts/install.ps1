@@ -350,15 +350,22 @@ if ($valid.Count) {
     } else {
         Write-Host (Tr "        (This certificate could not be registered in Tizen.)" "        (Ce certificat n'a pas pu être enregistré dans Tizen.)") -ForegroundColor DarkYellow
     }
-} else {
-    Fail (Tr ("no valid Samsung certificate on this PC: the TizenTube one has expired.`n" +
-              "  Create one with Tizen Studio's Certificate Manager (Samsung certificate, with your Samsung account) or Apps2Samsung, then try again.") `
-             ("aucun certificat Samsung valable sur ce PC : celui de TizenTube a expiré.`n" +
-              "  Crée-en un avec le Certificate Manager de Tizen Studio (certificat Samsung, avec ton compte Samsung) ou Apps2Samsung, puis réessaie."))
 }
 
-# 2) Otherwise: an existing Tizen Studio profile (e.g. "tizentube").
+# 2) Otherwise: a Tizen Studio signing profile (made with its Certificate Manager, or the one used for
+#    TizenTube). Its passwords are encrypted, so its expiry date is only read once the package is signed.
 if (-not $signProfile) { $signProfile = Find-SigningProfile }
+if (-not $signProfile) {
+    $newest = $certs | Where-Object { $_.Expires } | Sort-Object Expires -Descending | Select-Object -First 1
+    $found = if ($newest) {
+        $d = $newest.Expires.ToString((Tr 'yyyy-MM-dd' 'dd/MM/yyyy'))
+        Tr "the newest one found expired on $d" "le plus récent trouvé a expiré le $d"
+    } else { Tr "none was found" "aucun n'a été trouvé" }
+    Fail (Tr ("no valid Samsung certificate on this PC ($found).`n" +
+              "  Create one with Apps2Samsung, or with Tizen Studio's Certificate Manager (Samsung certificate for this screen, with your Samsung account), then try again.") `
+             ("aucun certificat Samsung valable sur ce PC ($found).`n" +
+              "  Crée-en un avec Apps2Samsung, ou avec le Certificate Manager de Tizen Studio (certificat Samsung pour cet écran, avec ton compte Samsung), puis réessaie."))
+}
 
 # The profile may come from ANOTHER Tizen Studio installation (the one used
 # for TizenTube). We copy it into the profiles file of the Tizen Studio
@@ -418,9 +425,19 @@ try {
     else { & "$PSScriptRoot\03-build-launcher.ps1" -ProfileName $signProfile -TizenCli $tizen }
 } catch { Fail ((Tr "the build failed: " "la compilation a échoué : ") + $_.Exception.Message) }
 
+# An expired certificate signs without a word, then the screen refuses the package: say it here.
+$wgt = Join-Path $Root "dist\APL-Launcher.wgt"
+$certEnd = Get-WgtCertExpiry $wgt
+if ($certEnd -and $certEnd -lt (Get-Date)) {
+    $d = $certEnd.ToString((Tr 'yyyy-MM-dd' 'dd/MM/yyyy'))
+    Fail (Tr ("the Samsung certificate of profile '$signProfile' expired on $d.`n" +
+              "  Create a new one with Apps2Samsung, or with Tizen Studio's Certificate Manager (Samsung certificate for this screen), then try again.") `
+             ("le certificat Samsung du profil « $signProfile » a expiré le $d.`n" +
+              "  Crée-en un nouveau avec Apps2Samsung, ou avec le Certificate Manager de Tizen Studio (certificat Samsung pour cet écran), puis réessaie."))
+}
+
 # ---------- 5. installation ----------
 Step 5 (Tr "Installing the launcher on the screen $TvIp…" "Installation du launcher sur l'écran $TvIp…")
-$wgt = Join-Path $Root "dist\APL-Launcher.wgt"
 if (Test-Vetro $TvIp) {
     Write-Host (Tr "        Vetro is running on the screen: installing through Vetro (nothing to change on the screen)." "        Vetro est actif sur l'écran : installation par Vetro (rien à changer sur l'écran).")
     try { Install-ViaVetro -Ip $TvIp -Wgt $wgt }

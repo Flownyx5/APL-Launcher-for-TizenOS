@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The manifest of APL Overlay in the hybrid .wgt (tools/make-overlay.sh puts it in place of
+     overlay/tizen-manifest.xml, which APL Launcher Setup keeps using for its separate .tpk): the
+     overlay and two services in the launcher's own package, APLauncher. -->
+<manifest xmlns="http://tizen.org/ns/packages" api-version="9.0" package="APLauncher" version="1.0.0">
+  <profile name="tv" />
+  <ui-application appid="APLauncher.Overlay"
+                  exec="APLOverlay.dll"
+                  type="dotnet"
+                  multiple="false"
+                  taskmanage="false"
+                  nodisplay="true"
+                  launch_mode="single"
+                  api-version="9.0">
+    <label>APL Overlay</label>
+    <icon>APLOverlay.png</icon>
+    <metadata key="http://tizen.org/metadata/prefer_dotnet_aot" value="true" />
+    <splash-screens />
+  </ui-application>
+  <!-- After a full start-up, puts the launcher on screen (boot/Program.cs). A .NET service: the
+       web bridge's on-boot is dropped in a hybrid package. -->
+  <service-application appid="APLauncher.Boot"
+                       exec="APLBoot.dll"
+                       type="dotnet"
+                       multiple="false"
+                       taskmanage="false"
+                       nodisplay="true"
+                       on-boot="true"
+                       auto-restart="false"
+                       api-version="9.0">
+    <label>APL Boot</label>
+  </service-application>
+  <!-- The launcher's relay to Vetro (bridge/Program.cs), under the web bridge's id: in the hybrid
+       package the web service never runs, and tools/make-package.sh drops it from config.xml. -->
+  <service-application appid="APLauncher.Bridge"
+                       exec="Bridge.dll"
+                       type="dotnet"
+                       multiple="false"
+                       taskmanage="false"
+                       nodisplay="true"
+                       auto-restart="false"
+                       api-version="9.0">
+    <label>APL Launcher Bridge</label>
+  </service-application>
+  <privileges>
+    <privilege>http://tizen.org/privilege/appmanager.launch</privilege>
+    <privilege>http://tizen.org/privilege/internet</privilege>
+    <privilege>http://tizen.org/privilege/bluetooth</privilege>
+    <privilege>http://tizen.org/privilege/network.get</privilege>
+  </privileges>
+</manifest>

@@ -23,7 +23,7 @@ Top Shelf, glass dock, Control Center, Settings, Sources — and no more Samsung
 - **Official logos for 50+ apps**, and for any other app the launcher finds its official icon and an Apple TV background by itself.
 - **Control Center** (tvOS 26/27 layout), even over a video — Sleep, Wi-Fi, Do Not Disturb, sleep timer, brightness, **audio output with Bluetooth headphones** (AirPods…, with battery), AirPlay and iPhone help, Sources, Settings.
 - **Settings** — an Apple TV–style split view that covers every Samsung settings page, with real picture controls (backlight, contrast, sharpness, colour, local dimming).
-- **Sources** — HDMI / USB-C / AirPlay as big tiles; pick the device on each input (Switch 2, Steam Deck, PS5, Xbox, PC, Mac, Apple TV…) and it shows its logo.
+- **Sources** — HDMI / USB-C / AirPlay as big tiles; pick the device on each input (Switch 2, Steam Deck, PS5, Xbox, PC, Mac, Apple TV…) and it shows its logo. Hold OK on an input to put it on the Home Screen like an app.
 - **Remote buttons** — press Home twice for the app switcher, hold Home or press ⏯ for the Control Center. When they are installed, Samsung TV Plus opens AquaPlay and Prime Video opens TizenTube.
 - **Alexa on the microphone button**, with a Siri-like glow at the bottom of the screen while you speak.
 - **Hold OK on an app** — Edit Home Screen (move apps), Hide App, Delete App, exactly like tvOS.

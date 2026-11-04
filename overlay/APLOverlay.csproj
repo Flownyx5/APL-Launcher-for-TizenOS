@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- APL Overlay built with the Tizen .NET workload (CI, tools/make-overlay.sh), against the
+       Tizen.NET reference assemblies instead of the screen's own DLLs. APL Launcher Setup still
+       compiles the .cs files with csc (scripts/05-build-overlay.ps1) and ignores this file. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0-tizen9.0</TargetFramework>
+    <AssemblyName>APLOverlay</AssemblyName>
+    <RootNamespace>APL</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <DebugType>None</DebugType>
+  </PropertyGroup>
+
+  <!-- APLauncher.Boot (boot/) is its own assembly in the same .tpk: not compiled into the Overlay,
+       built and copied to bin/ through the reference. -->
+  <ItemGroup>
+    <Compile Remove="boot\**" />
+    <None Remove="boot\**" />
+    <ProjectReference Include="boot\APLBoot.csproj" />
+    <Compile Remove="bridge\**" />
+    <None Remove="hybrid\**" />
+    <None Remove="bridge\**" />
+    <ProjectReference Include="bridge\Bridge.csproj" />
+  </ItemGroup>
+
+</Project>

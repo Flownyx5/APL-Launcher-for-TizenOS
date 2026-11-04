@@ -8,7 +8,9 @@
 |---|---|
 | *Tizen Studio is not found* | Install Tizen Studio **with the CLI**, then install again. |
 | *Author password* prompt | The certificate's `.pwd` files are encrypted, so the installer uses a Tizen security profile instead. Create the profile in Certificate Manager, or let the installer use your Apps2Samsung certificate. |
-| *No valid Samsung certificate* | Your certificate has expired or was made for another screen. Create a new one for this screen's DUID. |
+| *APL Launcher couldn't start* (or a black screen before 1.0.8) | The launcher met an error while starting. Take a photo of the message, with the TV model and Tizen version, and open an issue on GitHub. |
+| *No valid Samsung certificate* | No certificate was found, or the newest one has expired (the message says which). Create a new one for this screen's DUID with Apps2Samsung (found automatically) or Tizen Studio's Certificate Manager (used through its signing profile). Before 1.0.7, APL Launcher Setup ignored Tizen Studio certificates at this step. |
+| *The Samsung certificate of profile … expired* | The Tizen Studio profile signs, but its certificate is out of date. Create a new one, then install again. |
 | *Certificate in signature was expired* | Same cause. Create a new certificate, then install again. |
 | *[118,-4] Load archive info fail* | The package is corrupted or was built by an old version. Download the ZIP again and reinstall. |
 | *The screen is not in `sdb devices`* | Developer Mode must point to the PC's IP. If Vetro is running (Host PC IP `127.0.0.1`), the installer installs through Vetro instead: open Vetro once on the screen, wait a minute, then try again. |

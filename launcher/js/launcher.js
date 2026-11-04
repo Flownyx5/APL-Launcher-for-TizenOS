@@ -788,7 +788,8 @@
             return rank(a) - rank(b) || a.name.localeCompare(b.name, APL.locale, { sensitivity: "base" });
         });
         virtuals = virtuals || virtualApps();
-        var usable = virtuals.filter(function (v) { return !v.needs || list.some(function (a) { return a.id === v.needs; }); });
+        var usable = virtuals.filter(function (v) { return !v.needs || list.some(function (a) { return a.id === v.needs; }); })
+            .concat(APL.sources ? APL.sources.homeTiles() : []);              // inputs pinned to the Home Screen
         var tube = usable.filter(function (v) { return v.id === "apl.tizentube"; });
         defaultOrder = tube.concat(favs, usable.filter(function (v) { return tube.indexOf(v) === -1; }), rest, APL.folders.all().map(APL.folders.asApp));
         allApps = applySavedOrder(defaultOrder);
@@ -1030,6 +1031,16 @@
         nav.index = 0;
         render();
     });
+
+    /* The list again, the focus kept: an input pinned or unpinned in Sources. */
+    APL.refreshHome = function () {
+        APL.loadApps().then(function (list) {
+            var focused = apps[nav.index] && apps[nav.index].id;
+            buildList(list);
+            render();
+            for (var i = 0; i < apps.length; i++) if (apps[i].id === focused) { nav.focus(i); break; }
+        });
+    };
 
     APL.refreshArt = function () { if (APL.autoArt) APL.autoArt.refresh(allApps, render); };
     APL.restyleArt = function () { if (APL.autoArt) APL.autoArt.restyle(allApps, render); };

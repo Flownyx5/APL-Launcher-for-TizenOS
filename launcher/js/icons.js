@@ -22,6 +22,7 @@
         airplayAudio: '<path d="M7 15.6a7 7 0 1 1 10 0"/><path d="M9.5 13.1a3.5 3.5 0 1 1 5 0"/><path d="M12 15.2l3.6 5H8.4z" fill="currentColor" stroke-linejoin="round"/>',
         usbc:       '<rect x="3" y="8" width="18" height="8" rx="4"/><path d="M8 12h8"/>',
         plus:       '<path d="M12 5v14M5 12h14"/>',
+        minus:      '<path d="M5 12h14"/>',
         grid:       '<rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/>',
         eyeOff:     '<path d="M2.5 12s3.5-6.5 9.5-6.5c1.6 0 3 .4 4.3 1.1M21.5 12s-1.3 2.4-3.7 4.3M14.3 17.9c-.7.2-1.5.3-2.3.3-6 0-9.5-6.2-9.5-6.2"/><path d="M9.6 9.7a3.2 3.2 0 0 0 4.6 4.5"/><path d="M3.5 3.5l17 17"/>',
         trash:      '<path d="M4 6.5h16"/><path d="M9.5 6.5V4.5h5v2"/><path d="M6 6.5l1 13.2a1.5 1.5 0 0 0 1.5 1.3h7a1.5 1.5 0 0 0 1.5-1.3l1-13.2"/><path d="M10 10.5v6.5M14 10.5v6.5"/>',

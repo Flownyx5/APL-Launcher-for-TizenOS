@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.3 (Flownyx5 fork)
+- Merges the original project's 1.0.5 to 1.0.8 (Knikt/APL-Launcher-for-TizenOS), see below: every HDMI input in Sources and inputs on the Home Screen, the bridge relays the Remapper rules (Home back to the launcher without APL Overlay), Setup accepts Tizen Studio certificates again, and a start-up that doesn't finish shows its errors instead of a black screen.
+- The Diagnostic screen is now `js/diagnostic.js` (`js/diag.js` is the original project's start-up watchdog).
+
 ## 1.1.2 (Flownyx5 fork)
 - Vetro wakes up on its own: if it still doesn't answer about 130 s after the screen started (or when the launcher finds it silent), the launcher's bridge starts Vetro's service; if the screen refuses that, it opens Vetro's app for a few seconds, the time for its service to start, then brings the launcher back. At most once every 5 minutes. Before that, the usual causes are worth fixing: Vetro older than 0.3.2 (open it once after updating), or Developer Mode's Host PC IP not `127.0.0.1`.
 - Diagnostic: a "Start-up with the screen" line tells whether the launcher's service started with the screen and whether Vetro had to be woken up.
@@ -20,6 +24,20 @@ This copy updates itself from Flownyx5/APL-Launcher-for-TizenOS. Install it once
 - Phone Remote (Control Center, Settings › Routines): scan the QR code, then swipe to move, tap to open, Back/Home/⏯/volume, and a keyboard that types into the search. A small server on port 8092, opt-in, protected by a secret token or a 4-digit pairing code; only remote keys can be sent.
 - Good Night (Control Center, Settings › Routines): sleep timer, low brightness, Do Not Disturb and a black screen saver in one press; everything comes back the next morning.
 - Kids Mode (per profile, Settings › Routines): only the chosen apps; Settings, other profiles, the app menu, search and phone remote behind a parent PIN.
+
+## 1.0.8
+- A start-up that doesn't finish no longer leaves a black screen: after 20 s on screen without the Home Screen, the launcher shows the errors it met, its version and the screen's model, to send in a GitHub issue.
+
+## 1.0.7
+- APL Launcher Setup: a certificate made with Tizen Studio's Certificate Manager is accepted again. When no Apps2Samsung certificate was valid, Setup stopped with "the TizenTube one has expired" before looking at the Tizen Studio profiles, whatever the PC had. It now uses the profile, says when no certificate was found at all, and checks the signed package: an expired certificate is reported with its date instead of being refused by the screen.
+
+## 1.0.6
+- Releases also carry `apl-launcher-full-vX.Y.Z.wgt`: the launcher and APL Overlay in one package for Apps2Samsung, with a .NET bridge and a start-up service (#8, thanks exzos28). APL Launcher Setup is unchanged.
+- Without APL Overlay, the launcher can give the Home button back to itself again: its bridge now relays the Remapper rules (and the microphone switch), which it refused before. This is in the package: install it again (APL Launcher Setup or the .wgt).
+
+## 1.0.5
+- Sources shows every HDMI input of the screen. Tizen 9 no longer lists the inputs to apps, so every screen showed the Smart Monitor's (one HDMI and USB-C): they are now read from the screen through Vetro, with the device Samsung recognized on each input.
+- An input can go on the Home Screen like an app: in Sources, hold OK on it › Add to Home Screen. Its tile shows the chosen device, and Edit Home Screen moves it into the dock.
 
 ## 1.0.4
 - The Frame and other screens: the bridge reaches Vetro through the screen's own network address when the local one is blocked, brings the launcher back about 1 second after a wake-up instead of 15, and also after leaving Art Mode (#5, #6, thanks skjnldsv). The bridge is in the package: install it again (APL Launcher Setup or the .wgt).

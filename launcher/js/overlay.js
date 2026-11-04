@@ -15,7 +15,11 @@
     "use strict";
 
     var APL = global.APL, sys = APL.sys;
-    var OVERLAY = "apl.launcher.overlay", LAUNCHER = "APLauncher.Home", HOME_RULE = "physical_63";
+    /* APL Overlay is apl.launcher.overlay when APL Launcher Setup installs it (a package of its own), and
+       APLauncher.Overlay inside the hybrid package for Apps2Samsung. The one installed is used; if both
+       are, the one in this package. */
+    var OVERLAY_IDS = ["APLauncher.Overlay", "apl.launcher.overlay"];
+    var OVERLAY = OVERLAY_IDS[1], LAUNCHER = "APLauncher.Home", HOME_RULE = "physical_63";
     var installed = false, light = false;
 
     /* The apps the Echo can open: "Name=app:id", Home Screen first (the first ones
@@ -80,7 +84,7 @@
         sys.vetroGet("/remap").then(function (r) {
             var rules = (r && r.rules) || [], changed = false, home = false, freed = [];
             rules = rules.filter(function (rule) {
-                var mine = (rule.actions || []).filter(function (a) { return a.type === "launch" && a.appId === OVERLAY; });
+                var mine = (rule.actions || []).filter(function (a) { return a.type === "launch" && OVERLAY_IDS.indexOf(a.appId) !== -1; });
                 if (!mine.length) return true;
                 changed = true;
                 mine.forEach(function (a) { a.appId = LAUNCHER; });
@@ -107,9 +111,11 @@
 
     function start() {
         if (sys.PREVIEW) return;
-        APL.isInstalled(OVERLAY).then(function (yes) {
-            installed = yes;
-            if (yes) send(); else checkHomeRule();
+        Promise.all(OVERLAY_IDS.map(function (id) { return APL.isInstalled(id); })).then(function (found) {
+            var i = found.indexOf(true);
+            installed = i !== -1;
+            if (installed) OVERLAY = OVERLAY_IDS[i];
+            if (installed) send(); else checkHomeRule();
         });
     }
 
