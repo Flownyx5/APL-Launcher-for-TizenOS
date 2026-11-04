@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.5 (Flownyx5 fork)
+- Diagnostic: when APL Overlay is missing, says why (it is built for Tizen 9 and .NET 6) and which .NET the screen has, to see what an older-screen version would need.
+
 ## 1.1.4 (Flownyx5 fork)
 - Start with the screen, every time: some installers record Vetro's service and the launcher's bridge without "start at boot" (and Vetro's without "restart"), so after a full start nothing came back until Vetro was opened by hand. Once Vetro answers, the launcher reads these flags in the screen's app database and turns them on if they are off, as Vetro does for itself (effective at the next start). No reinstall needed: this comes with the automatic update.
 - Diagnostic: the "Start-up with the screen" line shows these flags.

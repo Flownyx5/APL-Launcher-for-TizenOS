@@ -146,8 +146,19 @@
             } },
             { label: "APL Overlay", run: function () {
                 if (PREVIEW) return preview();
-                return APL.overlay && APL.overlay.isInstalled() ? R("ok", APL.t("installed")) :
-                    R("warn", APL.t("not installed: no Control Center over videos (needs the C# compiler when installing)"));
+                if (APL.overlay && APL.overlay.isInstalled()) return R("ok", APL.t("installed"));
+                // Not there: what the screen offers, to see what it would take (APL Overlay is built for Tizen 9 / .NET 6).
+                // No backslash in Vetro commands (it doubles them): xargs puts the versions on one line.
+                var cmd = "ls /usr/share/dotnet.tizen/netcoreapp/ /usr/share/dotnet/shared/Microsoft.NETCore.App/ 2>/dev/null | grep -E '^[0-9]' | sort -u | xargs echo; " +
+                          "pkgcmd -l 2>/dev/null | grep -ci overlay";
+                return limit(sys.exec(cmd), 9000).then(function (r) {
+                    var lines = String(r.output || "").split("\n"), net = (lines[0] || "").trim() || "?", pkgs = (lines[1] || "0").trim();
+                    var tizen = parseFloat(sys.product().tizen) || 0;
+                    var why = tizen && tizen < 9 ? APL.t("built for Tizen 9, this screen is Tizen {v}", { v: sys.product().tizen }) : APL.t("not installed");
+                    return R("warn", why + " · .NET " + net + (pkgs !== "0" && pkgs !== "" ? " · " + APL.t("an overlay package is there but not usable") : ""));
+                }, function () {
+                    return R("warn", APL.t("not installed: no Control Center over videos (needs the C# compiler when installing)"));
+                });
             } },
             { label: APL.t("Key ▲ (phone remote)"), run: function () { return keyTest("Up", [38]); } },
             { label: APL.t("Key ▶ (phone remote)"), run: function () { return keyTest("Right", [39]); } },

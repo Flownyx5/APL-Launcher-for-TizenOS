@@ -731,5 +731,7 @@ window.APL_LANG_FR = {
     "auto start: launcher {a} · Vetro {b}": "démarrage auto : launcher {a} · Vetro {b}",
     "turned on now, effective at the next start": "activé maintenant, effectif au prochain démarrage",
     "flags not readable ({e})": "réglages illisibles ({e})",
-    "launcher service not answering": "le service du launcher ne répond pas"
+    "launcher service not answering": "le service du launcher ne répond pas",
+    "built for Tizen 9, this screen is Tizen {v}": "prévu pour Tizen 9, cet écran est en Tizen {v}",
+    "an overlay package is there but not usable": "un paquet overlay est présent mais inutilisable"
 };
