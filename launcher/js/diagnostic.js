@@ -1,5 +1,5 @@
 /* ============================================================
-   diag.js — Settings › Support › Diagnostic.
+   diagnostic.js — Settings › Support › Diagnostic.
 
    Checks, on the screen itself, what depends on the model: Vetro,
    the bridge, each remote key (the key is really sent and the
