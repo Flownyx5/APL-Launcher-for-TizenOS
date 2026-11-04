@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.7 (Flownyx5 fork)
+- Without APL Overlay (it is built for Tizen 9, so older screens can't run it): the launcher's bridge now closes the apps left in the background for 10 minutes, as APL Overlay does (Samsung's apps that open by themselves and were never used: after a minute). Never the app in front, the launcher, Vetro, the TV inputs, AirPlay, nor music apps (Spotify, Deezer, Apple Music…), which keep playing behind the Home Screen. Settings › Apps › Close unused apps; the Diagnostic shows the last ones closed. The bridge is in the package: install again with APL Launcher Setup.
+- Opening an app on older screens: a light fade (the tile grows a little and fades while the screen goes black) replaces the full-screen zoom, which stuttered on a Tizen 6 TV, and the app starts once the animation is done. The black veil now really fades in (it appeared at once the first time). Settings › General & Privacy › Accessibility › Opening an App: Automatic, Zoom, Fade or None.
+
 ## 1.1.6 (Flownyx5 fork)
 - Older screens are recognized again: Samsung TVs write their engine as "76.0.3809.146/6.0 TV" in the user agent, not "Chrome/76", so the Q60A (Tizen 6.0) got neither the lighter animations nor the 1080p screen saver videos. The Tizen version and the missing `inset` support now count too.
 - Diagnostic: the last row no longer runs over the footer; a start-up flag that can't be read is shown as a limit, not a success.

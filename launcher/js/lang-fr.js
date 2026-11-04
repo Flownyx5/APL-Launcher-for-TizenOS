@@ -733,5 +733,16 @@ window.APL_LANG_FR = {
     "flags not readable ({e})": "réglages illisibles ({e})",
     "launcher service not answering": "le service du launcher ne répond pas",
     "built for Tizen 9, this screen is Tizen {v}": "prévu pour Tizen 9, cet écran est en Tizen {v}",
-    "an overlay package is there but not usable": "un paquet overlay est présent mais inutilisable"
+    "an overlay package is there but not usable": "un paquet overlay est présent mais inutilisable",
+    "Closing unused apps": "Fermeture des apps oubliées",
+    "done by APL Overlay": "assurée par APL Overlay",
+    "turned off in Settings › Apps": "désactivée dans Réglages › Apps",
+    "not running in the launcher service: install again with APL Launcher Setup": "inactive dans le service du launcher : réinstalle avec APL Launcher Setup",
+    "on: after {m} min in the background · {n} checks": "active : après {m} min en fond · {n} vérifications",
+    "last closed: {list}": "dernières fermées : {list}",
+    "Opening an App": "Ouverture des apps",
+    "Zoom": "Zoom",
+    "Fade": "Fondu",
+    "None": "Aucune",
+    "Zoom: the tile grows until it fills the screen, as on Apple TV. Fade: the tile grows a little and fades while the screen goes black, smooth on every screen. Automatic: fade on older screens (Tizen 6), zoom on recent ones.": "Zoom : la tuile grandit jusqu'à remplir l'écran, comme sur l'Apple TV. Fondu : la tuile grossit un peu et s'efface pendant que l'écran passe au noir, fluide sur tous les écrans. Automatique : fondu sur les écrans plus anciens (Tizen 6), zoom sur les récents."
 };

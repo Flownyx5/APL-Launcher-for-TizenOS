@@ -61,7 +61,7 @@ var launcherFront = false, hiddenAt = 0, lastTick = Date.now(), ticking = null, 
 function stopLater() {
     clearTimeout(idle);
     // Stays while the launcher is in front or the screen sleeps on it, to bring it back at wake-up
-    if (launcherFront || sleeping || waking || inArt || vetroWake.busy || (remote && remote.server)) return;
+    if (launcherFront || sleeping || waking || inArt || vetroWake.busy || (idleApps && idleApps.minutes > 0) || (remote && remote.server)) return;
     idle = setTimeout(function () {
         try { tizen.application.getCurrentApplication().exit(); } catch (e) {}
     }, IDLE_MS);
@@ -92,6 +92,8 @@ function onMessage(data) {
     var report = field(data, "report");
     if (report) { lastReport = report.slice(0, 20000); stopLater(); return; }
     if (field(data, "vetro") === "wake") { wakeVetro(); stopLater(); return; }
+    var ic = field(data, "idle");
+    if (ic) { idleConfig(ic); return; }
     var front = field(data, "front");
     if (front) {                        // the launcher came in front ("1") or left it ("0")
         launcherFront = front === "1";
@@ -102,7 +104,8 @@ function onMessage(data) {
     stopLater();
     var id = field(data, "id"), method = field(data, "method") || "GET", path = field(data, "path"), body = field(data, "body");
     if (path === "/__bridge/state") {               // Diagnostic: how this service and Vetro started
-        answer(id, 200, JSON.stringify({ startedAt: startedAt, uptime: upSeconds(), vetroWake: vetroWake }));
+        answer(id, 200, JSON.stringify({ startedAt: startedAt, uptime: upSeconds(), vetroWake: vetroWake,
+                                         idle: { minutes: idleApps.minutes, closed: idleApps.closed.slice(-6), checks: idleApps.checks } }));
         return;
     }
     if (!ALLOWED.test(path) || (method !== "GET" && method !== "POST")) {
@@ -259,6 +262,78 @@ function wokeUp(wasFront, first) {
             setTimeout(look, POLL_MS);
         });
     })();
+}
+
+/* ---------- apps left in the background ----------
+   APL Overlay's IdleApps (overlay/IdleApps.cs), for screens where APL Overlay can't run (it is built
+   for Tizen 9): every minute, the apps running behind the one in front; an app left in the
+   background for 10 minutes is closed (app_launcher -k, through Vetro). The screen keeps every app
+   it opened until its memory runs out, and then everything slows down. Never closed: the app in
+   front, the launcher, Vetro, Samsung's home, the TV inputs, AirPlay and screen mirroring, and the
+   music apps the launcher names (music keeps playing behind the Home Screen). Only the Home
+   Screen's apps, those once seen in front and Samsung's that open by themselves count; those never
+   seen in front close after a minute (they reopen at every wake-up and hold about 250 MB).
+   The launcher turns it on (message "idle") when APL Overlay isn't installed. */
+var IDLE_CHECK_MS = 60000, IDLE_UNUSED_MIN = 1;
+var IDLE_NEVER = /^(APLauncher\.|apl\.launcher\.|vetrotvapp|com\.samsung\.tv\.csfs|com\.samsung\.tv\.home\.sidebar|org\.tizen\.tv-viewer)/;
+var IDLE_RECEIVERS = /airplay|ScreenMirroring|multiscreen/i;
+var IDLE_SELF = ["com.samsung.tv.home.media", "com.samsung.tv.mycontents", "com.samsung.tv.quicklaunch", "org.tizen.browser",
+                 "com.samsung.tv.bixbycapsuleviewer", "com.samsung.tv.aria-video", "com.samsung.tv.cobalt-yt",
+                 "MCmYXNxgcu.DisneyPlus", "org.tizen.netflix-app", "org.tizen.primevideo", "HEPsqFNie0.tvplusstandalone"];
+var idleApps = { minutes: 0, home: {}, keep: {}, lastUsed: {}, seen: {}, front: "", timer: null, busy: false, closed: [], checks: 0 };
+
+function idleConfig(json) {
+    var c = {};
+    try { c = JSON.parse(json); } catch (e) { return; }
+    var m = parseInt(c.minutes, 10);
+    idleApps.minutes = isNaN(m) ? 0 : Math.max(0, Math.min(240, m));
+    idleApps.home = {}; idleApps.keep = {};
+    (c.apps || []).forEach(function (id) { if (/^[A-Za-z0-9_.-]+$/.test(id)) idleApps.home[id] = true; });
+    (c.keep || []).forEach(function (id) { if (/^[A-Za-z0-9_.-]+$/.test(id)) idleApps.keep[id] = true; });
+    if (idleApps.minutes > 0 && !idleApps.timer) idleApps.timer = setInterval(idleCheck, IDLE_CHECK_MS);
+    if (idleApps.minutes === 0 && idleApps.timer) { clearInterval(idleApps.timer); idleApps.timer = null; }
+    stopLater();
+}
+
+function idleFront(app) {
+    var now = Date.now();
+    if (idleApps.front && idleApps.front !== app) idleApps.lastUsed[idleApps.front] = now;   // in use until now
+    idleApps.front = app || "";
+    if (!idleApps.front) return;
+    idleApps.lastUsed[idleApps.front] = now;
+    idleApps.seen[idleApps.front] = true;
+}
+
+function idleClosable(id) {
+    if (IDLE_NEVER.test(id) || IDLE_RECEIVERS.test(id) || idleApps.keep[id]) return false;
+    return !!(idleApps.seen[id] || idleApps.home[id] || IDLE_SELF.indexOf(id) !== -1);
+}
+
+function idleCheck() {
+    if (idleApps.busy || idleApps.minutes <= 0 || sleeping) return;
+    idleApps.busy = true;
+    shell("vconftool get memory/appfw/current_fullscreen_appid 2>/dev/null; app_launcher -S 2>/dev/null", function (out) {
+        idleApps.checks++;
+        if (!out) { idleApps.busy = false; return; }                     // Vetro silent: nothing is known, nothing closed
+        idleFront(vconfValue(out, "memory/appfw/current_fullscreen_appid") || "");
+        var now = Date.now(), close = [];
+        out.split("\n").forEach(function (line) {
+            var m = /^\s*([A-Za-z0-9_.-]+) \(\d+\)\s*$/.exec(line);
+            if (!m) return;
+            var id = m[1];
+            if (id === idleApps.front || !idleClosable(id)) return;
+            var used = idleApps.lastUsed[id];
+            if (!used) { idleApps.lastUsed[id] = now; return; }          // already behind when this started: counted from now
+            var limit = IDLE_SELF.indexOf(id) !== -1 && !idleApps.seen[id] ? Math.min(IDLE_UNUSED_MIN, idleApps.minutes) : idleApps.minutes;
+            if (now - used >= limit * 60000) close.push(id);
+        });
+        if (!close.length) { idleApps.busy = false; return; }
+        shell(close.map(function (id) { delete idleApps.lastUsed[id]; return "app_launcher -k " + id + " >/dev/null 2>&1"; }).join("; ") + "; true", function () {
+            close.forEach(function (id) { idleApps.closed.push(new Date().toISOString().slice(11, 16) + " " + id); });
+            if (idleApps.closed.length > 20) idleApps.closed = idleApps.closed.slice(-20);
+            idleApps.busy = false;
+        });
+    });
 }
 
 /* ---------- Vetro wake-up ----------
@@ -512,4 +587,4 @@ module.exports.onStart = function () { start(); openLauncher(LAUNCH_TRIES); if (
 // Some environments run the script without calling onStart
 try { start(); openLauncher(LAUNCH_TRIES); if (isBooting()) wakeVetro(); } catch (e) {}
 module.exports.onRequest = function () { start(); };
-module.exports.onExit = function () { clearTimeout(idle); clearInterval(ticking); ticking = null; port = null; stopRemote(); };
+module.exports.onExit = function () { clearTimeout(idle); clearInterval(ticking); ticking = null; port = null; stopRemote(); if (idleApps.timer) clearInterval(idleApps.timer); };

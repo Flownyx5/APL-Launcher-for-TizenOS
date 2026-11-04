@@ -43,8 +43,21 @@
         }).filter(function (id) { return /^[A-Za-z0-9_.-]+$/.test(id); }).join(";");
     }
 
+    /* Without APL Overlay (it is built for Tizen 9): the launcher's bridge closes the apps left in the
+       background instead (bridge/service.js, idleCheck). Music apps are left alone: they play behind. */
+    var MUSIC = /^(spotify|deezer|applemusic|amazonmusic|qobuz|tidal|youtubemusic)$/;
+    var checked = false;                // APL Overlay looked for (start): before that, nothing is sent
+    function sendBridgeIdle() {
+        if (sys.PREVIEW || installed || !checked) return;
+        var apps = (APL.allApps && APL.allApps()) || [];
+        var keep = apps.filter(function (a) { return !a.virtual && (a.music || (a.key && MUSIC.test(a.key))); }).map(function (a) { return a.id; });
+        var cfg = { minutes: sys.pref("idleClose") ? IDLE_MINUTES : 0, apps: homeApps().split(";"), keep: keep };
+        sys.bridgeSend([{ key: "idle", value: JSON.stringify(cfg) }]).catch(function () {});
+    }
+
     function send() {
-        if (!installed || sys.PREVIEW) return;
+        if (!installed) { sendBridgeIdle(); return; }
+        if (sys.PREVIEW) return;
         try {
             var T = global.tizen;
             var data = [new T.ApplicationControlData("apl_action", ["stay"]),
@@ -114,14 +127,18 @@
         Promise.all(OVERLAY_IDS.map(function (id) { return APL.isInstalled(id); })).then(function (found) {
             var i = found.indexOf(true);
             installed = i !== -1;
+            checked = true;
             if (installed) OVERLAY = OVERLAY_IDS[i];
-            if (installed) send(); else checkHomeRule();
+            if (installed) send(); else { checkHomeRule(); sendBridgeIdle(); }
         });
     }
 
     sys.onPref("homeReturn", send);
     sys.onPref("alexaBridge", send);
     sys.onPref("idleClose", send);
+
+    // The Home Screen's list changes (an app installed, hidden…): the bridge gets it again, every 10 minutes at most
+    setInterval(function () { if (!installed && !document.hidden) sendBridgeIdle(); }, 10 * 60000);
 
     APL.overlay = {
         start: start,

@@ -145,6 +145,18 @@
                     });
                 });
             } },
+            { label: APL.t("Closing unused apps"), run: function () {
+                if (PREVIEW) return preview();
+                if (APL.overlay && APL.overlay.isInstalled()) return R("ok", APL.t("done by APL Overlay"));
+                if (!sys.pref("idleClose")) return R("skip", APL.t("turned off in Settings › Apps"));
+                return limit(sys.bridgeState(), 9000).then(function (st) {
+                    var i = st.idle || {};
+                    if (!i.minutes) return R("warn", APL.t("not running in the launcher service: install again with APL Launcher Setup"));
+                    var last = (i.closed || []).slice(-3).join(", ");
+                    return R("ok", APL.t("on: after {m} min in the background · {n} checks", { m: i.minutes, n: i.checks || 0 }) +
+                                   (last ? " · " + APL.t("last closed: {list}", { list: last }) : ""));
+                });
+            } },
             { label: "APL Overlay", run: function () {
                 if (PREVIEW) return preview();
                 if (APL.overlay && APL.overlay.isInstalled()) return R("ok", APL.t("installed"));

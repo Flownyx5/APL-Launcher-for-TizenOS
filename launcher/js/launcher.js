@@ -409,23 +409,45 @@
         if (!apps[i].virtual || apps[i].web) APL.sys.profiles.noteLaunch(apps[i].id);   // profile history
         if (apps[i].web && APL.sys.PREVIEW) { toast(APL.t("Preview: on your TV, “{name}” would open in Internet ({url})", { name: apps[i].name, url: apps[i].url.replace(/^https:\/\/|\/$/g, "") })); return; }
         if (apps[i].virtual && !apps[i].zoom) { apps[i].run(); return; }
-        zoomOpen(el, apps[i]);
-        if (apps[i].virtual) { apps[i].run(); return; }
-        if (APL.sys.PREVIEW) { toast(APL.t("Preview: on your TV, “{name}” would open now", { name: apps[i].name })); setTimeout(dropZoom, 1400); return; }
-        showVeil();
-        var id = apps[i].id;
-        if (TUBE.test(apps[i].name)) { launchTube(id); return; }
-        APL.launchApp(id).catch(function (err) { hideVeil(); toast(err.message || APL.t("Couldn't open the app")); });
+        var app = apps[i];
+        // The app starts once the animation is done: started together, the screen had no time left to animate it
+        var wait = zoomOpen(el, app);
+        setTimeout(function () {
+            if (app.virtual) { app.run(); return; }
+            if (APL.sys.PREVIEW) { toast(APL.t("Preview: on your TV, “{name}” would open now", { name: app.name })); setTimeout(function () { dropZoom(); hideVeil(); }, 1400); return; }
+            if (!fadingTile) showVeil();
+            if (TUBE.test(app.name)) { launchTube(app.id); return; }
+            APL.launchApp(app.id).catch(function (err) { hideVeil(); toast(err.message || APL.t("Couldn't open the app")); });
+        }, wait);
     }
 
     /* Opening an app, the tvOS way: its tile grows until it fills the screen and fades to
        black, while the app starts underneath. Only a transform and an opacity are animated
        (the compositor does all the work, nothing is redrawn), in 420 ms. */
-    var zoomEl = null, zoomTimer = null;
+    var zoomEl = null, zoomTimer = null, fadingTile = null;
+    /* Opening animation (Settings › General › Accessibility › Opening an App): "zoom" (the tile fills the
+       screen), "fade" (the tile grows a little and fades while the screen goes black: only a 250×150 card
+       and an opacity move, what older screens can do smoothly), "none". Automatic: fade on older screens.
+       Returns the time to wait before starting the app. */
+    function openStyle() {
+        var s = APL.sys.pref("openAnim");
+        if (APL.sys.pref("reduceMotion") || s === "none") return "none";
+        return s === "zoom" || s === "fade" ? s : (APL.oldScreen ? "fade" : "zoom");
+    }
     function zoomOpen(tile, app) {
-        if (!tile || APL.sys.pref("reduceMotion")) return;
+        var style = openStyle();
+        if (!tile || style === "none") return 0;
+        if (style === "fade") {
+            dropZoom();
+            fadingTile = tile;
+            tile.classList.add("is-launching");
+            setTimeout(function () { showVeil(true); }, 60);
+            clearTimeout(zoomTimer);
+            zoomTimer = setTimeout(dropZoom, 8000);
+            return 280;                       // the screen is black by then (60 + 240 ms)
+        }
         var card = tile.querySelector(".tile__card");
-        if (!card) return;
+        if (!card) return 0;
         dropZoom();
         var r = card.getBoundingClientRect(), k = (document.documentElement.getBoundingClientRect().width / 1920) || 1;
         var x = r.left / k, y = r.top / k, w = r.width / k, h = r.height / k;
@@ -451,11 +473,13 @@
         z.classList.add("is-open");
         clearTimeout(zoomTimer);
         zoomTimer = setTimeout(dropZoom, 8000);       // the app couldn't open: the Home Screen comes back
+        return 260;
     }
     function dropZoom() {
         clearTimeout(zoomTimer);
         if (zoomEl && zoomEl.parentNode) zoomEl.parentNode.removeChild(zoomEl);
         zoomEl = null;
+        if (fadingTile) { fadingTile.classList.remove("is-launching"); fadingTile = null; }
     }
     APL.zoomOpen = zoomOpen;
     APL.dropZoom = dropZoom;
@@ -463,9 +487,11 @@
     /* When an app opens: the screen dims right away, the app appears over it.
        The veil goes away on returning Home, or by itself if the app couldn't open. */
     var veilTimer = null, veilHeldUntil = 0;
-    function showVeil() {
+    function showVeil(slow) {
         var v = $("veil");
-        if (!v) { v = document.createElement("div"); v.id = "veil"; v.className = "veil"; document.body.appendChild(v); }
+        // Created on the spot, it appeared at once (no fade): a reflow first lets the transition play
+        if (!v) { v = document.createElement("div"); v.id = "veil"; v.className = "veil"; document.body.appendChild(v); void v.offsetWidth; }
+        v.classList.toggle("is-slow", !!slow);
         v.classList.add("is-on");
         clearTimeout(veilTimer);
         veilTimer = setTimeout(hideVeil, Math.max(5000, veilHeldUntil - Date.now()));
@@ -712,6 +738,7 @@
 
     function boot() {
         cacheDom();
+        if (!$("veil")) { var veil = document.createElement("div"); veil.id = "veil"; veil.className = "veil"; document.body.appendChild(veil); }
         detectFlexGap();
         dom.hint.querySelector(".hint__text").textContent = APL.t("Press ▲ for full screen");   // index.html only has the English text
         startClock();

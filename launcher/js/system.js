@@ -80,7 +80,8 @@
         kidsPin: "",                // Kids Mode PIN (hashed), shared by the whole screen
         kidsMode: false,            // this profile is a child's: only the chosen apps, Settings behind the PIN
         kidsApps: [],               // apps allowed in Kids Mode (ids)
-        nightState: null            // "Good Night" running: what to put back the next morning (routines.js)
+        nightState: null,           // "Good Night" running: what to put back the next morning (routines.js)
+        openAnim: "auto"            // opening an app: "auto" (fade on older screens, zoom otherwise) | "zoom" | "fade" | "none"
     };
     /* Screen settings (shared) and the settings of each profile in the household:
        Home Screen layout, hidden apps, preferences, recent apps. */

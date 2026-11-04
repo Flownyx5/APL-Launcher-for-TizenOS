@@ -251,7 +251,9 @@
                     n("energy", APL.t("Power Saving Mode"), APL.t("Reduces power consumption."), ON_OFF)
                 ], APL.t("Brightness and power consumption.")),
                 menu(APL.t("Accessibility"), "access", [
-                    toggle(APL.t("Reduce Motion"), "reduceMotion", APL.t("Removes the launcher's zooms and fades."))
+                    toggle(APL.t("Reduce Motion"), "reduceMotion", APL.t("Removes the launcher's zooms and fades.")),
+                    choice(APL.t("Opening an App"), "openAnim", [["auto", APL.t("Automatic")], ["zoom", APL.t("Zoom")], ["fade", APL.t("Fade")], ["none", APL.t("None")]],
+                        APL.t("Zoom: the tile grows until it fills the screen, as on Apple TV. Fade: the tile grows a little and fades while the screen goes black, smooth on every screen. Automatic: fade on older screens (Tizen 6), zoom on recent ones."))
                 ], APL.t("Launcher animations.")),
                 menu(APL.t("Samsung Services"), "shield", [
                     action(APL.t("Block All"), function () { APL.services.cutAll(); },
