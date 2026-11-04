@@ -1,8 +1,8 @@
 {
- "version": "1.1.7",
+ "version": "1.1.8",
  "loader": 2,
  "reinstall": "1.1.7",
- "notes": "Unused apps closed without APL Overlay (music apps kept); smooth opening animation on older screens.",
+ "notes": "TizenTube wears YouTube's logo and artwork.",
  "scripts": [
   "js/diag.js",
   "js/lang-fr.js",

@@ -681,7 +681,7 @@
     function virtualApps() {
         return [
             // TizenTube: its own tile, without going through TizenBrew's screen
-            { id: "apl.tizentube", name: "TizenTube", virtual: true, zoom: true, needs: "xvvl3S1bvH.TizenBrewStandalone", accent: "#1fb6e6", eyebrow: "VIDÉO",
+            { id: "apl.tizentube", name: "TizenTube", virtual: true, zoom: true, needs: "xvvl3S1bvH.TizenBrewStandalone", accent: "#ff0000", eyebrow: "VIDÉO",
               tile: APL.TIZENTUBE_ART.tile, bg: APL.TIZENTUBE_ART.bg, bgBlur: APL.TIZENTUBE_ART.bgBlur, live: "youtube",
               run: function () { showVeil(); launchTube(null); } },
             // Apple's Settings icon (images/apps/settings-*, made by tools/art)

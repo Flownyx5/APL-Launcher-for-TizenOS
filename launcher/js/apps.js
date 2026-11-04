@@ -21,7 +21,8 @@
 
     /* Nicer names + accent colours for known apps. Everything else
        falls back to its Tizen name + a neutral accent. */
-    var TIZENTUBE = { name: "TizenTube", accent: "#1fb6e6", eyebrow: "VIDEO", bg: "images/bg-tizentube.jpg", tile: "images/tile-tizentube.png", bgBlur: "images/blur/tizentube.jpg", live: "youtube" };
+    /* TizenTube wears YouTube's logo and artwork (it is YouTube, without the ads): same tile, same Top Shelf. */
+    var TIZENTUBE = { name: "TizenTube", accent: "#ff0000", eyebrow: "VIDEO", bg: "images/apps/youtube-bg.jpg", tile: "images/apps/youtube-tile.png", bgBlur: "images/blur/youtube.jpg", live: "youtube" };
     /* TizenTube: by its name (TizenTube, TizenTube Cobalt…) or its package xvvl3S1TT1. */
     function isTizenTube(id, name) { return /tizen ?tube/i.test(String(name || "")) || /^xvvl3S1TT1\./.test(id); }
     var META = {
