@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.6 (Flownyx5 fork)
+- Older screens are recognized again: Samsung TVs write their engine as "76.0.3809.146/6.0 TV" in the user agent, not "Chrome/76", so the Q60A (Tizen 6.0) got neither the lighter animations nor the 1080p screen saver videos. The Tizen version and the missing `inset` support now count too.
+- Diagnostic: the last row no longer runs over the footer; a start-up flag that can't be read is shown as a limit, not a success.
+
 ## 1.1.5 (Flownyx5 fork)
 - Diagnostic: when APL Overlay is missing, says why (it is built for Tizen 9 and .NET 6) and which .NET the screen has, to see what an older-screen version would need.
 

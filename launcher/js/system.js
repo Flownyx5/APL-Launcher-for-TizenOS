@@ -24,9 +24,15 @@
 
     /* Older screens (Tizen 6.5 and before ship Chromium 85 or older; Tizen 6.0 is Chromium 76):
        lighter animations and 1080p screen saver videos by default. */
-    var chrome = parseInt((/Chrome\/(\d+)/.exec((global.navigator && global.navigator.userAgent) || "") || [])[1], 10) || 0;
+    /* Samsung TVs don't write "Chrome/76" in their user agent but "… (KHTML, like Gecko) 76.0.3809.146/6.0 TV
+       Safari/537.36" (engine version / Tizen version): both forms are read, and the Tizen version too. A screen
+       that doesn't know `inset` (Chromium 86 and before) is old whatever it says. */
+    var ua = (global.navigator && global.navigator.userAgent) || "";
+    var chrome = parseInt((/Chrome\/(\d+)/.exec(ua) || /\b(\d{2,3})\.\d+\.\d+\.\d+\/\d+(\.\d+)?\b/.exec(ua) || [])[1], 10) || 0;
+    var tizenUa = parseFloat((/Tizen (\d+(\.\d+)?)/.exec(ua) || [])[1]) || 0;
+    var noInset = !!(global.CSS && global.CSS.supports && !global.CSS.supports("inset", "0"));
     APL.chromeVersion = chrome;
-    APL.oldScreen = !!chrome && chrome < 90;
+    APL.oldScreen = (!!chrome && chrome < 90) || (!!tizenUa && tizenUa < 7) || noInset;
 
     /* ---------- preferences (stored on the screen) ---------- */
     var DEFAULTS = {

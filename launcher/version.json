@@ -1,8 +1,8 @@
 {
- "version": "1.1.5",
+ "version": "1.1.6",
  "loader": 2,
  "reinstall": "1.1.3",
- "notes": "Diagnostic: why APL Overlay is missing, and the screen's .NET version.",
+ "notes": "Older Samsung screens recognized from their real user agent: lighter animations and 1080p screen saver on Tizen 6.",
  "scripts": [
   "js/diag.js",
   "js/lang-fr.js",

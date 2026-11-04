@@ -130,6 +130,7 @@
                             var b = f.apps["APLauncher.Bridge"], v = f.apps["vetrotvapp.svc"];
                             parts.push(APL.t("auto start: launcher {a} · Vetro {b}", { a: b ? (b.onboot ? "✓" : "✕") : "?", b: v ? (v.onboot && v.autorestart ? "✓" : "✕") : "?" }));
                             if (f.fixed.length) { parts.push(APL.t("turned on now, effective at the next start")); state = "warn"; }
+                            if (!b || !v) state = "warn";                       // a flag that couldn't be read is not a success
                             if ((b && !b.onboot) || (v && !(v.onboot && v.autorestart))) state = "fail";
                         } else if (f && f.error) { parts.push(APL.t("flags not readable ({e})", { e: f.error.slice(0, 60) })); state = "warn"; }
                         if (st) {
