@@ -76,6 +76,16 @@
             choice(APL.t("Appearance"), "appearance", [["light", APL.t("Light")], ["dark", APL.t("Dark")], ["auto", APL.t("Automatic")]],
                 APL.t("Light or dark for backgrounds and menus. Automatic switches to dark at sunset and to light at sunrise.")),
 
+            menu(APL.t("Living Home Screen"), "sun", [
+                toggle(APL.t("Light of the Day"), "ambient", APL.t("A soft tint over the Top Shelf follows the sun where you are: pink at dawn, golden at sunset, blue at night.")),
+                toggle(APL.t("Weather"), "weather", APL.t("Temperature and sky next to the clock, from Open-Meteo. The town is found from the screen's internet address (geojs.io); Paris if it can't be found.")),
+                toggle(APL.t("Rain and Snow"), "weatherFx", APL.t("When it rains or snows outside, drops or flakes fall over the Top Shelf for 40 seconds when you come back Home.")),
+                info(APL.t("Now"), function () {
+                    var w = APL.ambient && APL.ambient.now();
+                    return w ? (w.city ? w.city + " · " : "") + w.temp + "°" : "—";
+                })
+            ], APL.t("Light of the day, weather, rain and snow.")),
+
             /* -------- Account -------- */
             menu(APL.t("Users and Accounts"), "person", [
                 action(APL.t("Household Profiles"), function () { APL.settings.close(); if (APL.profilesUI) APL.profilesUI.open(); },
@@ -146,6 +156,8 @@
                     APL.t("Idle time on the Home Screen before the screen saver starts.")),
                 choice(APL.t("Type"), "screensaverStyle", [["aerial", APL.t("Aerial (Apple videos)")], ["art", APL.t("App artwork")], ["clock", APL.t("Large clock over the artwork")], ["dark", APL.t("Clock on black")]],
                     APL.t("Aerial: the Apple TV flyover videos, streamed live (China, Hawaii, London, space station…). Without a network, it switches to the app artwork.")),
+                choice(APL.t("Video Quality"), "aerialQuality", [["auto", APL.t("Automatic")], ["1080", "1080p"], ["4k", "4K"]],
+                    APL.t("Automatic: 1080p on older screens (they start in a second or two), 4K on recent ones. While the first video loads, an app's artwork shows.")),
                 menu(APL.t("Aerial Themes"), "photo", [
                     flag(APL.t("Cities"), "cityscape", APL.t("New York, London, Hong Kong, Dubai…")),
                     flag(APL.t("Earth from Space"), "space", APL.t("Views from the International Space Station.")),
@@ -252,6 +264,31 @@
                 toggle(APL.t("Close Apps at Start-Up"), "bootCleanup", APL.t("Once per full power-on, closes what the system opens on its own: Netflix, TV Plus, Disney+, Samsung Internet, Art Mode, the pieces of the Samsung home screen and the blocked services. Frees about 350 MB.")),
                 { type: "samsung", label: APL.t("Samsung Settings"), desc: APL.t("For what the screen keeps for its own menus: changing Wi-Fi, time, language, Samsung account, parental controls, privacy, reset.") }
             ], APL.t("Clock, energy, accessibility, Samsung Settings.")),
+
+            /* -------- Routines (routines.js) -------- */
+            menu(APL.t("Routines"), "night", [
+                action(APL.t("Good Night"), function () { APL.settings.close(); APL.routines.goodNight(); },
+                    APL.t("Sleep timer, low brightness, Do Not Disturb and a black screen saver, in one press. Press again to cancel; everything comes back the next morning."), "night"),
+                choice(APL.t("Good Night: Sleep After"), "nightMinutes", [[15, APL.t("15 minutes")], [30, APL.t("30 minutes")], [45, APL.t("45 minutes")], [60, APL.t("1 hour")], [90, APL.t("1 h 30")]],
+                    APL.t("When the screen turns off after Good Night.")),
+                choice(APL.t("Good Night: Brightness"), "nightBacklight", [[0, APL.t("Minimum")], [4, "4"], [8, "8"], [14, "14"], [20, "20"]],
+                    APL.t("The backlight while Good Night runs (0 to 50).")),
+                menu(APL.t("Kids Mode"), "kids", [
+                    { type: "check", label: APL.t("Kids Mode for {name}", { name: sys.profiles.current().name }),
+                      get: function () { return APL.kids.active(); }, set: function (v) { APL.kids.set(v); },
+                      desc: APL.t("This profile only sees the apps chosen below. Settings, the other profiles, the app menu and the search ask for the parent PIN. A fence for young children: the screen's Parental Controls stay the real lock.") },
+                    menu(APL.t("Allowed Apps"), "apps", apps.map(function (a) {
+                        return { type: "check", label: a.name, onText: APL.t("Allowed"), offText: "—",
+                                 get: function () { return APL.kids.allowedIds().indexOf(a.id) !== -1; },
+                                 set: function () { APL.kids.toggleApp(a.id); },
+                                 desc: APL.t("OK to allow or remove “{name}” in Kids Mode.", { name: a.name }) };
+                    }), APL.t("The apps a child's profile sees.")),
+                    action(APL.t("Change PIN"), function () { APL.kids.changePin(); }, APL.t("The 4-digit parent PIN."), "lock")
+                ], APL.t("A profile for children, behind a PIN.")),
+                { type: "action", label: APL.t("Phone Remote"), icon: "phone", run: function () { APL.settings.close(); APL.phone.open(); },
+                  value: function () { return sys.pref("phoneRemote") ? APL.t("On") : APL.t("Off"); },
+                  desc: APL.t("Your phone becomes a remote: swipe to move, tap to open, and a keyboard for the search. Scan the code shown on the screen (same Wi-Fi).") }
+            ], APL.t("Good Night, Kids Mode, phone remote.")),
 
             /* -------- Support -------- */
             menu(APL.t("Support"), "info", [

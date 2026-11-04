@@ -15,7 +15,7 @@
     "use strict";
 
     var APL = global.APL, sys = APL.sys;
-    var root, layers, vids, labelEl, timeEl;
+    var root, layers, vids, labelEl, timeEl, logos, lcur = 0;
     var active = false, lastInput = Date.now(), slideTimer = null, watchdog = null;
     var idx = 0, cur = 0, vcur = 0, tries = 0, history = [];
     var MAX_TRIES = 3;
@@ -33,6 +33,9 @@
             root.appendChild(v);
         });
         root.appendChild(el("div", "saver__shade"));
+        // The app's logo over its artwork: the catalogue's backgrounds are colours only
+        logos = [el("div", "saver__logo"), el("div", "saver__logo")];
+        logos.forEach(function (l) { root.appendChild(l); });
         timeEl = el("div", "saver__time");
         labelEl = el("div", "saver__label");
         root.appendChild(timeEl); root.appendChild(labelEl);
@@ -87,6 +90,8 @@
         next.onplaying = function () {
             clearTimeout(watchdog);
             tries = 0;
+            // The first video is there: the artwork shown while it loaded goes away under it
+            if (!root.classList.contains("is-playing")) { clearInterval(slideTimer); root.classList.add("is-playing"); }
             next.classList.add("is-on");
             prev.classList.remove("is-on");
             setTimeout(function () { try { prev.pause(); prev.removeAttribute("src"); prev.load(); } catch (e) {} }, 2600);
@@ -96,7 +101,8 @@
         next.onended = function () { if (active) nextAerial(); };
         // The 4K in HEVC, otherwise the same video in 1080p. The screen decodes only one 4K at a time: during
         // the crossfade, the old one stops on its last frame while the new one plays.
-        var sources = [a[3], a[4]].filter(Boolean);
+        // Older screens: the 1080p first (starts in a second or two, and the interface is 1080p anyway).
+        var sources = (quality() === "4k" ? [a[3], a[4]] : [a[4], a[3]]).filter(Boolean);
         next.onerror = function () {
             sources.shift();
             if (!sources.length || !active) { aerialFailed(); return; }
@@ -105,6 +111,11 @@
         };
         next.src = http(sources[0]);
         try { var p = next.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    }
+
+    function quality() {
+        var q = sys.pref("aerialQuality");
+        return q === "auto" ? (APL.oldScreen ? "1080" : "4k") : q;
     }
 
     /* Over http: over https, Apple's certificate is recognized neither by the screen nor by a browser, and
@@ -136,12 +147,23 @@
         nextLayer.classList.add("is-on", idx % 2 ? "is-pan-a" : "is-pan-b");
         layers[cur].classList.remove("is-on");
         cur = 1 - cur;
+        showLogo(s);
         showLabel(s.name);
+    }
+
+    /* The tile (official logo on its colour) as a floating card, unless the background already shows it. */
+    function showLogo(s) {
+        var next = logos[1 - lcur];
+        logos[lcur].classList.remove("is-on");
+        lcur = 1 - lcur;
+        if (!s.tile || s.bgHasLogo || root.classList.contains("is-clock")) return;
+        next.style.backgroundImage = "url('" + s.tile + "')";
+        setTimeout(function () { if (active) next.classList.add("is-on"); }, 700);
     }
 
     function startArt() {
         clearInterval(slideTimer);
-        root.classList.remove("is-video");
+        root.classList.remove("is-video", "is-playing");
         nextArt();
         slideTimer = setInterval(nextArt, 14000);
     }
@@ -160,7 +182,11 @@
         if (style === "dark") return;
         if (style === "aerial" && !sys.PREVIEW_NO_VIDEO) {
             root.classList.add("is-video");
+            root.classList.remove("is-playing");
             tries = 0;
+            // No black wait: an app's artwork shows right away while the first video loads
+            nextArt();
+            slideTimer = setInterval(nextArt, 14000);
             nextAerial();
         } else {
             startArt();
@@ -173,7 +199,8 @@
         clearInterval(slideTimer);
         stopVideos();
         layers.forEach(function (l) { l.classList.remove("is-on"); });
-        root.classList.remove("is-active", "is-video");
+        (logos || []).forEach(function (l) { l.classList.remove("is-on"); });
+        root.classList.remove("is-active", "is-video", "is-playing");
         lastInput = Date.now();
     }
 

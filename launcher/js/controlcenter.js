@@ -315,7 +315,25 @@
             { cls: "pill", icon: "photo", title: APL.t("Screensaver"), sub: function () { return APL.t("Start"); },
               select: function () { close(); if (APL.screensaver) APL.screensaver.start(); } },
             { cls: "pill", icon: "gear", title: APL.t("Settings"), sub: function () { return APL.t("All settings"); },
-              select: openSettings() }
+              select: openSettings() },
+            // Second row of round buttons: the new routines
+            { cls: "round", icon: "search", title: APL.t("Search"), select: function () { close(); if (APL.search) APL.search.open(""); } },
+            { cls: "round", icon: "phone", title: APL.t("Phone Remote"), tint: "#30d158",
+              sub: function () { return sys.pref("phoneRemote") ? APL.t("On") : APL.t("Off"); },
+              on: function () { return !!sys.pref("phoneRemote"); }, select: function () { close(); if (APL.phone) APL.phone.open(); } },
+            { cls: "round", icon: "night", title: APL.t("Good Night"), tint: "#5e5ce6",
+              sub: function () { return APL.routines && APL.routines.nightOn() ? APL.t("On: press to cancel") : APL.t("Sleep timer, low brightness"); },
+              on: function () { return !!(APL.routines && APL.routines.nightOn()); },
+              select: function () { if (APL.routines) APL.routines.goodNight(); } },
+            { cls: "round", icon: "kids", title: APL.t("Kids Mode"), tint: "#ff9f0a",
+              sub: function () { return APL.kids && APL.kids.active() ? APL.t("On") : APL.t("Off"); },
+              on: function () { return !!(APL.kids && APL.kids.active()); },
+              select: function () {
+                  if (!APL.kids) return;
+                  if (APL.kids.active()) APL.kids.guard(function () { APL.kids.set(false); refreshSoon(); });   // leaving it: the PIN
+                  else APL.kids.set(true);
+                  refreshSoon();
+              } }
         ];
     }
 
@@ -427,6 +445,7 @@
         body.style.transform = "translateY(0)";
         var focusables = [], rounds = null;
         captionEl = null;
+        var caps = [];
         items.forEach(function (it) {
             if (it.cls === "head") {
                 var h = el("div", "cc__sheethead", APL.icon("chevron", 30, 2.6) + "<span></span>");
@@ -446,12 +465,16 @@
             if (it.cls === "round") {
                 if (!rounds) { rounds = el("div", "cc__rounds"); body.appendChild(rounds); }
                 rounds.appendChild(t);
+                t._rounds = rounds;
             } else {
-                if (rounds && it.cls !== "round") { body.appendChild(captionEl = el("div", "cc__caption")); rounds = null; }
+                if (rounds && it.cls !== "round") { body.appendChild(rounds._cap = el("div", "cc__caption")); caps.push(rounds._cap); rounds = null; }
                 body.appendChild(t);
             }
             focusables.push(t);
         });
+        // The last row of round buttons gets its caption too
+        if (rounds) { body.appendChild(rounds._cap = el("div", "cc__caption")); caps.push(rounds._cap); rounds = null; }
+        captionEl = caps[0] || null;
         focusables.forEach(function (t) {
             if (t._item.type === "backlight") {
                 sys.tvItem("backlight").then(function (m) {
@@ -479,7 +502,8 @@
 
     function refresh() {
         nav.tiles.forEach(function (t) { if (t._item.type !== "backlight") draw(t._item, t); });
-        if (captionEl && nav.current()) captionEl.textContent = captionOf(nav.current()._item);
+        var c = nav.current();
+        if (c && c._rounds && c._rounds._cap) c._rounds._cap.textContent = captionOf(c._item);
         var d = new Date(), h = d.getHours(), m = String(d.getMinutes()).padStart(2, "0");
         timeEl.textContent = sys.pref("clock24") ? String(h).padStart(2, "0") + ":" + m : ((h % 12) || 12) + ":" + m;
         if (APL.profilesUI) APL.profilesUI.paint(avatarEl, sys.profiles.current());
@@ -513,7 +537,9 @@
         nav = new APL.Nav({
             onFocus: function (i, t) {
                 ensureVisible(t);
-                if (captionEl) captionEl.textContent = captionOf(t._item);
+                // Each row of round buttons shows the name of the focused one below it
+                Array.prototype.forEach.call(body.querySelectorAll(".cc__caption"), function (cap) { cap.textContent = ""; });
+                if (t._rounds && t._rounds._cap) t._rounds._cap.textContent = captionOf(t._item);
             },
             onSelect: function (i, t) {
                 var it = t._item;
@@ -568,6 +594,7 @@
         isOpen = false;
     }
 
+    function refreshSoon() { setTimeout(function () { if (isOpen) refresh(); }, 300); }
     setInterval(function () { if (isOpen) refresh(); }, 15000);
 
     APL.controlCenter = {

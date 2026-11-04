@@ -1,8 +1,8 @@
 {
- "version": "1.0.4",
- "loader": 1,
- "reinstall": "1.0.0",
- "notes": "Back after sleep and Art Mode on The Frame, Smart Hub tile, background choice for other apps, smoother Continue Watching cards.",
+ "version": "1.1.0",
+ "loader": 2,
+ "reinstall": "1.1.0",
+ "notes": "Tizen 6 fixes, instant start-up, Search, living Home Screen, phone remote, Good Night and Kids Mode.",
  "scripts": [
   "js/lang-fr.js",
   "js/i18n.js",
@@ -30,6 +30,11 @@
   "js/switcher.js",
   "js/widgets.js",
   "js/overlay.js",
+  "js/qr.js",
+  "js/ambient.js",
+  "js/search.js",
+  "js/phone.js",
+  "js/routines.js",
   "js/updater.js",
   "js/launcher.js",
   "js/preview.js"

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.0 (Flownyx5 fork)
+This copy updates itself from Flownyx5/APL-Launcher-for-TizenOS. Install it once with APL Launcher Setup placed in a download of this repository (the loader changed).
+- Older screens (Tizen 6.0, Chromium 76: Samsung Q60A and others of 2021 and before): logos, Top Shelf backgrounds, screen saver and Settings backgrounds were invisible (`inset` is not understood there), and rows had no spacing (no `gap` in flex rows). Both now work, and these screens get lighter animations.
+- Netflix and Prime Video show again on screens that list them as `org.tizen.netflix-app` / `org.tizen.primevideo`.
+- App artwork screen saver: the app's logo floats over its background.
+- Instant start-up: the Home Screen of the last start shows right away, the screen's app list replaces it as soon as it arrives. Tiles and backgrounds are decoded in advance.
+- Aerial screen saver: 1080p by default on older screens (Settings › Screen Saver › Video Quality), and an app's artwork shows while the first video loads instead of a black screen.
+- Opening an app: the tile grows until it fills the screen, as on tvOS. A band of light sweeps across the tile that gets the focus, in the direction of the move.
+- Living Home Screen (Settings › Living Home Screen): a tint that follows the sun, the local weather next to the clock (Open-Meteo), and rain or snow over the Top Shelf for 40 seconds when it rains or snows outside.
+- Search (new tile, Control Center, the blue key, or any letter on a keyboard): apps, films and series (TMDB), and where to watch them in France, with a button that opens the service if it is installed.
+- Phone Remote (Control Center, Settings › Routines): scan the QR code, then swipe to move, tap to open, Back/Home/⏯/volume, and a keyboard that types into the search. A small server on port 8092, opt-in, protected by a secret token or a 4-digit pairing code; only remote keys can be sent.
+- Good Night (Control Center, Settings › Routines): sleep timer, low brightness, Do Not Disturb and a black screen saver in one press; everything comes back the next morning.
+- Kids Mode (per profile, Settings › Routines): only the chosen apps; Settings, other profiles, the app menu, search and phone remote behind a parent PIN.
+
 ## 1.0.4
 - The Frame and other screens: the bridge reaches Vetro through the screen's own network address when the local one is blocked, brings the launcher back about 1 second after a wake-up instead of 15, and also after leaving Art Mode (#5, #6, thanks skjnldsv). The bridge is in the package: install it again (APL Launcher Setup or the .wgt).
 - Without APL Overlay, the launcher still gives Home back to itself and the other buttons to Samsung, and now says so (#2, thanks exzos28).

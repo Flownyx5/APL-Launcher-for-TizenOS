@@ -51,12 +51,13 @@ var ART_APP = /^org\.tizen\.art-app$/, ART_POLL_MS = 1500;
 var STATE = "vconftool get memory/pm/state; vconftool get memory/appfw/current_fullscreen_appid; vconftool get memory/system/source_type";
 
 var port = null, idle = null, openedAtBoot = false;
+var remote = null;                      // phone remote: { server, token, code, codeUntil, tries } (see the end of this file)
 var launcherFront = false, hiddenAt = 0, lastTick = Date.now(), ticking = null, sleeping = false, waking = false, inArt = false;
 
 function stopLater() {
     clearTimeout(idle);
     // Stays while the launcher is in front or the screen sleeps on it, to bring it back at wake-up
-    if (launcherFront || sleeping || waking || inArt) return;
+    if (launcherFront || sleeping || waking || inArt || (remote && remote.server)) return;
     idle = setTimeout(function () {
         try { tizen.application.getCurrentApplication().exit(); } catch (e) {}
     }, IDLE_MS);
@@ -82,6 +83,8 @@ function answer(id, status, body) {
 }
 
 function onMessage(data) {
+    var rc = field(data, "remote");
+    if (rc) { remoteConfig(rc); return; }
     var front = field(data, "front");
     if (front) {                        // the launcher came in front ("1") or left it ("0")
         launcherFront = front === "1";
@@ -273,8 +276,149 @@ function openLauncher(tries) {
     } catch (e) { again(); }
 }
 
+/* ---------- phone remote ----------
+   Opt-in (Settings, or the Phone Remote button in Control Center). A small web server on the
+   screen's network address, port 8092, serves the remote's page to a phone on the same Wi-Fi and
+   turns its buttons into remote keys (input_keyevent, through Vetro).
+   Security: every request needs the secret token that the screen puts in its QR code (or a pairing
+   code shown on the screen for 10 minutes, 8 tries). Only the keys of the list below can be sent:
+   no command, no file. Text typed on the phone only goes to the launcher's search. */
+var REMOTE_PORT = 8092;
+var REMOTE_KEYS = { up: "Up", down: "Down", left: "Left", right: "Right", ok: "Return", back: "XF86Back", home: "XF86Home",
+                    play: "XF86PlayBack", volup: "XF86AudioRaiseVolume", voldown: "XF86AudioLowerVolume", mute: "XF86AudioMute",
+                    chup: "XF86RaiseChannel", chdown: "XF86LowerChannel", info: "XF86Info", power: "XF86PowerOff" };
+
+function sameSecret(a, b) {
+    a = String(a || ""); b = String(b || "");
+    if (!a || a.length !== b.length) return false;
+    var d = 0;
+    for (var i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    return d === 0;
+}
+
+function remoteConfig(json) {
+    var c = {};
+    try { c = JSON.parse(json); } catch (e) { return; }
+    if (!c.on || !/^[A-Za-z0-9]{16,64}$/.test(c.token || "")) { stopRemote(); stopLater(); return; }
+    if (!remote) remote = { server: null, tries: 0 };
+    remote.token = c.token;
+    if (c.code && /^[0-9]{4}$/.test(c.code)) { remote.code = c.code; remote.codeUntil = Date.now() + 10 * 60000; remote.tries = 0; }
+    if (!remote.server) startRemote();
+    stopLater();
+}
+
+function stopRemote() {
+    if (remote && remote.server) { try { remote.server.close(); } catch (e) {} }
+    remote = null;
+}
+
+function startRemote() {
+    var srv = http.createServer(function (req, res) {
+        var url = req.url || "/", q = url.indexOf("?"), path = q === -1 ? url : url.substr(0, q);
+        var params = {};
+        (q === -1 ? "" : url.substr(q + 1)).split("&").forEach(function (kv) {
+            var i = kv.indexOf("=");
+            if (i > 0) { try { params[kv.substr(0, i)] = decodeURIComponent(kv.substr(i + 1)); } catch (e) {} }
+        });
+        function send(status, type, body) {
+            res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+            res.end(body);
+        }
+        if (req.method === "GET" && (path === "/" || path === "/index.html")) { send(200, "text/html; charset=utf-8", REMOTE_PAGE); return; }
+        if (req.method !== "POST") { send(404, "text/plain", "not found"); return; }
+        var chunks = [], size = 0;
+        req.on("data", function (c) { size += c.length; if (size > 2048) { req.destroy(); return; } chunks.push(c); });
+        req.on("end", function () {
+            var body = {};
+            try { body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); } catch (e) {}
+            if (!remote) { send(503, "application/json", '{"ok":false}'); return; }
+            if (path === "/pair") {
+                var ok = remote.code && Date.now() < remote.codeUntil && remote.tries < 8 && sameSecret(body.code, remote.code);
+                if (!ok) { remote.tries++; send(403, "application/json", '{"ok":false}'); return; }
+                send(200, "application/json", JSON.stringify({ ok: true, token: remote.token }));
+                return;
+            }
+            if (!sameSecret(params.t || body.t, remote.token)) { send(403, "application/json", '{"ok":false}'); return; }
+            if (path === "/key") {
+                var k = REMOTE_KEYS[body.k];
+                if (!k) { send(400, "application/json", '{"ok":false}'); return; }
+                shell("/usr/bin/input_keyevent " + k + " >/dev/null 2>&1; true", function () {});
+                send(200, "application/json", '{"ok":true}');
+                return;
+            }
+            if (path === "/text") {
+                var text = String(body.text || "").replace(/[\u0000-\u001f]/g, "").slice(0, 60);
+                toLauncher("text", text);
+                send(200, "application/json", '{"ok":true}');
+                return;
+            }
+            if (path === "/hello") { send(200, "application/json", JSON.stringify({ ok: true, front: launcherFront })); return; }
+            send(404, "application/json", '{"ok":false}');
+        });
+    });
+    srv.on("error", function () { if (remote) remote.server = null; });
+    srv.listen(REMOTE_PORT);
+    remote.server = srv;
+}
+
+/* An event for the launcher (text typed on the phone): the launcher comes to the front first. */
+function toLauncher(event, body) {
+    function post() {
+        try {
+            tizen.messageport.requestTrustedRemoteMessagePort(APP_ID, REPLY_PORT)
+                .sendMessage([{ key: "id", value: "event" }, { key: "event", value: event }, { key: "body", value: body }]);
+            return true;
+        } catch (e) { return false; }
+    }
+    if (launcherFront && post()) return;
+    try { tizen.application.launch(APP_ID, function () {}, function () {}); } catch (e) {}
+    var n = 0;
+    (function again() { if (!post() && ++n < 10) setTimeout(again, 500); })();
+}
+
+var REMOTE_PAGE = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">' +
+'<meta name="theme-color" content="#000"><title>APL Remote</title><style>' +
+':root{color-scheme:dark}*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}' +
+'body{margin:0;background:#000;color:#f5f5f7;font:16px -apple-system,system-ui,Segoe UI,Roboto,sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:18px 16px 28px}' +
+'h1{font-size:17px;font-weight:600;margin:4px 0 16px;color:#a1a1a6}h1 b{color:#f5f5f7}' +
+'#pad{width:100%;max-width:380px;aspect-ratio:1/1;border-radius:34px;background:radial-gradient(circle at 50% 40%,#2c2c30,#18181b 70%);position:relative;touch-action:none;box-shadow:inset 0 0 0 1px #2e2e33}' +
+'#pad i{position:absolute;color:#5a5a60;font-style:normal;font-size:22px}#pad .u{top:14px;left:50%;transform:translateX(-50%)}#pad .d{bottom:14px;left:50%;transform:translateX(-50%)}' +
+'#pad .l{left:16px;top:50%;transform:translateY(-50%)}#pad .r{right:16px;top:50%;transform:translateY(-50%)}' +
+'#dot{position:absolute;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;background:rgba(255,255,255,.14);opacity:0;transition:opacity .2s;pointer-events:none}' +
+'.row{display:flex;justify-content:space-between;width:100%;max-width:380px;margin-top:16px}' +
+'button{flex:1;margin:0 6px;height:62px;border:0;border-radius:31px;background:#1c1c1f;color:#f5f5f7;font-size:22px;box-shadow:inset 0 0 0 1px #2e2e33}' +
+'button:active{background:#3a3a3f}button.small{font-size:15px}' +
+'form{display:flex;width:100%;max-width:380px;margin-top:20px}input{flex:1;height:52px;border-radius:26px;border:0;padding:0 20px;background:#1c1c1f;color:#fff;font-size:17px;box-shadow:inset 0 0 0 1px #2e2e33;-webkit-user-select:text;user-select:text}' +
+'form button{flex:none;width:110px;height:52px;font-size:16px;background:#0a84ff;box-shadow:none}' +
+'#pair{display:none;flex-direction:column;align-items:center;margin-top:30px}#pair input{width:200px;text-align:center;font-size:30px;letter-spacing:10px;flex:none}' +
+'#msg{color:#ff453a;height:20px;margin-top:10px;font-size:14px}.hide{display:none!important}' +
+'</style></head><body><h1><b>APL</b> Remote</h1>' +
+'<div id="pair"><p id="ptext"></p><input id="code" inputmode="numeric" maxlength="4" autocomplete="off"><div id="msg"></div></div>' +
+'<div id="ui" class="hide"><div id="pad"><i class="u">⌃</i><i class="d">⌄</i><i class="l">‹</i><i class="r">›</i><div id="dot"></div></div>' +
+'<div class="row"><button data-k="back">‹</button><button data-k="home">⌂</button><button data-k="play">⏯</button></div>' +
+'<div class="row"><button data-k="voldown">−</button><button data-k="mute" class="small">MUTE</button><button data-k="volup">+</button></div>' +
+'<form id="f"><input id="q" autocomplete="off"><button id="go"></button></form></div>' +
+'<script>(function(){var fr=/^fr/i.test(navigator.language||"");var T=fr?{pair:"Entre le code à 4 chiffres affiché sur la TV",bad:"Code incorrect",q:"Rechercher sur la TV…",go:"Envoyer"}:{pair:"Enter the 4-digit code shown on the TV",bad:"Wrong code",q:"Search on the TV…",go:"Send"};' +
+'var m=/[?&]t=([A-Za-z0-9]+)/.exec(location.search),t=m?m[1]:"";try{if(t)localStorage.setItem("aplT",t);else t=localStorage.getItem("aplT")||""}catch(e){}' +
+'if(m)history.replaceState(null,"","/");' +
+'function post(p,b){b=b||{};b.t=t;return fetch(p+"?t="+encodeURIComponent(t),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)})}' +
+'function key(k){if(navigator.vibrate)navigator.vibrate(8);post("/key",{k:k}).then(function(r){if(r.status===403)askPair()})}' +
+'function askPair(){t="";try{localStorage.removeItem("aplT")}catch(e){}document.getElementById("ui").classList.add("hide");var p=document.getElementById("pair");p.style.display="flex";document.getElementById("ptext").textContent=T.pair;document.getElementById("code").focus()}' +
+'document.getElementById("code").addEventListener("input",function(){var c=this.value.replace(/[^0-9]/g,"");this.value=c;if(c.length===4)fetch("/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:c})}).then(function(r){return r.json()}).then(function(j){if(j.ok){t=j.token;try{localStorage.setItem("aplT",t)}catch(e){}show()}else{document.getElementById("msg").textContent=T.bad;document.getElementById("code").value=""}})});' +
+'function show(){document.getElementById("pair").style.display="none";document.getElementById("ui").classList.remove("hide")}' +
+'document.getElementById("q").placeholder=T.q;document.getElementById("go").textContent=T.go;' +
+'document.getElementById("f").addEventListener("submit",function(e){e.preventDefault();var q=document.getElementById("q");if(q.value.trim())post("/text",{text:q.value.trim()});q.value="";q.blur()});' +
+'Array.prototype.forEach.call(document.querySelectorAll("button[data-k]"),function(b){b.addEventListener("click",function(){key(b.getAttribute("data-k"))})});' +
+'var pad=document.getElementById("pad"),dot=document.getElementById("dot"),sx=0,sy=0,st=0,moved=false,rep=null;' +
+'function pos(e){var r=pad.getBoundingClientRect(),p=e.touches?e.touches[0]:e;return{x:p.clientX-r.left,y:p.clientY-r.top}}' +
+'function down(e){e.preventDefault();var p=pos(e);sx=p.x;sy=p.y;st=Date.now();moved=false;dot.style.left=p.x+"px";dot.style.top=p.y+"px";dot.style.opacity=1}' +
+'function move(e){if(!st)return;e.preventDefault();var p=pos(e),dx=p.x-sx,dy=p.y-sy;dot.style.left=p.x+"px";dot.style.top=p.y+"px";if(Math.abs(dx)>56||Math.abs(dy)>56){moved=true;key(Math.abs(dx)>Math.abs(dy)?(dx>0?"right":"left"):(dy>0?"down":"up"));sx=p.x;sy=p.y}}' +
+'function up(e){if(!st)return;e.preventDefault();if(!moved&&Date.now()-st<450)key("ok");st=0;dot.style.opacity=0}' +
+'pad.addEventListener("touchstart",down);pad.addEventListener("touchmove",move);pad.addEventListener("touchend",up);pad.addEventListener("mousedown",down);pad.addEventListener("mousemove",move);pad.addEventListener("mouseup",up);' +
+'if(!t)askPair();else post("/hello").then(function(r){if(r.status===403)askPair();else show()},function(){show()})})()</script></body></html>';
+
 module.exports.onStart = function () { start(); openLauncher(LAUNCH_TRIES); };
 // Some environments run the script without calling onStart
 try { start(); openLauncher(LAUNCH_TRIES); } catch (e) {}
 module.exports.onRequest = function () { start(); };
-module.exports.onExit = function () { clearTimeout(idle); clearInterval(ticking); ticking = null; port = null; };
+module.exports.onExit = function () { clearTimeout(idle); clearInterval(ticking); ticking = null; port = null; stopRemote(); };

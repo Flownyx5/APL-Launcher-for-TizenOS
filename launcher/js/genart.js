@@ -334,7 +334,7 @@
     function use(app, r) {
         var changed = false;
         if (!app.tile && !app.tileHtml) { app.tile = r.tile; app.madeTile = true; changed = true; }
-        if (!app.bg && !app.shelfHtml) { app.bg = r.bg === WALLPAPER ? wallpaper() : r.bg; app.madeBg = true; changed = true; }
+        if (!app.bg && !app.shelfHtml) { app.bg = r.bg === WALLPAPER ? wallpaper() : r.bg; app.madeBg = true; app.bgHasLogo = r.bg !== WALLPAPER && bgMode() === "logo"; changed = true; }
         if (!app.accent) app.accent = r.accent;
         return changed;
     }

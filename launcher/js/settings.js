@@ -70,7 +70,8 @@
             case "service": return APL.services.isCut(item.group) ? APL.t("Blocked") : APL.t("Active");
             case "native":
                 return sys.native.get(item.id).then(function (n) { return nativeText(item, n); }, function () { return APL.t("Unavailable"); });
-            default: return "";
+            case "check": return item.get() ? (item.onText || APL.t("On")) : (item.offText || APL.t("Off"));
+            default: return item.value ? item.value() : "";
         }
     }
 
@@ -326,6 +327,11 @@
                 break;
             case "action":
                 item.run();
+                if (item.value) setTimeout(function () { if (row.parentNode) refreshRow(row); }, 400);
+                break;
+            case "check":
+                item.set(!item.get());
+                refreshRow(row);
                 break;
             default: break;
         }

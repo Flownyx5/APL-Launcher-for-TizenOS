@@ -17,8 +17,8 @@
 (function (global) {
     "use strict";
 
-    var LOADER = 1;
-    var REPO = "Knikt/APL-Launcher-for-TizenOS";
+    var LOADER = 2;                      // 2: updates come from Flownyx5/APL-Launcher-for-TizenOS
+    var REPO = "Flownyx5/APL-Launcher-for-TizenOS";   // your copy (fork): updates come from there
     var BRANCH = "main";
     var BUILD = global.APL_BUILD || { version: "0", scripts: [], images: [] };
     var RAW = "https://raw.githubusercontent.com/" + REPO + "/" + BRANCH + "/launcher/";

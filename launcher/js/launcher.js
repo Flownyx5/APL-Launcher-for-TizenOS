@@ -408,13 +408,57 @@
         setTimeout(function () { el.classList.remove("is-pressed"); }, 160);
         if (!apps[i].virtual || apps[i].web) APL.sys.profiles.noteLaunch(apps[i].id);   // profile history
         if (apps[i].web && APL.sys.PREVIEW) { toast(APL.t("Preview: on your TV, “{name}” would open in Internet ({url})", { name: apps[i].name, url: apps[i].url.replace(/^https:\/\/|\/$/g, "") })); return; }
+        if (apps[i].virtual && !apps[i].zoom) { apps[i].run(); return; }
+        zoomOpen(el, apps[i]);
         if (apps[i].virtual) { apps[i].run(); return; }
-        if (APL.sys.PREVIEW) { toast(APL.t("Preview: on your TV, “{name}” would open now", { name: apps[i].name })); return; }
+        if (APL.sys.PREVIEW) { toast(APL.t("Preview: on your TV, “{name}” would open now", { name: apps[i].name })); setTimeout(dropZoom, 1400); return; }
         showVeil();
         var id = apps[i].id;
         if (TUBE.test(apps[i].name)) { launchTube(id); return; }
         APL.launchApp(id).catch(function (err) { hideVeil(); toast(err.message || APL.t("Couldn't open the app")); });
     }
+
+    /* Opening an app, the tvOS way: its tile grows until it fills the screen and fades to
+       black, while the app starts underneath. Only a transform and an opacity are animated
+       (the compositor does all the work, nothing is redrawn), in 420 ms. */
+    var zoomEl = null, zoomTimer = null;
+    function zoomOpen(tile, app) {
+        if (!tile || APL.sys.pref("reduceMotion")) return;
+        var card = tile.querySelector(".tile__card");
+        if (!card) return;
+        dropZoom();
+        var r = card.getBoundingClientRect(), k = (document.documentElement.getBoundingClientRect().width / 1920) || 1;
+        var x = r.left / k, y = r.top / k, w = r.width / k, h = r.height / k;
+        var z = document.createElement("div");
+        z.className = "zoomer";
+        z.style.left = x + "px"; z.style.top = y + "px";
+        z.style.width = w + "px"; z.style.height = h + "px";
+        var art = card.cloneNode(true);
+        art.className = "zoomer__art";
+        z.appendChild(art);
+        var black = document.createElement("div");
+        black.className = "zoomer__black";
+        var c = app.edge || app.accent;
+        black.style.background = c ? "radial-gradient(circle at 50% 50%, " + rgba(c, 0.38) + ", #000 72%)" : "#000";
+        z.appendChild(black);
+        document.body.appendChild(z);
+        zoomEl = z;
+        // Uniform scale that covers the screen, centred: the logo is never stretched
+        var s = Math.max(1920 / w, 1080 / h) * 1.08;
+        var dx = 960 - (x + w / 2), dy = 540 - (y + h / 2);
+        void z.offsetWidth;
+        z.style.transform = "translate(" + dx + "px," + dy + "px) scale(" + s + ")";
+        z.classList.add("is-open");
+        clearTimeout(zoomTimer);
+        zoomTimer = setTimeout(dropZoom, 8000);       // the app couldn't open: the Home Screen comes back
+    }
+    function dropZoom() {
+        clearTimeout(zoomTimer);
+        if (zoomEl && zoomEl.parentNode) zoomEl.parentNode.removeChild(zoomEl);
+        zoomEl = null;
+    }
+    APL.zoomOpen = zoomOpen;
+    APL.dropZoom = dropZoom;
 
     /* When an app opens: the screen dims right away, the app appears over it.
        The veil goes away on returning Home, or by itself if the app couldn't open. */
@@ -429,6 +473,7 @@
     function hideVeil() {
         if (Date.now() < veilHeldUntil) return;
         clearTimeout(veilTimer);
+        dropZoom();
         var v = $("veil");
         if (v) v.classList.remove("is-on");
     }
@@ -546,6 +591,11 @@
             if (APL.sys.pref("hiddenApps").indexOf(a.id) !== -1 || APL.folders.holding(a.id)) return false;
             return !a.folder || APL.folders.byId(a.folder);
         });
+        // Kids Mode: only the apps chosen for this profile (routines.js)
+        if (APL.kids && APL.kids.active()) {
+            apps = allApps.filter(function (a) { return !a.folder && APL.kids.allowed(a); });
+            if (!apps.length) toast(APL.t("Kids Mode: no app chosen yet. Control Center › Settings › Routines."));
+        }
         dom.row0.innerHTML = "";
         dom.rows.innerHTML = "";
         tiles = apps.map(function (app, i) {
@@ -568,7 +618,10 @@
         nav = new APL.Nav({
             onFocus: onFocus,
             onSelect: function (i) { launch(i); },
-            onLongPress: function (i, el) { if (!editing) openAppMenu(i, el); },
+            onLongPress: function (i, el) {
+                if (editing) return;
+                if (APL.kids) APL.kids.guard(function () { openAppMenu(i, el); }); else openAppMenu(i, el);
+            },
             // The tile reacts as soon as it's pressed: the remote's delay no longer shows
             onHoldStart: function (i) { if (tiles[i]) tiles[i].classList.add("is-pressed"); },
             onHoldCancel: function (i) { if (tiles[i]) tiles[i].classList.remove("is-pressed"); },
@@ -593,6 +646,7 @@
             }
         });
         nav.attach();
+        APL.homeNav = nav;
     }
 
     function asset(p) { return global.APL_ASSET ? global.APL_ASSET(p) : p; }
@@ -601,7 +655,7 @@
     function virtualApps() {
         return [
             // TizenTube: its own tile, without going through TizenBrew's screen
-            { id: "apl.tizentube", name: "TizenTube", virtual: true, needs: "xvvl3S1bvH.TizenBrewStandalone", accent: "#1fb6e6", eyebrow: "VIDÉO",
+            { id: "apl.tizentube", name: "TizenTube", virtual: true, zoom: true, needs: "xvvl3S1bvH.TizenBrewStandalone", accent: "#1fb6e6", eyebrow: "VIDÉO",
               tile: APL.TIZENTUBE_ART.tile, bg: APL.TIZENTUBE_ART.bg, bgBlur: APL.TIZENTUBE_ART.bgBlur, live: "youtube",
               run: function () { showVeil(); launchTube(null); } },
             // Apple's Settings icon (images/apps/settings-*, made by tools/art)
@@ -613,6 +667,11 @@
               tileHtml: '<div class="vtile vtile--sources">' + APL.icon("source", 92, 1.6) + '</div>',
               shelfHtml: '<div class="brandcard__glyph vtile--sources">' + APL.icon("source", 180, 1.3) + '</div>',
               run: function () { APL.openSources(); } },
+            // Search, as on Apple TV: apps, films and series, and where to watch them (search.js)
+            { id: "apl.search", name: APL.t("Search"), virtual: true, accent: "#3a3a40", eyebrow: "SYSTÈME",
+              tileHtml: '<div class="vtile vtile--search">' + APL.icon("search", 88, 1.8) + '</div>',
+              shelfHtml: '<div class="brandcard__glyph vtile--search">' + APL.icon("search", 170, 1.4) + '</div>',
+              run: function () { if (APL.search) APL.search.open(""); } },
             // Samsung's own home: the way out now that Vetro keeps the Home key for the launcher.
             // Hidden like any app (Settings › Apps › Show on Home Screen, or hold OK › Hide App).
             { id: SAMSUNG_HOME_TILE, name: "Smart Hub", virtual: true, accent: "#1428a0", eyebrow: "SYSTÈME",
@@ -635,8 +694,25 @@
             .catch(function () { toast(APL.t("Vetro is not responding")); });
     }
 
+    /* Old screens (Tizen 6.0 and earlier): no `gap` in flex rows. Measured, not guessed. */
+    function detectFlexGap() {
+        try {
+            var f = document.createElement("div");
+            f.style.cssText = "display:flex;flex-direction:column;row-gap:1px;position:absolute;visibility:hidden";
+            f.appendChild(document.createElement("div"));
+            f.appendChild(document.createElement("div"));
+            document.body.appendChild(f);
+            var ok = f.scrollHeight === 1;
+            document.body.removeChild(f);
+            document.documentElement.classList.toggle("no-flexgap", !ok);
+        } catch (e) {}
+        // Older screens (Tizen 6.5 and before: Chromium 85 or older) get the lighter animations
+        document.documentElement.classList.toggle("legacy", APL.oldScreen);
+    }
+
     function boot() {
         cacheDom();
+        detectFlexGap();
         dom.hint.querySelector(".hint__text").textContent = APL.t("Press ▲ for full screen");   // index.html only has the English text
         startClock();
         APL.sys.registerKeys();
@@ -648,9 +724,14 @@
         APL.sys.onPref("appearance", applyTheme);
         APL.sys.profiles.onChange(applyTheme);
         setInterval(applyTheme, 60000);
-        APL.loadApps().then(function (list) {
+        /* Instant start-up: the Home Screen of the last start is drawn right away, from the list
+           kept on the screen; the screen's real list replaces it as soon as it arrives (only
+           redrawn if an app was installed, removed or renamed in the meantime). */
+        var shown = false, shownSig = "";
+        function firstShow(list) {
+            shown = true;
+            shownSig = APL.appsSignature ? APL.appsSignature(list) : "";
             buildList(list);
-            watchPackages();
             setTimeout(preloadDock, 400);
             // Then a background search for missing artwork (new apps included)
             setTimeout(function () { if (APL.autoArt) APL.autoArt.run(allApps, render); }, 3500);
@@ -659,10 +740,41 @@
             if (APL.overlay) APL.overlay.start();
             slowKeyRepeat(8);
             setTimeout(bootCleanup, 25000);
+            setTimeout(warmImages, 1200);
             global.APL_BOOT_OK = true;          // the version (installed or updated) starts fine
             if (requestedAction()) runAction(requestedAction());   // opened for a specific reason: TizenTube, App Switcher…
-            setTimeout(function () { dom.boot.classList.add("is-hidden"); }, 120);
+            setTimeout(function () { dom.boot.classList.add("is-hidden"); }, 60);
+            if (APL.onHomeReady) APL.onHomeReady();
+        }
+        var cached = APL.loadAppsCached ? APL.loadAppsCached() : null;
+        if (cached && cached.length) firstShow(cached);
+        APL.loadApps().then(function (list) {
+            watchPackages();
+            if (!shown) { firstShow(list); return; }
+            if (APL.appsSignature && APL.appsSignature(list) === shownSig) return;
+            var focused = apps[nav.index] && apps[nav.index].id;
+            buildList(list);
+            render();
+            for (var i = 0; i < apps.length; i++) if (apps[i].id === focused) { nav.focus(i); break; }
         });
+    }
+
+    /* Images decoded in advance, a few at a time while nothing moves: the first time a tile or
+       a Top Shelf background shows, the screen no longer has to decode it (the hitch older screens show). */
+    function warmImages() {
+        var list = [];
+        apps.slice(0, 18).forEach(function (a, i) {
+            if (a.tile) list.push(a.tile);
+            if (i < DOCK_SIZE && a.bg) list.push(a.bg);
+        });
+        (function next() {
+            var src = list.shift();
+            if (!src) return;
+            var im = new Image();
+            im.src = src;
+            var go = function () { setTimeout(next, 120); };
+            if (im.decode) im.decode().then(go, go); else { im.onload = go; im.onerror = go; }
+        })();
     }
 
     /* Full list: the dock (your apps, Settings, Sources), then your websites,

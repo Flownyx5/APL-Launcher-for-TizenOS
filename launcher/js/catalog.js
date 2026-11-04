@@ -15,7 +15,8 @@ window.APL_CATALOG = [
     ],
     "ids": [
       "3201907018807",
-      "11101200001"
+      "11101200001",
+      "org.tizen.netflix-app"
     ],
     "tile": "images/apps/netflix-tile.png",
     "bg": "images/apps/netflix-bg.jpg"
@@ -30,7 +31,8 @@ window.APL_CATALOG = [
       "amazon prime"
     ],
     "ids": [
-      "3201910019365"
+      "3201910019365",
+      "org.tizen.primevideo"
     ],
     "tile": "images/apps/primevideo-tile.png",
     "bg": "images/apps/primevideo-bg.jpg"

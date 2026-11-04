@@ -84,9 +84,9 @@
             if (c.hide) return false;                                      // SmartThings: never
             if (c.system || !SYSTEM_ID.test(id)) return true;              // Samsung TV Plus: a Samsung app to keep
         }
+        if (CAT_BY_ID[id]) return true;                                    // known app, even with a system id (org.tizen.netflix-app)
         if (SYSTEM_ID.test(id)) return false;
         if (TECH_NAME.test(String(name || ""))) return false;
-        if (CAT_BY_ID[id]) return true;
         if (/^[A-Za-z0-9]{10}\.[A-Za-z0-9_-]+$/.test(id)) return true;   // Store apps and installed apps
         if (/^\d{9,14}$/.test(id)) return true;                         // Samsung apps from the Store (Netflix…)
         return false;
@@ -166,10 +166,46 @@
     /* A single App Store tile: the screen sometimes lists two entries for the Samsung
        store (the store and the old Apps panel). com.samsung.tv.store is kept. */
     function dedupe(apps) {
+        // One tile per catalogue app: some screens list Netflix twice (store id + org.tizen.netflix-app)
+        var seen = {};
+        apps = apps.filter(function (a) {
+            if (!a.key || a.key === "appstore") return true;
+            if (seen[a.key]) return false;
+            seen[a.key] = true;
+            return true;
+        });
         var stores = apps.filter(function (a) { return STORE_ID.test(a.id); });
         if (stores.length < 2) return apps;
         var keep = stores.filter(function (a) { return a.id === "com.samsung.tv.store"; })[0] || stores[0];
         return apps.filter(function (a) { return !STORE_ID.test(a.id) || a === keep; });
+    }
+
+    /* Raw list (id, name, icon) → the Home Screen's apps, decorated and in order. */
+    function finish(raw) {
+        var apps = raw.map(decorate);
+        // Overscan takes the place of Samsung Internet
+        overscanInstalled = apps.some(function (a) { return a.id === OVERSCAN; });
+        if (overscanInstalled) apps = apps.filter(function (a) { return !/^org\.tizen\.browser/.test(a.id); });
+        return order(dedupe(apps));
+    }
+
+    /* Instant start-up: the list from the last start, kept on the screen. The screen's own list
+       (getAppsInfo, often 0.5 to 2 s on older screens) replaces it as soon as it arrives. */
+    var CACHE = "apl.appcache";
+    function saveCache(raw) {
+        try { global.localStorage.setItem(CACHE, JSON.stringify({ v: 1, lang: global.APL.lang, apps: raw })); } catch (e) {}
+    }
+    function loadAppsCached() {
+        if (!hasTizen()) return null;
+        try {
+            var c = JSON.parse(global.localStorage.getItem(CACHE) || "null");
+            if (!c || c.v !== 1 || c.lang !== global.APL.lang || !c.apps || !c.apps.length) return null;
+            return finish(c.apps);
+        } catch (e) { return null; }
+    }
+    /* Same apps (ids, names, icons) as the cached list? Then nothing to redraw. */
+    function signature(list) {
+        return list.map(function (a) { return a.id + "|" + a.name + "|" + (a.icon || ""); }).join(",");
     }
 
     function loadApps() {
@@ -180,7 +216,7 @@
             }
             try {
                 global.tizen.application.getAppsInfo(function (list) {
-                    var apps = [];
+                    var raw = [];
                     for (var i = 0; i < list.length; i++) {
                         var a = list[i];
                         // `show:true` == meant to appear in the real Samsung menu.
@@ -188,13 +224,11 @@
                         if (!a.show) continue;
                         if (BLOCKLIST[a.id]) continue;
                         if (!isRealApp(a.id, a.name)) continue;
-                        apps.push(decorate({ id: a.id, name: a.name, icon: a.iconPath }));
+                        raw.push({ id: a.id, name: a.name, icon: a.iconPath });
                     }
-                    if (!apps.length) { resolve(order(DEMO_APPS.map(decorate))); return; }
-                    // Overscan takes the place of Samsung Internet
-                    overscanInstalled = apps.some(function (a) { return a.id === OVERSCAN; });
-                    if (overscanInstalled) apps = apps.filter(function (a) { return !/^org\.tizen\.browser/.test(a.id); });
-                    resolve(order(dedupe(apps)));
+                    if (!raw.length) { resolve(order(DEMO_APPS.map(decorate))); return; }
+                    saveCache(raw);
+                    resolve(finish(raw));
                 }, function () {
                     resolve(order(DEMO_APPS.map(decorate)));
                 });
@@ -249,7 +283,7 @@
         var list = (global.APL_KEYS && global.APL_KEYS.webApps) || [];
         return list.filter(function (w) { return w && w.name && /^https?:\/\//.test(w.url || ""); }).map(function (w) {
             var a = decorate({ id: "web." + slug(w.name), name: w.name, icon: null });
-            a.virtual = true; a.web = true; a.url = w.url; a.live = w.live || a.live;
+            a.virtual = true; a.web = true; a.zoom = true; a.url = w.url; a.live = w.live || a.live;
             a.run = function () {
                 openUrl(w.url).catch(function (e) { if (global.APL.toast) global.APL.toast(e.message); });
             };
@@ -320,6 +354,8 @@
 
     global.APL = global.APL || {};
     global.APL.loadApps = loadApps;
+    global.APL.loadAppsCached = loadAppsCached;
+    global.APL.appsSignature = signature;
     global.APL.isInstalled = isInstalled;
     global.APL.webApps = webApps;
     global.APL.openUrl = openUrl;

@@ -185,6 +185,8 @@
     };
 
     Nav.prototype.move = function (dir) {
+        // The focus shine (CSS) sweeps in the direction of the move
+        if (document.body && document.body.getAttribute("data-navdir") !== dir) document.body.setAttribute("data-navdir", dir);
         var n = this.neighbour(dir);
         if (n !== -1) { this.focus(n); if (global.APL.sound) global.APL.sound.tick(); }
         else {

@@ -74,7 +74,7 @@ namespace APL.Setup
 
     internal sealed class AboutPage : Page
     {
-        internal const string GitHub = "https://github.com/Knikt/APL-Launcher-for-TizenOS";
+        internal const string GitHub = "https://github.com/Flownyx5/APL-Launcher-for-TizenOS";
 
         internal AboutPage(MainWindow main) : base(main, "about", "AboutPage.xaml")
         {

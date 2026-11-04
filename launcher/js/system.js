@@ -22,6 +22,12 @@
     var PREVIEW = !tz;
     var APL = global.APL;
 
+    /* Older screens (Tizen 6.5 and before ship Chromium 85 or older; Tizen 6.0 is Chromium 76):
+       lighter animations and 1080p screen saver videos by default. */
+    var chrome = parseInt((/Chrome\/(\d+)/.exec((global.navigator && global.navigator.userAgent) || "") || [])[1], 10) || 0;
+    APL.chromeVersion = chrome;
+    APL.oldScreen = !!chrome && chrome < 90;
+
     /* ---------- preferences (stored on the screen) ---------- */
     var DEFAULTS = {
         profileName: "",            // first name shown in Control Center (Settings)
@@ -54,13 +60,25 @@
         servicesCut: {},            // blocked Samsung services and their original settings (services.js)
         bootCleanup: true,          // once per power-on: closes what Samsung opens on its own
         idleClose: true,            // an app left in the background for 10 min is closed (overlay/IdleApps.cs)
-        language: "auto"            // "auto" (screen language) | "en" | "fr": read at start-up by i18n.js
+        language: "auto",           // "auto" (screen language) | "en" | "fr": read at start-up by i18n.js
+        aerialQuality: "auto",      // "auto" (1080p on older screens, 4K otherwise) | "1080" | "4k"
+        ambient: true,              // the Home Screen's light follows the time of day (ambient.js)
+        weather: true,              // local weather in the status pill (Open-Meteo, location from the IP address)
+        weatherFx: true,            // rain or snow over the Top Shelf for a few seconds on arriving Home
+        phoneRemote: false,         // remote control from a phone on the same Wi-Fi (phone.js + bridge/service.js)
+        phoneToken: "",             // secret put in the QR code: only a phone that scanned it can send keys
+        nightMinutes: 30,           // "Good Night": sleep timer (minutes)
+        nightBacklight: 8,          // "Good Night": backlight while it runs
+        kidsPin: "",                // Kids Mode PIN (hashed), shared by the whole screen
+        kidsMode: false,            // this profile is a child's: only the chosen apps, Settings behind the PIN
+        kidsApps: [],               // apps allowed in Kids Mode (ids)
+        nightState: null            // "Good Night" running: what to put back the next morning (routines.js)
     };
     /* Screen settings (shared) and the settings of each profile in the household:
        Home Screen layout, hidden apps, preferences, recent apps. */
     var PROFILE_KEYS = { hiddenApps: 1, appOrder: 1, clock24: 1, showHint: 1, reduceMotion: 1, dnd: 1,
                          uiSounds: 1, screensaverStyle: 1, screensaverDelay: 1, liveShelf: 1, recentApps: 1,
-                         appearance: 1, folders: 1, aerialHidden: 1, smartHubTileSet: 1 };
+                         appearance: 1, folders: 1, aerialHidden: 1, smartHubTileSet: 1, kidsMode: 1, kidsApps: 1 };
     DEFAULTS.recentApps = [];
     var COLORS = ["#ff9f0a", "#30d158", "#0a84ff", "#bf5af2", "#ff375f", "#64d2ff", "#ffd60a", "#ac8e68"];
     function load(k, fallback) {
@@ -396,6 +414,8 @@
         replyPort.addMessagePortListener(function (data) {
             var m = {};
             for (var i = 0; i < data.length; i++) m[data[i].key] = data[i].value;
+            // An event sent by the bridge on its own (text typed on the phone remote)
+            if (m.event) { bridgeEvents.forEach(function (fn) { try { fn(m.event, m.body || ""); } catch (e) {} }); return; }
             var p = pending[m.id];
             if (!p) return;
             // Large answers arrive in several pieces
@@ -406,6 +426,19 @@
             p.resolve({ status: parseInt(m.status, 10) || 0, body: p.chunks.join("") });
         });
         return replyPort;
+    }
+    var bridgeEvents = [];
+    function onBridgeEvent(fn) {
+        bridgeEvents.push(fn);
+        if (!PREVIEW && tz && tz.messageport) { try { ensureReplyPort(); } catch (e) {} }
+    }
+    /* A message to the bridge that needs no answer (phone remote settings), starting it if needed. */
+    function bridgeSend(fields) {
+        if (PREVIEW || !tz || !tz.messageport) return Promise.reject(new Error("bridge unavailable"));
+        function send() {
+            tz.messageport.requestTrustedRemoteMessagePort(BRIDGE_ID, BRIDGE_PORT).sendMessage(fields);
+        }
+        try { send(); return Promise.resolve(); } catch (e) { return startBridge().then(send); }
     }
     function bridgeRequest(method, path, body) {
         if (PREVIEW || !tz || !tz.messageport || Date.now() < bridgeDownUntil) return Promise.reject(new Error("bridge unavailable"));
@@ -791,6 +824,7 @@
         switchSource: switchSource, vetroAlive: vetroAlive,
         registerKeys: registerKeys, armSleepTimer: armSleepTimer, readSleepTimer: readSleepTimer,
         vetroGet: vetroGet, vetroPost: vetroPost, exec: tvExec, game: game, runningApps: runningApps,
+        bridgeSend: bridgeSend, onBridgeEvent: onBridgeEvent,
         native: { get: nativeGet, set: nativeSet, reset: nativeReset, info: function (id) { return NATIVE[id]; } },
         PICTURE_MODES: PICTURE_MODES, pictureModeName: pictureModeName, setPictureMode: setPictureMode,
         tvSettings: tvSettings, tvItem: tvItem, tvAdjust: tvAdjust, tvValue: tvValue,
