@@ -1287,3 +1287,35 @@ html, body {
 .nightfx__moon { transform: translateY(30px) scale(0.85); transition: transform 1600ms cubic-bezier(0.2, 0.8, 0.2, 1); filter: drop-shadow(0 0 40px rgba(245, 233, 200, 0.5)); }
 .nightfx.is-on .nightfx__moon { transform: none; }
 .nightfx__txt { margin-top: 30px; font-size: 64px; font-weight: 300; letter-spacing: 2px; color: #fff; }
+
+/* ===================== DIAGNOSTIC (diag.js) ===================== */
+.diag { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 46; background: linear-gradient(180deg, #0f1118, #06070b);
+    color: #fff; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
+.diag.is-open { opacity: 1; pointer-events: auto; }
+.diag__head { position: absolute; left: 90px; right: 90px; top: 54px; height: 110px; }
+.diag__title { margin: 0; font-size: 56px; font-weight: 800; }
+.diag__sum { margin-top: 8px; font-size: 26px; color: rgba(255, 255, 255, 0.65); }
+.diag__btns { position: absolute; right: 0; top: 14px; display: flex; }
+.diag__btn { height: 76px; padding: 0 38px; margin-left: 20px; border-radius: 38px; background: rgba(255, 255, 255, 0.10);
+    display: flex; align-items: center; font-size: 28px; font-weight: 600; transition: transform 140ms ease; }
+.diag__btn.is-focused { background: #f5f5f7; color: #1c1c1e; transform: scale(1.07); }
+.diag__spin { position: absolute; right: 420px; top: 30px; width: 44px; height: 44px; border-radius: 50%;
+    border: 5px solid rgba(255, 255, 255, 0.15); border-top-color: #0a84ff; box-sizing: border-box; opacity: 0; }
+.diag__spin.is-on { opacity: 1; animation: diagSpin 0.8s linear infinite; }
+@keyframes diagSpin { to { transform: rotate(360deg); } }
+.diag__list { position: absolute; left: 90px; right: 90px; top: 200px; display: flex; flex-wrap: wrap; justify-content: space-between; }
+.diag__row { width: 860px; height: 62px; margin-bottom: 8px; display: flex; align-items: center; border-radius: 16px; padding: 0 18px;
+    background: rgba(255, 255, 255, 0.05); box-sizing: border-box; overflow: hidden; }
+.diag__st { flex: none; width: 40px; height: 40px; border-radius: 50%; margin-right: 18px; display: flex; align-items: center; justify-content: center;
+    font-size: 24px; font-weight: 800; color: #000; background: rgba(255, 255, 255, 0.15); }
+.diag__txt { min-width: 0; }
+.diag__txt b { display: block; font-size: 23px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.diag__txt i { display: block; font-style: normal; font-size: 19px; color: rgba(255, 255, 255, 0.62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.diag__row.is-ok .diag__st { background: #30d158; }
+.diag__row.is-warn .diag__st { background: #ff9f0a; }
+.diag__row.is-fail .diag__st { background: #ff453a; color: #fff; }
+.diag__row.is-info .diag__st { background: #64d2ff; }
+.diag__row.is-skip .diag__st { background: rgba(255, 255, 255, 0.25); color: #fff; }
+.diag__row.is-run .diag__st { background: none; border: 4px solid rgba(255, 255, 255, 0.2); border-top-color: #fff; box-sizing: border-box; animation: diagSpin 0.8s linear infinite; }
+.diag__row.is-wait { opacity: 0.45; }
+.diag__foot { position: absolute; left: 90px; right: 90px; bottom: 40px; font-size: 24px; color: rgba(255, 255, 255, 0.55); }

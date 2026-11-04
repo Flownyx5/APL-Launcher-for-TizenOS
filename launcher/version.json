@@ -1,8 +1,8 @@
 {
- "version": "1.1.0",
+ "version": "1.1.1",
  "loader": 2,
- "reinstall": "1.1.0",
- "notes": "Tizen 6 fixes, instant start-up, Search, living Home Screen, phone remote, Good Night and Kids Mode.",
+ "reinstall": "1.1.1",
+ "notes": "Diagnostic: Settings › Support › Diagnostic tests what depends on the screen model.",
  "scripts": [
   "js/lang-fr.js",
   "js/i18n.js",
@@ -35,6 +35,7 @@
   "js/search.js",
   "js/phone.js",
   "js/routines.js",
+  "js/diag.js",
   "js/updater.js",
   "js/launcher.js",
   "js/preview.js"

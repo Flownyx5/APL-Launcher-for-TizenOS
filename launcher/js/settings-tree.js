@@ -292,6 +292,8 @@
 
             /* -------- Support -------- */
             menu(APL.t("Support"), "info", [
+                action(APL.t("Diagnostic"), function () { if (APL.diag) APL.diag.open(); },
+                    APL.t("Tests on this screen what depends on the model: Vetro, each remote key, volume, the phone remote, brightness, weather, TMDB, Apple's videos, smoothness. Volume, mute and brightness are changed for a second, then put back. Takes about a minute."), "help"),
                 menu(APL.t("Launcher Update"), "update", [
                     info(APL.t("Version"), function () {
                         var u = APL.updater;

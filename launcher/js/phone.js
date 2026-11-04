@@ -146,5 +146,10 @@
         if (sys.pref("phoneRemote")) setTimeout(function () { push(false).catch(function () {}); }, 6000);
     };
 
-    APL.phone = { open: open, close: close, isOpen: function () { return isOpen; } };
+    APL.phone = {
+        open: open, close: close, isOpen: function () { return isOpen; },
+        /* Diagnostic (diag.js): the server on for a moment, whatever the setting, then back as set. */
+        serverOn: function () { return sys.bridgeSend([{ key: "remote", value: JSON.stringify({ on: true, token: token() }) }]); },
+        serverSync: function () { return push(false).catch(function () {}); }
+    };
 })(window);

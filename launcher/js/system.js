@@ -825,6 +825,8 @@
         registerKeys: registerKeys, armSleepTimer: armSleepTimer, readSleepTimer: readSleepTimer,
         vetroGet: vetroGet, vetroPost: vetroPost, exec: tvExec, game: game, runningApps: runningApps,
         bridgeSend: bridgeSend, onBridgeEvent: onBridgeEvent,
+        /* Diagnostic: the bridge answers (a path it refuses to relay still proves it is there). */
+        bridgePing: function () { return bridgeRequest("GET", "/__ping", "").then(function (r) { return r.status; }); },
         native: { get: nativeGet, set: nativeSet, reset: nativeReset, info: function (id) { return NATIVE[id]; } },
         PICTURE_MODES: PICTURE_MODES, pictureModeName: pictureModeName, setPictureMode: setPictureMode,
         tvSettings: tvSettings, tvItem: tvItem, tvAdjust: tvAdjust, tvValue: tvValue,

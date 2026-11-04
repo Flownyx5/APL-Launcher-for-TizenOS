@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.1 (Flownyx5 fork)
+- Settings › Support › Diagnostic: tests on the screen itself what depends on the model (Vetro, the bridge, each remote key really sent, volume and mute, the phone remote's server, writing the backlight, weather, the TMDB key, Apple's videos, frames per second, free memory). Volume, mute and backlight are changed for a second, then put back. The report is also readable as text from the phone remote ("Diagnostic" link at the bottom of its page).
+
 ## 1.1.0 (Flownyx5 fork)
 This copy updates itself from Flownyx5/APL-Launcher-for-TizenOS. Install it once with APL Launcher Setup placed in a download of this repository (the loader changed).
 - Older screens (Tizen 6.0, Chromium 76: Samsung Q60A and others of 2021 and before): logos, Top Shelf backgrounds, screen saver and Settings backgrounds were invisible (`inset` is not understood there), and rows had no spacing (no `gap` in flex rows). Both now work, and these screens get lighter animations.

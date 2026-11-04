@@ -52,6 +52,7 @@ var STATE = "vconftool get memory/pm/state; vconftool get memory/appfw/current_f
 
 var port = null, idle = null, openedAtBoot = false;
 var remote = null;                      // phone remote: { server, token, code, codeUntil, tries } (see the end of this file)
+var lastReport = "";                    // the launcher's last diagnostic, readable from the phone remote
 var launcherFront = false, hiddenAt = 0, lastTick = Date.now(), ticking = null, sleeping = false, waking = false, inArt = false;
 
 function stopLater() {
@@ -85,6 +86,8 @@ function answer(id, status, body) {
 function onMessage(data) {
     var rc = field(data, "remote");
     if (rc) { remoteConfig(rc); return; }
+    var report = field(data, "report");
+    if (report) { lastReport = report.slice(0, 20000); stopLater(); return; }
     var front = field(data, "front");
     if (front) {                        // the launcher came in front ("1") or left it ("0")
         launcherFront = front === "1";
@@ -325,6 +328,18 @@ function startRemote() {
             res.end(body);
         }
         if (req.method === "GET" && (path === "/" || path === "/index.html")) { send(200, "text/html; charset=utf-8", REMOTE_PAGE); return; }
+        // Diagnostic: is the server reachable? (nothing secret in the answer)
+        if (req.method === "GET" && path === "/ping") {
+            res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
+            res.end('{"ok":true,"app":"apl-remote"}');
+            return;
+        }
+        // The last diagnostic report, as text to copy (token needed)
+        if (req.method === "GET" && path === "/report") {
+            if (!remote || !sameSecret(params.t, remote.token)) { send(403, "text/plain; charset=utf-8", "forbidden"); return; }
+            send(200, "text/plain; charset=utf-8", lastReport || "No diagnostic yet: Settings › Support › Diagnostic on the screen.");
+            return;
+        }
         if (req.method !== "POST") { send(404, "text/plain", "not found"); return; }
         var chunks = [], size = 0;
         req.on("data", function (c) { size += c.length; if (size > 2048) { req.destroy(); return; } chunks.push(c); });
@@ -392,12 +407,13 @@ var REMOTE_PAGE = '<!doctype html><html><head><meta charset="utf-8"><meta name="
 'form button{flex:none;width:110px;height:52px;font-size:16px;background:#0a84ff;box-shadow:none}' +
 '#pair{display:none;flex-direction:column;align-items:center;margin-top:30px}#pair input{width:200px;text-align:center;font-size:30px;letter-spacing:10px;flex:none}' +
 '#msg{color:#ff453a;height:20px;margin-top:10px;font-size:14px}.hide{display:none!important}' +
+'#rep{display:block;text-align:center;margin-top:26px;color:#636366;font-size:14px;text-decoration:none}' +
 '</style></head><body><h1><b>APL</b> Remote</h1>' +
 '<div id="pair"><p id="ptext"></p><input id="code" inputmode="numeric" maxlength="4" autocomplete="off"><div id="msg"></div></div>' +
 '<div id="ui" class="hide"><div id="pad"><i class="u">⌃</i><i class="d">⌄</i><i class="l">‹</i><i class="r">›</i><div id="dot"></div></div>' +
 '<div class="row"><button data-k="back">‹</button><button data-k="home">⌂</button><button data-k="play">⏯</button></div>' +
 '<div class="row"><button data-k="voldown">−</button><button data-k="mute" class="small">MUTE</button><button data-k="volup">+</button></div>' +
-'<form id="f"><input id="q" autocomplete="off"><button id="go"></button></form></div>' +
+'<form id="f"><input id="q" autocomplete="off"><button id="go"></button></form><a id="rep" href="#">Diagnostic</a></div>' +
 '<script>(function(){var fr=/^fr/i.test(navigator.language||"");var T=fr?{pair:"Entre le code à 4 chiffres affiché sur la TV",bad:"Code incorrect",q:"Rechercher sur la TV…",go:"Envoyer"}:{pair:"Enter the 4-digit code shown on the TV",bad:"Wrong code",q:"Search on the TV…",go:"Send"};' +
 'var m=/[?&]t=([A-Za-z0-9]+)/.exec(location.search),t=m?m[1]:"";try{if(t)localStorage.setItem("aplT",t);else t=localStorage.getItem("aplT")||""}catch(e){}' +
 'if(m)history.replaceState(null,"","/");' +
@@ -406,6 +422,7 @@ var REMOTE_PAGE = '<!doctype html><html><head><meta charset="utf-8"><meta name="
 'function askPair(){t="";try{localStorage.removeItem("aplT")}catch(e){}document.getElementById("ui").classList.add("hide");var p=document.getElementById("pair");p.style.display="flex";document.getElementById("ptext").textContent=T.pair;document.getElementById("code").focus()}' +
 'document.getElementById("code").addEventListener("input",function(){var c=this.value.replace(/[^0-9]/g,"");this.value=c;if(c.length===4)fetch("/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:c})}).then(function(r){return r.json()}).then(function(j){if(j.ok){t=j.token;try{localStorage.setItem("aplT",t)}catch(e){}show()}else{document.getElementById("msg").textContent=T.bad;document.getElementById("code").value=""}})});' +
 'function show(){document.getElementById("pair").style.display="none";document.getElementById("ui").classList.remove("hide")}' +
+'document.getElementById("rep").addEventListener("click",function(e){e.preventDefault();location.href="/report?t="+encodeURIComponent(t)});' +
 'document.getElementById("q").placeholder=T.q;document.getElementById("go").textContent=T.go;' +
 'document.getElementById("f").addEventListener("submit",function(e){e.preventDefault();var q=document.getElementById("q");if(q.value.trim())post("/text",{text:q.value.trim()});q.value="";q.blur()});' +
 'Array.prototype.forEach.call(document.querySelectorAll("button[data-k]"),function(b){b.addEventListener("click",function(){key(b.getAttribute("data-k"))})});' +
