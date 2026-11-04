@@ -51,7 +51,8 @@
         if (sys.PREVIEW || installed || !checked) return;
         var apps = (APL.allApps && APL.allApps()) || [];
         var keep = apps.filter(function (a) { return !a.virtual && (a.music || (a.key && MUSIC.test(a.key))); }).map(function (a) { return a.id; });
-        var cfg = { minutes: sys.pref("idleClose") ? IDLE_MINUTES : 0, apps: homeApps().split(";"), keep: keep };
+        var cfg = { minutes: sys.pref("idleClose") ? IDLE_MINUTES : 0, apps: homeApps().split(";"), keep: keep,
+                    homeReturn: !!sys.pref("homeReturn") };
         sys.bridgeSend([{ key: "idle", value: JSON.stringify(cfg) }]).catch(function () {});
     }
 

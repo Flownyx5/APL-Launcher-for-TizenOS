@@ -744,5 +744,9 @@ window.APL_LANG_FR = {
     "Zoom": "Zoom",
     "Fade": "Fondu",
     "None": "Aucune",
-    "Zoom: the tile grows until it fills the screen, as on Apple TV. Fade: the tile grows a little and fades while the screen goes black, smooth on every screen. Automatic: fade on older screens (Tizen 6), zoom on recent ones.": "Zoom : la tuile grandit jusqu'à remplir l'écran, comme sur l'Apple TV. Fondu : la tuile grossit un peu et s'efface pendant que l'écran passe au noir, fluide sur tous les écrans. Automatique : fondu sur les écrans plus anciens (Tizen 6), zoom sur les récents."
+    "Zoom: the tile grows until it fills the screen, as on Apple TV. Fade: the tile grows a little and fades while the screen goes black, smooth on every screen. Automatic: fade on older screens (Tizen 6), zoom on recent ones.": "Zoom : la tuile grandit jusqu'à remplir l'écran, comme sur l'Apple TV. Fondu : la tuile grossit un peu et s'efface pendant que l'écran passe au noir, fluide sur tous les écrans. Automatique : fondu sur les écrans plus anciens (Tizen 6), zoom sur les récents.",
+    "When an app closes, or when Samsung's home opens on its own (a phone app's Home button, a remote Vetro doesn't intercept), the screen comes back here. Samsung's home opened from the launcher's Smart Hub tile stays.": "Quand une app se ferme, ou quand le menu Samsung s'ouvre tout seul (bouton Home d'une app téléphone, télécommande que Vetro n'intercepte pas), l'écran revient ici. Le menu Samsung ouvert depuis la tuile Smart Hub du launcher reste affiché.",
+    "turned off in Settings › Advanced Features": "désactivé dans Réglages › Fonctions avancées",
+    "on: Samsung's home is watched while the launcher is behind": "actif : le menu Samsung est surveillé quand le launcher est en arrière-plan",
+    "brought back {n} times (last {t})": "launcher ramené {n} fois (dernière à {t})"
 };

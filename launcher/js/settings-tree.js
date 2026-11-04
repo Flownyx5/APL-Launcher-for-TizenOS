@@ -190,7 +190,7 @@
             /* -------- Advanced Features -------- */
             menu(APL.t("Advanced Features"), "sparkle", [
                 toggle(APL.t("“Full screen” hint"), "showHint", APL.t("Shows “Press ▲ for full screen” on the Home Screen.")),
-                toggle(APL.t("Return to the Launcher"), "homeReturn", APL.t("When an app closes, the screen comes back here instead of the Samsung home screen.")),
+                toggle(APL.t("Return to the Launcher"), "homeReturn", APL.t("When an app closes, or when Samsung's home opens on its own (a phone app's Home button, a remote Vetro doesn't intercept), the screen comes back here. Samsung's home opened from the launcher's Smart Hub tile stays.")),
                 action(APL.t("Alexa on the microphone button"), function () { APL.settings.close(); APL.services.alexaMic(); },
                     APL.t("Do this once: in the Voice menu, choose Amazon Alexa and sign in to your Amazon account. Then hold the microphone button on the remote and talk to Alexa."), "mic"),
                 toggle("Alexa (Echo Dot)", "alexaBridge", APL.t("Say “Alexa, discover my devices” once. Then: “Alexa, turn on TizenTube”, “Alexa, turn off the screen”, “Alexa, turn on the AirPods”, “Alexa, turn on game mode”.")),

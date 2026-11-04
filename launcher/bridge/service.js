@@ -61,7 +61,7 @@ var launcherFront = false, hiddenAt = 0, lastTick = Date.now(), ticking = null, 
 function stopLater() {
     clearTimeout(idle);
     // Stays while the launcher is in front or the screen sleeps on it, to bring it back at wake-up
-    if (launcherFront || sleeping || waking || inArt || vetroWake.busy || (idleApps && idleApps.minutes > 0) || (remote && remote.server)) return;
+    if (launcherFront || sleeping || waking || inArt || vetroWake.busy || (idleApps && idleApps.minutes > 0) || (homeGuard && homeGuard.on) || (remote && remote.server)) return;
     idle = setTimeout(function () {
         try { tizen.application.getCurrentApplication().exit(); } catch (e) {}
     }, IDLE_MS);
@@ -94,6 +94,7 @@ function onMessage(data) {
     if (field(data, "vetro") === "wake") { wakeVetro(); stopLater(); return; }
     var ic = field(data, "idle");
     if (ic) { idleConfig(ic); return; }
+    if (field(data, "home") === "wanted") { homeGuard.wanted = true; homeGuard.seenAt = 0; return; }
     var front = field(data, "front");
     if (front) {                        // the launcher came in front ("1") or left it ("0")
         launcherFront = front === "1";
@@ -105,7 +106,8 @@ function onMessage(data) {
     var id = field(data, "id"), method = field(data, "method") || "GET", path = field(data, "path"), body = field(data, "body");
     if (path === "/__bridge/state") {               // Diagnostic: how this service and Vetro started
         answer(id, 200, JSON.stringify({ startedAt: startedAt, uptime: upSeconds(), vetroWake: vetroWake,
-                                         idle: { minutes: idleApps.minutes, closed: idleApps.closed.slice(-6), checks: idleApps.checks } }));
+                                         idle: { minutes: idleApps.minutes, closed: idleApps.closed.slice(-6), checks: idleApps.checks },
+                                         homeGuard: { on: homeGuard.on, back: homeGuard.back, last: homeGuard.last } }));
         return;
     }
     if (!ALLOWED.test(path) || (method !== "GET" && method !== "POST")) {
@@ -292,7 +294,42 @@ function idleConfig(json) {
     (c.keep || []).forEach(function (id) { if (/^[A-Za-z0-9_.-]+$/.test(id)) idleApps.keep[id] = true; });
     if (idleApps.minutes > 0 && !idleApps.timer) idleApps.timer = setInterval(idleCheck, IDLE_CHECK_MS);
     if (idleApps.minutes === 0 && idleApps.timer) { clearInterval(idleApps.timer); idleApps.timer = null; }
+    homeGuardConfig(c.homeReturn === true);
     stopLater();
+}
+
+/* ---------- back to the launcher when Samsung's home shows ----------
+   APL Overlay's "Return to the Launcher", for screens without it. Samsung's home comes to the front
+   when a remote that Vetro doesn't intercept presses Home (a phone app such as SmartThings, an
+   infrared remote while the Bluetooth one is chosen in Vetro), or when an app closes. While the
+   launcher isn't in front, the app in front is read every 1.2 s; Samsung's home seen twice in a row
+   (it flashes by while apps start) brings the launcher back. Not when it was asked for (the
+   launcher's Smart Hub tile): it then stays until something else is in front. Settings › Advanced
+   Features › Return to the Launcher. */
+var HOME_GUARD_MS = 1200;
+var homeGuard = { on: false, timer: null, busy: false, wanted: false, seenAt: 0, back: 0, last: "" };
+function homeGuardConfig(on) {
+    homeGuard.on = !!on;
+    if (homeGuard.on && !homeGuard.timer) homeGuard.timer = setInterval(homeGuardTick, HOME_GUARD_MS);
+    if (!homeGuard.on && homeGuard.timer) { clearInterval(homeGuard.timer); homeGuard.timer = null; }
+}
+function homeGuardTick() {
+    if (!homeGuard.on || launcherFront || sleeping || waking || homeGuard.busy) { homeGuard.seenAt = 0; return; }
+    homeGuard.busy = true;
+    shell("vconftool get memory/appfw/current_fullscreen_appid 2>/dev/null; vconftool get memory/pm/state 2>/dev/null", function (out) {
+        homeGuard.busy = false;
+        if (!out || launcherFront) { homeGuard.seenAt = 0; return; }
+        var app = vconfValue(out, "current_fullscreen_appid") || "", pm = vconfValue(out, "memory/pm/state");
+        if (pm && pm !== "1") { homeGuard.seenAt = 0; return; }          // going to sleep: left alone
+        var home = /csfs|home\.sidebar/.test(app);
+        if (!home) { homeGuard.seenAt = 0; if (app) homeGuard.wanted = false; return; }
+        if (homeGuard.wanted) return;                                    // opened on purpose: it stays
+        if (!homeGuard.seenAt) { homeGuard.seenAt = Date.now(); return; }
+        homeGuard.seenAt = 0;
+        homeGuard.back++;
+        homeGuard.last = new Date().toISOString().slice(11, 16);
+        try { tizen.application.launch(APP_ID, function () {}, function () {}); } catch (e) {}
+    });
 }
 
 function idleFront(app) {
@@ -504,6 +541,13 @@ function startRemote() {
             }
             if (!sameSecret(params.t || body.t, remote.token)) { send(403, "application/json", '{"ok":false}'); return; }
             if (path === "/key") {
+                if (body.k === "home") {
+                    // An injected Home key isn't seen by Vetro's interception: it would open Samsung's home.
+                    // The launcher is opened directly (twice quickly: its App Switcher, as with the remote).
+                    try { tizen.application.launch(APP_ID, function () {}, function () {}); } catch (e) {}
+                    send(200, "application/json", '{"ok":true}');
+                    return;
+                }
                 var k = REMOTE_KEYS[body.k];
                 if (!k) { send(400, "application/json", '{"ok":false}'); return; }
                 shell("/usr/bin/input_keyevent " + k + " >/dev/null 2>&1; true", function () {});
@@ -587,4 +631,4 @@ module.exports.onStart = function () { start(); openLauncher(LAUNCH_TRIES); if (
 // Some environments run the script without calling onStart
 try { start(); openLauncher(LAUNCH_TRIES); if (isBooting()) wakeVetro(); } catch (e) {}
 module.exports.onRequest = function () { start(); };
-module.exports.onExit = function () { clearTimeout(idle); clearInterval(ticking); ticking = null; port = null; stopRemote(); if (idleApps.timer) clearInterval(idleApps.timer); };
+module.exports.onExit = function () { clearTimeout(idle); clearInterval(ticking); ticking = null; port = null; stopRemote(); if (idleApps.timer) clearInterval(idleApps.timer); if (homeGuard.timer) clearInterval(homeGuard.timer); };

@@ -716,6 +716,8 @@
         // The overlay opens it itself (it reaches Vetro on its own, without the bridge) and then
         // leaves it on screen; without the overlay, the launcher asks Vetro.
         if (APL.overlay && APL.overlay.isInstalled() && APL.overlay.openSamsungHome) { APL.overlay.openSamsungHome(); return; }
+        // Asked for: the bridge's "Return to the Launcher" leaves it on screen (bridge/service.js, homeGuard)
+        APL.sys.bridgeSend([{ key: "home", value: "wanted" }]).catch(function () {});
         APL.sys.vetroPost("/exec", { cmd: "/usr/bin/app_launcher -s com.samsung.tv.csfs >/dev/null 2>&1 &" })
             .catch(function () { toast(APL.t("Vetro is not responding")); });
     }

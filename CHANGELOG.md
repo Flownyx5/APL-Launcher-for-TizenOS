@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.9 (Flownyx5 fork)
+- Return to the Launcher without APL Overlay: when Samsung's home comes to the front by itself — the Home button of a phone app (SmartThings…) or of a remote Vetro doesn't intercept, or an app that closes — the launcher's bridge brings the launcher back within about 2 s. Samsung's home opened from the Smart Hub tile stays. Settings › Advanced Features › Return to the Launcher; the Diagnostic counts how many times it happened.
+- Phone remote: Home opens the launcher directly (an injected Home key went to Samsung's home, as with the phone apps).
+- The bridge is in the package: install again with APL Launcher Setup.
+
 ## 1.1.8 (Flownyx5 fork)
 - TizenTube wears YouTube's logo and artwork: tile, Top Shelf, blurred grid background, App Switcher and screen saver.
 

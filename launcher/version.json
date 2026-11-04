@@ -1,8 +1,8 @@
 {
- "version": "1.1.8",
+ "version": "1.1.9",
  "loader": 2,
- "reinstall": "1.1.7",
- "notes": "TizenTube wears YouTube's logo and artwork.",
+ "reinstall": "1.1.9",
+ "notes": "Back to the launcher when Samsung's home opens by itself (phone apps); phone remote Home opens the launcher.",
  "scripts": [
   "js/diag.js",
   "js/lang-fr.js",

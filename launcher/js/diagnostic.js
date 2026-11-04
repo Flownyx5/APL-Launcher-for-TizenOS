@@ -157,6 +157,17 @@
                                    (last ? " · " + APL.t("last closed: {list}", { list: last }) : ""));
                 });
             } },
+            { label: APL.t("Return to the Launcher"), run: function () {
+                if (PREVIEW) return preview();
+                if (APL.overlay && APL.overlay.isInstalled()) return R("ok", APL.t("done by APL Overlay"));
+                if (!sys.pref("homeReturn")) return R("skip", APL.t("turned off in Settings › Advanced Features"));
+                return limit(sys.bridgeState(), 9000).then(function (st) {
+                    var g = st.homeGuard || {};
+                    if (!g.on) return R("warn", APL.t("not running in the launcher service: install again with APL Launcher Setup"));
+                    return R("ok", APL.t("on: Samsung's home is watched while the launcher is behind") +
+                                   (g.back ? " · " + APL.t("brought back {n} times (last {t})", { n: g.back, t: g.last }) : ""));
+                });
+            } },
             { label: "APL Overlay", run: function () {
                 if (PREVIEW) return preview();
                 if (APL.overlay && APL.overlay.isInstalled()) return R("ok", APL.t("installed"));
