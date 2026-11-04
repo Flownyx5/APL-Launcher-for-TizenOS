@@ -119,6 +119,20 @@
                 if (PREVIEW) return preview();
                 return limit(sys.bridgePing(), 9000).then(function () { return R("ok", APL.t("answers")); });
             } },
+            { label: APL.t("Start-up with the screen"), run: function () {
+                if (PREVIEW) return preview();
+                return limit(sys.bridgeState(), 9000).then(function (st) {
+                    var boot = st.startedAt && st.startedAt < 240;
+                    var d = boot ? APL.t("launcher service started with the screen ({s} s)", { s: Math.round(st.startedAt) })
+                                 : APL.t("launcher service started later, by the launcher");
+                    var w = st.vetroWake || {};
+                    if (w.how === "service") d += " · " + APL.t("Vetro woken up automatically ({s} s)", { s: w.uptime });
+                    else if (w.how === "app") d += " · " + APL.t("Vetro woken up by opening its app ({s} s)", { s: w.uptime });
+                    else if (w.how === "failed") d += " · " + APL.t("Vetro could not be woken up");
+                    else d += " · " + APL.t("Vetro started on its own");
+                    return R(w.how === "failed" ? "fail" : (!boot || w.how) ? "warn" : "ok", d);
+                });
+            } },
             { label: "APL Overlay", run: function () {
                 if (PREVIEW) return preview();
                 return APL.overlay && APL.overlay.isInstalled() ? R("ok", APL.t("installed")) :

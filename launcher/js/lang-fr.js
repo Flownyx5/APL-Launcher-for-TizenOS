@@ -712,5 +712,12 @@ window.APL_LANG_FR = {
     "Close": "Fermer",
     "Tests on this screen what depends on the model: Vetro, each remote key, volume, the phone remote, brightness, weather, TMDB, Apple's videos, smoothness. Volume, mute and brightness are changed for a second, then put back. Takes about a minute.": "Teste sur cet écran ce qui dépend du modèle : Vetro, chaque touche, le volume, la télécommande téléphone, la luminosité, la météo, TMDB, les vidéos Apple, la fluidité. Volume, sourdine et luminosité changent une seconde, puis sont remis. Dure environ une minute.",
     "no": "non",
-    "probably": "sans doute"
+    "probably": "sans doute",
+    "Start-up with the screen": "Démarrage avec l'écran",
+    "launcher service started with the screen ({s} s)": "service du launcher lancé avec l'écran ({s} s)",
+    "launcher service started later, by the launcher": "service du launcher lancé plus tard, par le launcher",
+    "Vetro woken up automatically ({s} s)": "Vetro relancé automatiquement ({s} s)",
+    "Vetro woken up by opening its app ({s} s)": "Vetro relancé en ouvrant son app ({s} s)",
+    "Vetro could not be woken up": "Vetro n'a pas pu être relancé",
+    "Vetro started on its own": "Vetro a démarré tout seul"
 };

@@ -23,7 +23,7 @@ SCRIPTS = [
 ]
 STYLES = ["css/launcher.css"]
 LOADER = 2          # raise it when boot.js changes: the screens will ask for APL Launcher Setup
-REINSTALL = "1.1.1"  # minimum installed version: raise it when config.xml changes (permissions…)
+REINSTALL = "1.1.2"  # minimum installed version: raise it when config.xml changes (permissions…)
 
 notes = ""
 if "--notes" in sys.argv:

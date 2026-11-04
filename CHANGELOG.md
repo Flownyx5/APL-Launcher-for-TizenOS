@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.2 (Flownyx5 fork)
+- Vetro wakes up on its own: if it still doesn't answer about 130 s after the screen started (or when the launcher finds it silent), the launcher's bridge starts Vetro's service; if the screen refuses that, it opens Vetro's app for a few seconds, the time for its service to start, then brings the launcher back. At most once every 5 minutes. Before that, the usual causes are worth fixing: Vetro older than 0.3.2 (open it once after updating), or Developer Mode's Host PC IP not `127.0.0.1`.
+- Diagnostic: a "Start-up with the screen" line tells whether the launcher's service started with the screen and whether Vetro had to be woken up.
+
 ## 1.1.1 (Flownyx5 fork)
 - Settings › Support › Diagnostic: tests on the screen itself what depends on the model (Vetro, the bridge, each remote key really sent, volume and mute, the phone remote's server, writing the backlight, weather, the TMDB key, Apple's videos, frames per second, free memory). Volume, mute and backlight are changed for a second, then put back. The report is also readable as text from the phone remote ("Diagnostic" link at the bottom of its page).
 

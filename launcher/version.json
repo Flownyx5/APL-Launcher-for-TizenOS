@@ -1,8 +1,8 @@
 {
- "version": "1.1.1",
+ "version": "1.1.2",
  "loader": 2,
- "reinstall": "1.1.1",
- "notes": "Diagnostic: Settings › Support › Diagnostic tests what depends on the screen model.",
+ "reinstall": "1.1.2",
+ "notes": "Vetro wakes up on its own after a start-up; Diagnostic shows how the screen started.",
  "scripts": [
   "js/lang-fr.js",
   "js/i18n.js",

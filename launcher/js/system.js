@@ -503,7 +503,17 @@
             .then(function (ok) { alive = ok; aliveAt = Date.now(); return ok; });
     }
     // Bridge started early: Control Center and Settings respond right away
-    if (!PREVIEW) setTimeout(function () { vetroAlive(); }, 4000);
+    if (!PREVIEW) setTimeout(checkVetro, 4000);
+    /* Vetro silent (its service didn't start with the screen): the bridge wakes it up (bridge/service.js,
+       wakeVetro: its service, otherwise its app for a few seconds, then back to the launcher). */
+    function checkVetro() {
+        vetroAlive().then(function (ok) {
+            if (!ok) bridgeSend([{ key: "vetro", value: "wake" }]).catch(function () {});
+        });
+    }
+    if (!PREVIEW && global.document) {
+        document.addEventListener("visibilitychange", function () { if (!document.hidden) setTimeout(checkVetro, 3000); });
+    }
 
     /* Root command on the screen, through Vetro and the bridge. No backslashes in commands: Vetro doubles them. */
     function tvExec(cmd) {
@@ -827,6 +837,7 @@
         bridgeSend: bridgeSend, onBridgeEvent: onBridgeEvent,
         /* Diagnostic: the bridge answers (a path it refuses to relay still proves it is there). */
         bridgePing: function () { return bridgeRequest("GET", "/__ping", "").then(function (r) { return r.status; }); },
+        bridgeState: function () { return bridgeRequest("GET", "/__bridge/state", "").then(function (r) { return JSON.parse(r.body); }); },
         native: { get: nativeGet, set: nativeSet, reset: nativeReset, info: function (id) { return NATIVE[id]; } },
         PICTURE_MODES: PICTURE_MODES, pictureModeName: pictureModeName, setPictureMode: setPictureMode,
         tvSettings: tvSettings, tvItem: tvItem, tvAdjust: tvAdjust, tvValue: tvValue,

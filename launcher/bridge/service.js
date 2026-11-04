@@ -53,12 +53,14 @@ var STATE = "vconftool get memory/pm/state; vconftool get memory/appfw/current_f
 var port = null, idle = null, openedAtBoot = false;
 var remote = null;                      // phone remote: { server, token, code, codeUntil, tries } (see the end of this file)
 var lastReport = "";                    // the launcher's last diagnostic, readable from the phone remote
+var startedAt = upSeconds();            // seconds since the screen started, when this service started
+var vetroWake = { busy: false, at: 0, how: "", uptime: 0 };   // last time Vetro had to be woken up (see wakeVetro)
 var launcherFront = false, hiddenAt = 0, lastTick = Date.now(), ticking = null, sleeping = false, waking = false, inArt = false;
 
 function stopLater() {
     clearTimeout(idle);
     // Stays while the launcher is in front or the screen sleeps on it, to bring it back at wake-up
-    if (launcherFront || sleeping || waking || inArt || (remote && remote.server)) return;
+    if (launcherFront || sleeping || waking || inArt || vetroWake.busy || (remote && remote.server)) return;
     idle = setTimeout(function () {
         try { tizen.application.getCurrentApplication().exit(); } catch (e) {}
     }, IDLE_MS);
@@ -88,6 +90,7 @@ function onMessage(data) {
     if (rc) { remoteConfig(rc); return; }
     var report = field(data, "report");
     if (report) { lastReport = report.slice(0, 20000); stopLater(); return; }
+    if (field(data, "vetro") === "wake") { wakeVetro(); stopLater(); return; }
     var front = field(data, "front");
     if (front) {                        // the launcher came in front ("1") or left it ("0")
         launcherFront = front === "1";
@@ -97,6 +100,10 @@ function onMessage(data) {
     }
     stopLater();
     var id = field(data, "id"), method = field(data, "method") || "GET", path = field(data, "path"), body = field(data, "body");
+    if (path === "/__bridge/state") {               // Diagnostic: how this service and Vetro started
+        answer(id, 200, JSON.stringify({ startedAt: startedAt, uptime: upSeconds(), vetroWake: vetroWake }));
+        return;
+    }
     if (!ALLOWED.test(path) || (method !== "GET" && method !== "POST")) {
         answer(id, 404, '{"error":"not relayed"}');
         return;
@@ -129,7 +136,7 @@ function vetro(method, path, buf, timeoutMs, done, retries) {
     function fail(e) {
         if (finished) return;
         // The request did not go out (refused, or no answer to connect): try the next address
-        if (retries > 0 && /EHOSTUNREACH|EACCES|ECONNREFUSED|ENETUNREACH|EINVAL|ETIMEDOUT/.test(e.code)) {
+        if (retries > 0 && /EHOSTUNREACH|EACCES|ECONNREFUSED|ENETUNREACH|EINVAL|ETIMEDOUT|EAFNOSUPPORT|EADDRNOTAVAIL/.test(e.code)) {
             finished = true;
             clearTimeout(timer);
             if (HOSTS[hostIndex] === host) hostIndex = (hostIndex + 1) % HOSTS.length;
@@ -251,6 +258,72 @@ function wokeUp(wasFront, first) {
             setTimeout(look, POLL_MS);
         });
     })();
+}
+
+/* ---------- Vetro wake-up ----------
+   Vetro's service should start with the screen, but on some screens its installer drops the
+   "start at boot" flag (Vetro puts it back from 0.3.2, once opened), and after a full start it
+   takes up to 90 s. If Vetro still doesn't answer about 130 s after the screen started (or when
+   the launcher finds it silent), its service is started from here; if the screen refuses that,
+   Vetro's app is opened for a few seconds, the time for its service to start, then the launcher
+   comes back to the front. At most once every 5 minutes. */
+var VETRO_APP = "vetrotvapp.app", VETRO_SVC = "vetrotvapp.svc", VETRO_READY_S = 130;
+function upSeconds() { try { return parseFloat(fs.readFileSync("/proc/uptime", "utf8")) || 0; } catch (e) { return 0; } }
+function vetroAnswers(done) {
+    vetro("GET", "/status", Buffer.from("", "utf8"), 4000, function (status) { done(status === 200); });
+}
+function waitVetro(ms, done) {
+    var until = Date.now() + ms;
+    (function look() {
+        vetroAnswers(function (ok) {
+            if (ok || Date.now() >= until) { done(ok); return; }
+            setTimeout(look, 2500);
+        });
+    })();
+}
+function startVetroService(done) {
+    var called = false;
+    function once(v) { if (!called) { called = true; done(v); } }
+    function plain() { try { tizen.application.launch(VETRO_SVC, function () { once(true); }, function () { once(false); }); } catch (e) { once(false); } }
+    try {
+        tizen.application.launchAppControl(new tizen.ApplicationControl("http://tizen.org/appcontrol/operation/service"),
+                                           VETRO_SVC, function () { once(true); }, plain);
+    } catch (e) { plain(); }
+    setTimeout(function () { once(false); }, 8000);
+}
+function wakeVetro() {
+    if (vetroWake.busy || Date.now() - vetroWake.at < 5 * 60000) return;
+    var up = upSeconds();
+    if (up && up < VETRO_READY_S) {                        // full start: leave Vetro its 90 s first
+        setTimeout(wakeVetro, (VETRO_READY_S - up) * 1000);
+        return;
+    }
+    vetroWake.busy = true;
+    function done(how) {
+        vetroWake.busy = false;
+        vetroWake.at = Date.now();
+        vetroWake.how = how;
+        vetroWake.uptime = Math.round(upSeconds());
+        stopLater();
+    }
+    vetroAnswers(function (ok) {
+        if (ok) { vetroWake.busy = false; return; }        // it answers: nothing to do
+        startVetroService(function (started) {
+            waitVetro(started ? 30000 : 0, function (ok2) {
+                if (ok2) { done("service"); return; }
+                // Started from here is refused (another package's service): Vetro's own app starts it
+                try {
+                    tizen.application.launch(VETRO_APP, function () {
+                        waitVetro(60000, function (ok3) {
+                            // Vetro's app was opened from here: the launcher comes back in front
+                            try { tizen.application.launch(APP_ID, function () {}, function () {}); } catch (e) {}
+                            done(ok3 ? "app" : "failed");
+                        });
+                    }, function () { done("failed"); });
+                } catch (e) { done("failed"); }
+            });
+        });
+    });
 }
 
 function start() {
@@ -434,8 +507,8 @@ var REMOTE_PAGE = '<!doctype html><html><head><meta charset="utf-8"><meta name="
 'pad.addEventListener("touchstart",down);pad.addEventListener("touchmove",move);pad.addEventListener("touchend",up);pad.addEventListener("mousedown",down);pad.addEventListener("mousemove",move);pad.addEventListener("mouseup",up);' +
 'if(!t)askPair();else post("/hello").then(function(r){if(r.status===403)askPair();else show()},function(){show()})})()</script></body></html>';
 
-module.exports.onStart = function () { start(); openLauncher(LAUNCH_TRIES); };
+module.exports.onStart = function () { start(); openLauncher(LAUNCH_TRIES); if (isBooting()) wakeVetro(); };
 // Some environments run the script without calling onStart
-try { start(); openLauncher(LAUNCH_TRIES); } catch (e) {}
+try { start(); openLauncher(LAUNCH_TRIES); if (isBooting()) wakeVetro(); } catch (e) {}
 module.exports.onRequest = function () { start(); };
 module.exports.onExit = function () { clearTimeout(idle); clearInterval(ticking); ticking = null; port = null; stopRemote(); };
