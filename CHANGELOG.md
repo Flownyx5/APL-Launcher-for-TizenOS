@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.4 (Flownyx5 fork)
+- Start with the screen, every time: some installers record Vetro's service and the launcher's bridge without "start at boot" (and Vetro's without "restart"), so after a full start nothing came back until Vetro was opened by hand. Once Vetro answers, the launcher reads these flags in the screen's app database and turns them on if they are off, as Vetro does for itself (effective at the next start). No reinstall needed: this comes with the automatic update.
+- Diagnostic: the "Start-up with the screen" line shows these flags.
+
 ## 1.1.3 (Flownyx5 fork)
 - Merges the original project's 1.0.5 to 1.0.8 (Knikt/APL-Launcher-for-TizenOS), see below: every HDMI input in Sources and inputs on the Home Screen, the bridge relays the Remapper rules (Home back to the launcher without APL Overlay), Setup accepts Tizen Studio certificates again, and a start-up that doesn't finish shows its errors instead of a black screen.
 - The Diagnostic screen is now `js/diagnostic.js` (`js/diag.js` is the original project's start-up watchdog).

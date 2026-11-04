@@ -727,5 +727,9 @@ window.APL_LANG_FR = {
     "Vetro woken up automatically ({s} s)": "Vetro relancé automatiquement ({s} s)",
     "Vetro woken up by opening its app ({s} s)": "Vetro relancé en ouvrant son app ({s} s)",
     "Vetro could not be woken up": "Vetro n'a pas pu être relancé",
-    "Vetro started on its own": "Vetro a démarré tout seul"
+    "Vetro started on its own": "Vetro a démarré tout seul",
+    "auto start: launcher {a} · Vetro {b}": "démarrage auto : launcher {a} · Vetro {b}",
+    "turned on now, effective at the next start": "activé maintenant, effectif au prochain démarrage",
+    "flags not readable ({e})": "réglages illisibles ({e})",
+    "launcher service not answering": "le service du launcher ne répond pas"
 };

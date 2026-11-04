@@ -1,8 +1,8 @@
 {
- "version": "1.1.3",
+ "version": "1.1.4",
  "loader": 2,
  "reinstall": "1.1.3",
- "notes": "Merges the original project's 1.0.5-1.0.8 (all HDMI inputs, inputs on the Home Screen, start-up watchdog) with the fork's features.",
+ "notes": "Vetro and the launcher's service start with the screen again (start-at-boot flags turned back on).",
  "scripts": [
   "js/diag.js",
   "js/lang-fr.js",
@@ -36,6 +36,7 @@
   "js/search.js",
   "js/phone.js",
   "js/routines.js",
+  "js/startup.js",
   "js/diagnostic.js",
   "js/updater.js",
   "js/launcher.js",

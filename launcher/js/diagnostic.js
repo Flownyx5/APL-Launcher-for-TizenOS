@@ -121,16 +121,27 @@
             } },
             { label: APL.t("Start-up with the screen"), run: function () {
                 if (PREVIEW) return preview();
-                return limit(sys.bridgeState(), 9000).then(function (st) {
-                    var boot = st.startedAt && st.startedAt < 240;
-                    var d = boot ? APL.t("launcher service started with the screen ({s} s)", { s: Math.round(st.startedAt) })
-                                 : APL.t("launcher service started later, by the launcher");
-                    var w = st.vetroWake || {};
-                    if (w.how === "service") d += " · " + APL.t("Vetro woken up automatically ({s} s)", { s: w.uptime });
-                    else if (w.how === "app") d += " · " + APL.t("Vetro woken up by opening its app ({s} s)", { s: w.uptime });
-                    else if (w.how === "failed") d += " · " + APL.t("Vetro could not be woken up");
-                    else d += " · " + APL.t("Vetro started on its own");
-                    return R(w.how === "failed" ? "fail" : (!boot || w.how) ? "warn" : "ok", d);
+                // The two services' "start at boot" flags (read, and turned on if off: startup.js)
+                var flags = APL.startup ? limit(APL.startup.check(), 12000).catch(function () { return null; }) : Promise.resolve(null);
+                return flags.then(function (f) {
+                    return limit(sys.bridgeState(), 9000).catch(function () { return null; }).then(function (st) {
+                        var parts = [], state = "ok";
+                        if (f && !f.error) {
+                            var b = f.apps["APLauncher.Bridge"], v = f.apps["vetrotvapp.svc"];
+                            parts.push(APL.t("auto start: launcher {a} · Vetro {b}", { a: b ? (b.onboot ? "✓" : "✕") : "?", b: v ? (v.onboot && v.autorestart ? "✓" : "✕") : "?" }));
+                            if (f.fixed.length) { parts.push(APL.t("turned on now, effective at the next start")); state = "warn"; }
+                            if ((b && !b.onboot) || (v && !(v.onboot && v.autorestart))) state = "fail";
+                        } else if (f && f.error) { parts.push(APL.t("flags not readable ({e})", { e: f.error.slice(0, 60) })); state = "warn"; }
+                        if (st) {
+                            parts.push(st.startedAt && st.startedAt < 240 ? APL.t("launcher service started with the screen ({s} s)", { s: Math.round(st.startedAt) })
+                                                                         : APL.t("launcher service started later, by the launcher"));
+                            var w = st.vetroWake || {};
+                            if (w.how === "service") parts.push(APL.t("Vetro woken up automatically ({s} s)", { s: w.uptime }));
+                            else if (w.how === "app") parts.push(APL.t("Vetro woken up by opening its app ({s} s)", { s: w.uptime }));
+                            else if (w.how === "failed") { parts.push(APL.t("Vetro could not be woken up")); state = "fail"; }
+                        } else { parts.push(APL.t("launcher service not answering")); state = "fail"; }
+                        return R(state, parts.join(" · "));
+                    });
                 });
             } },
             { label: "APL Overlay", run: function () {
