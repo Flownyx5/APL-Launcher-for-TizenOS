@@ -810,5 +810,15 @@ window.APL_LANG_FR = {
     "When an app closes, or when Samsung's home opens on its own (a phone app's Home button, a remote Vetro doesn't intercept), the screen comes back here. Samsung's home opened from the launcher's Smart Hub tile stays.": "Quand une app se ferme, ou quand le menu Samsung s'ouvre tout seul (bouton Home d'une app téléphone, télécommande que Vetro n'intercepte pas), l'écran revient ici. Le menu Samsung ouvert depuis la tuile Smart Hub du launcher reste affiché.",
     "turned off in Settings › Advanced Features": "désactivé dans Réglages › Fonctions avancées",
     "on: Samsung's home is watched while the launcher is behind": "actif : le menu Samsung est surveillé quand le launcher est en arrière-plan",
-    "brought back {n} times (last {t})": "launcher ramené {n} fois (dernière à {t})"
+    "brought back {n} times (last {t})": "launcher ramené {n} fois (dernière à {t})",
+    "the screen's home app can't be read here": "l'app d'accueil de l'écran est illisible ici",
+    "the launcher is the screen's home app: any remote's Home opens it, and it shows at power-on": "le launcher est l'app d'accueil de l'écran : le Home de n'importe quelle télécommande l'ouvre, et il s'affiche à l'allumage",
+    "home app: {app} · Autorun Smart Hub {a} · to try: Settings › General & Privacy › Start on APL Launcher": "app d'accueil : {app} · Lancer Smart Hub automatiquement {a} · à essayer : Réglages › Général et confidentialité › Démarrer sur APL Launcher",
+    "Remote held by Vetro": "Télécommande interceptée par Vetro",
+    "not held: {list} (its Home goes to Samsung, Return to the Launcher brings the launcher back)": "non interceptée : {list} (son Home va chez Samsung, « Revenir sur le launcher » ramène le launcher)",
+    "no remote intercepted: Vetro › Remapper › choose the remote, Remote interception on": "aucune télécommande interceptée : Vetro › Remapper › choisis la télécommande, active Remote interception",
+    "not connected right now": "pas connectée en ce moment",
+    "Vetro doesn't say ({e})": "Vetro ne répond pas ({e})",
+    "active from power-on": "actif dès l'allumage",
+    "turned off in Settings › Home Screen": "désactivé dans Réglages › Écran d'accueil"
 };

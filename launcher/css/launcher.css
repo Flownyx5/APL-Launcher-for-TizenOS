@@ -1395,7 +1395,7 @@ html, body {
 .diag__spin.is-on { opacity: 1; animation: diagSpin 0.8s linear infinite; }
 @keyframes diagSpin { to { transform: rotate(360deg); } }
 .diag__list { position: absolute; left: 90px; right: 90px; top: 186px; display: flex; flex-wrap: wrap; justify-content: space-between; }
-.diag__row { width: 860px; height: 58px; margin-bottom: 6px; display: flex; align-items: center; border-radius: 16px; padding: 0 18px;
+.diag__row { width: 860px; height: 54px; margin-bottom: 5px; display: flex; align-items: center; border-radius: 16px; padding: 0 18px;
     background: rgba(255, 255, 255, 0.05); box-sizing: border-box; overflow: hidden; }
 .diag__st { flex: none; width: 40px; height: 40px; border-radius: 50%; margin-right: 18px; display: flex; align-items: center; justify-content: center;
     font-size: 24px; font-weight: 800; color: #000; background: rgba(255, 255, 255, 0.15); }

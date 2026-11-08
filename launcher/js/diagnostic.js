@@ -157,14 +157,36 @@
                                    (last ? " · " + APL.t("last closed: {list}", { list: last }) : ""));
                 });
             } },
+            { label: APL.t("Start on APL Launcher"), run: function () {
+                if (PREVIEW) return preview();
+                // The screen's home app and Autorun Smart Hub (Settings › General & Privacy › Start on APL Launcher)
+                return limit(sys.exec("vconftool get db/appfw/home_appid 2>&1; vconftool get db/menu/smart_hub/ontvsetting/auto_start 2>&1"), 9000).then(function (r) {
+                    var out = String(r.output || ""), h = (/home_appid, value = (\S+)/.exec(out) || [])[1], a = (/auto_start, value = (-?\d+)/.exec(out) || [])[1];
+                    if (!h) return R("warn", APL.t("the screen's home app can't be read here"));
+                    if (h === "APLauncher.Home" && a === "1") return R("ok", APL.t("the launcher is the screen's home app: any remote's Home opens it, and it shows at power-on"));
+                    return R("warn", APL.t("home app: {app} · Autorun Smart Hub {a} · to try: Settings › General & Privacy › Start on APL Launcher",
+                                           { app: h, a: a === "1" ? APL.t("on") : APL.t("off") }));
+                });
+            } },
+            { label: APL.t("Remote held by Vetro"), run: function () {
+                if (PREVIEW) return preview();
+                return limit(sys.vetroGet("/input"), 9000).then(function (d) {
+                    var pol = (d && d.status && d.status.policy) || {}, held = pol.mode === "filter" ? pol.device : "";
+                    var others = ((d && d.devices) || []).filter(function (x) { return x.selectable && x.name !== held; }).map(function (x) { return x.name; });
+                    var more = others.length ? " · " + APL.t("not held: {list} (its Home goes to Samsung, Return to the Launcher brings the launcher back)", { list: others.join(", ") }) : "";
+                    if (!held) return R("warn", APL.t("no remote intercepted: Vetro › Remapper › choose the remote, Remote interception on") + more);
+                    return R(pol.connected ? "ok" : "warn", held + (pol.connected ? "" : " · " + APL.t("not connected right now")) + more);
+                }, function (e) { return R("warn", APL.t("Vetro doesn't say ({e})", { e: msg(e).slice(0, 60) })); });
+            } },
             { label: APL.t("Return to the Launcher"), run: function () {
                 if (PREVIEW) return preview();
                 if (APL.overlay && APL.overlay.isInstalled()) return R("ok", APL.t("done by APL Overlay"));
-                if (!sys.pref("homeReturn")) return R("skip", APL.t("turned off in Settings › Advanced Features"));
+                if (!sys.pref("homeReturn")) return R("skip", APL.t("turned off in Settings › Home Screen"));
                 return limit(sys.bridgeState(), 9000).then(function (st) {
                     var g = st.homeGuard || {};
                     if (!g.on) return R("warn", APL.t("not running in the launcher service: install again with APL Launcher Setup"));
                     return R("ok", APL.t("on: Samsung's home is watched while the launcher is behind") +
+                                   (g.fromStart ? " · " + APL.t("active from power-on") : "") +
                                    (g.back ? " · " + APL.t("brought back {n} times (last {t})", { n: g.back, t: g.last }) : ""));
                 });
             } },

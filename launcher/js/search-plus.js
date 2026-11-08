@@ -1,5 +1,8 @@
 /* ============================================================
-   search.js — universal search, as on Apple TV.
+   search-plus.js — universal search, as on Apple TV (the fork's).
+   Loaded after the original's search.js, it takes its place (APL.search):
+   same ways in (▲ from the full screen Top Shelf, the magnifier, Control
+   Center), plus the blue key and any letter typed on a keyboard.
 
    Type a few letters (on-screen keyboard, the remote's numbers, a
    keyboard, or the phone remote): the installed apps that match, then
@@ -79,7 +82,9 @@
     function appsMatching(q) {
         q = norm(q);
         if (!q) return [];
-        var list = (APL.allApps ? APL.allApps() : []).filter(function (a) { return !a.folder; });
+        // Hidden apps only with Settings › Home Screen › Search Hidden Apps, as in the original's search
+        var hidden = APL.sys.pref("searchHidden") ? [] : APL.sys.pref("hiddenApps") || [];
+        var list = (APL.allApps ? APL.allApps() : []).filter(function (a) { return !a.folder && hidden.indexOf(a.id) === -1; });
         var scored = [];
         list.forEach(function (a) {
             var n = norm(a.name), s = n.indexOf(q) === 0 ? 3 : (" " + n).indexOf(" " + q) !== -1 ? 2 : n.indexOf(q) !== -1 ? 1 : 0;

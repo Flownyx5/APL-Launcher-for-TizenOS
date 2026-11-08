@@ -33,6 +33,14 @@
         }
         return t;
     }
+    /* The QR code as SVG, from qr.js (APL.qr.matrix): sharp at any size, 4 modules of quiet zone. */
+    function qrSvg(text, px) {
+        var m = APL.qr.matrix(text), n = m.length + 8, d = "";
+        for (var y = 0; y < m.length; y++) for (var x = 0; x < m.length; x++) if (m[y][x]) d += "M" + (x + 4) + " " + (y + 4) + "h1v1h-1z";
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="' + px + '" height="' + px + '" viewBox="0 0 ' + n + " " + n +
+               '" shape-rendering="crispEdges"><rect width="' + n + '" height="' + n + '" fill="#fff"/><path d="' + d + '" fill="#000"/></svg>';
+    }
+
     function address() {
         var ip = sys.network().ip;
         return /^\d+\.\d+\.\d+\.\d+$/.test(ip || "") ? "http://" + ip + ":" + PORT : "";
@@ -58,7 +66,7 @@
             qrEl.innerHTML = "";
             stateEl.textContent = APL.t("The screen is not connected to the network.");
         } else {
-            try { qrEl.innerHTML = APL.qrSvg(base + "/?t=" + token(), 400, "M"); } catch (e) { qrEl.innerHTML = ""; }
+            try { qrEl.innerHTML = qrSvg(base + "/?t=" + token(), 400); } catch (e) { qrEl.innerHTML = ""; }
             urlEl.textContent = base.replace(/^http:\/\//, "");
             codeEl.textContent = code;
             stateEl.textContent = sys.PREVIEW ? APL.t("Preview: on your TV, the phone remote answers at this address.") : "";

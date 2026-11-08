@@ -38,7 +38,8 @@ var HOSTS = ["::ffff:127.0.0.1", "127.0.0.1"].concat(lanAddresses()), hostIndex 
 /* req.setTimeout never fires on these screens: own timers, one to connect, one for the answer. */
 var CONNECT_MS = 5000;
 // remap: the launcher repairs the Home rule without APL Overlay (overlay.js); quick: Alexa's microphone (services.js)
-var ALLOWED = /^\/(status|screen|tv-settings|tv-menu|exec|components\/action|control|apps|remap|quick)(\/|\?|$)/;
+// input: read only, which remote Vetro intercepts (the fork's Diagnostic)
+var ALLOWED = /^\/(status|screen|tv-settings|tv-menu|exec|components\/action|control|apps|remap|quick|input)(\/|\?|$)/;
 var IDLE_MS = 15 * 60 * 1000;
 var CHUNK = 4000;                       // characters per message (at most 12 KB once encoded)
 var BOOT_WINDOW_S = 240, LAUNCH_TRIES = 5;
@@ -309,7 +310,7 @@ function onMessage(data, attached) {
     if (path === "/__bridge/state") {               // Diagnostic: how this service and Vetro started
         answer(id, 200, JSON.stringify({ startedAt: startedAt, uptime: upSeconds(), vetroWake: vetroWake,
                                          idle: { minutes: idleApps.minutes, closed: idleApps.closed.slice(-6), checks: idleApps.checks },
-                                         homeGuard: { on: homeGuard.on, back: homeGuard.back, last: homeGuard.last } }), attached);
+                                         homeGuard: { on: homeGuard.on, back: homeGuard.back, last: homeGuard.last, fromStart: homeGuard.fromStart } }), attached);
         return;
     }
     if (++requestsSeen <= 20) note("request " + id + ": " + method + " " + path.split("?")[0] + (attached ? " (port attached)" : ""));
@@ -520,9 +521,27 @@ var IDLE_SELF = ["com.samsung.tv.home.media", "com.samsung.tv.mycontents", "com.
                  "MCmYXNxgcu.DisneyPlus", "org.tizen.netflix-app", "org.tizen.primevideo", "HEPsqFNie0.tvplusstandalone"];
 var idleApps = { minutes: 0, home: {}, keep: {}, lastUsed: {}, seen: {}, front: "", timer: null, busy: false, closed: [], checks: 0 };
 
-function idleConfig(json) {
+/* The launcher's settings for these two jobs, kept next to the bridge's log: at the next start of the
+   screen they apply at once, before the launcher has ever run (a remote Vetro doesn't intercept, such as an
+   old infrared one, opened Samsung's home and nothing brought the launcher back). Without the file (first
+   start after the install): Return to the Launcher on, as the launcher's own default. */
+var CONFIG_FILES = [(process.env.HOME || "/home/owner") + "/apps_rw/APLauncher/data/bridge-config.json",
+                    "/opt/usr/home/owner/apps_rw/APLauncher/data/bridge-config.json", "/tmp/apl-bridge-config.json"];
+function saveConfig(json) {
+    for (var i = 0; i < CONFIG_FILES.length; i++) {
+        try { fs.writeFileSync(CONFIG_FILES[i], json); return; } catch (e) {}
+    }
+}
+function loadConfig() {
+    for (var i = 0; i < CONFIG_FILES.length; i++) {
+        try { return fs.readFileSync(CONFIG_FILES[i], "utf8"); } catch (e) {}
+    }
+    return JSON.stringify({ minutes: 0, homeReturn: true });
+}
+function idleConfig(json, fromFile) {
     var c = {};
     try { c = JSON.parse(json); } catch (e) { return; }
+    if (!fromFile) saveConfig(JSON.stringify(c));
     var m = parseInt(c.minutes, 10);
     idleApps.minutes = isNaN(m) ? 0 : Math.max(0, Math.min(240, m));
     idleApps.home = {}; idleApps.keep = {};
@@ -543,7 +562,7 @@ function idleConfig(json) {
    launcher's Smart Hub tile): it then stays until something else is in front. Settings › Advanced
    Features › Return to the Launcher. */
 var HOME_GUARD_MS = 1200;
-var homeGuard = { on: false, timer: null, busy: false, wanted: false, seenAt: 0, back: 0, last: "" };
+var homeGuard = { on: false, timer: null, busy: false, wanted: false, seenAt: 0, back: 0, last: "", silent: 0 };
 function homeGuardConfig(on) {
     homeGuard.on = !!on;
     if (homeGuard.on && !homeGuard.timer) homeGuard.timer = setInterval(homeGuardTick, HOME_GUARD_MS);
@@ -554,10 +573,16 @@ function homeGuardTick() {
     homeGuard.busy = true;
     shell("vconftool get memory/appfw/current_fullscreen_appid 2>/dev/null; vconftool get memory/pm/state 2>/dev/null", function (out) {
         homeGuard.busy = false;
-        if (!out || launcherFront) { homeGuard.seenAt = 0; return; }
+        if (!out) {                                                      // Vetro silent: nothing can be read
+            homeGuard.seenAt = 0;
+            if (++homeGuard.silent >= 25) { homeGuard.silent = 0; wakeVetro(); }   // ~30 s: wake it (at most every 5 min)
+            return;
+        }
+        homeGuard.silent = 0;
+        if (launcherFront) { homeGuard.seenAt = 0; return; }
         var app = vconfValue(out, "current_fullscreen_appid") || "", pm = vconfValue(out, "memory/pm/state");
         if (pm && pm !== "1") { homeGuard.seenAt = 0; return; }          // going to sleep: left alone
-        var home = /csfs|home\.sidebar/.test(app);
+        var home = /csfs|home\.sidebar|coba\.newhome/.test(app);          // Samsung's home (2025: the new Home)
         if (!home) { homeGuard.seenAt = 0; if (app) homeGuard.wanted = false; return; }
         if (homeGuard.wanted) return;                                    // opened on purpose: it stays
         if (!homeGuard.seenAt) { homeGuard.seenAt = Date.now(); return; }
@@ -677,7 +702,13 @@ function wakeVetro() {
     });
 }
 
+var configLoaded = false;
 function start() {
+    if (!configLoaded) {                      // the launcher's last settings: Return to the Launcher from power-on
+        configLoaded = true;
+        idleConfig(loadConfig(), true);
+        homeGuard.fromStart = homeGuard.on;
+    }
     stopLater();
     if (!ticking) ticking = setInterval(tick, TICK_MS);
     if (port) return;

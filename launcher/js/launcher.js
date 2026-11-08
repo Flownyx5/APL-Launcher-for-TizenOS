@@ -1091,11 +1091,6 @@
               tileHtml: '<div class="vtile vtile--sources">' + APL.icon("source", 92, 1.6) + '</div>',
               shelfHtml: '<div class="brandcard__glyph vtile--sources">' + APL.icon("source", 180, 1.3) + '</div>',
               run: function () { APL.openSources(); } },
-            // Search, as on Apple TV: apps, films and series, and where to watch them (search.js)
-            { id: "apl.search", name: APL.t("Search"), virtual: true, accent: "#3a3a40", eyebrow: "SYSTÈME",
-              tileHtml: '<div class="vtile vtile--search">' + APL.icon("search", 88, 1.8) + '</div>',
-              shelfHtml: '<div class="brandcard__glyph vtile--search">' + APL.icon("search", 170, 1.4) + '</div>',
-              run: function () { if (APL.search) APL.search.open(""); } },
             // Samsung's own home: the way out now that Vetro keeps the Home key for the launcher.
             // Hidden like any app (Settings › Home Screen › Show on Home Screen, or hold OK › Hide App).
             { id: SAMSUNG_HOME_TILE, name: "Smart Hub", virtual: true, accent: "#1428a0", eyebrow: "SYSTÈME",
