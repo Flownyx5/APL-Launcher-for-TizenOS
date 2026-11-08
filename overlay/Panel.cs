@@ -214,10 +214,21 @@ namespace APL
 
         private static Animation Pulse(View orb, int ms, float scale)
         {
+#if TIZEN6
+            // Tizen 6's NUI has no LoopingMode: the way back is in the key frames, over twice the time
+            Animation a = new Animation(ms * 2);
+            KeyFrames k = new KeyFrames();
+            k.Add(0f, new Vector3(1f, 1f, 1f));
+            k.Add(0.5f, new Vector3(scale, scale, 1f), new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseInOut));
+            k.Add(1f, new Vector3(1f, 1f, 1f), new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseInOut));
+            a.AnimateBetween(orb, "Scale", k);
+            a.Looping = true;
+#else
             Animation a = new Animation(ms);
             a.AnimateTo(orb, "Scale", new Vector3(scale, scale, 1f), new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseInOut));
             a.Looping = true;
             a.LoopingMode = Animation.LoopingModes.AutoReverse;
+#endif
             return a;
         }
 

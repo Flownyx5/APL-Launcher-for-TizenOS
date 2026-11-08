@@ -2,8 +2,8 @@
 
 Logos, backgrounds and live content come from three places, in this order:
 
-1. **The bundled catalog.** Tiles and Top Shelf backgrounds for 50+ apps ship inside the package (`launcher/images/apps/`, listed in `launcher/js/catalog.js`).
-2. **Automatic artwork on the screen** (`launcher/js/autoart.js`, `launcher/js/genart.js`), for any app missing from the catalog, including apps installed later.
+1. **The bundled catalog.** Tiles for 50+ apps ship inside the package (`launcher/images/apps/`, listed in `launcher/js/catalog.js`). No Top Shelf background is shipped: the screen draws them (below).
+2. **Automatic artwork on the screen** (`launcher/js/autoart.js`, `launcher/js/genart.js`): the Top Shelf background of every app, and the tile of any app missing from the catalog, including apps installed later.
 3. **Live Top Shelf** (`launcher/js/liveshelf.js`): what is popular right now on the selected service.
 
 Everything is cached on the screen, so each lookup happens once.
@@ -38,7 +38,7 @@ Each entry can also take these flags:
 | `hide` | never show the app |
 | `live` | live Top Shelf source: `trending`, `anime`, `youtube`, `youtube-music`, `games`, `gamepass`, `sports` or `dailymotion` |
 
-Apps without live content get an abstract wallpaper in their brand colours (no logo, no text), like tvOS. The `wallpapers` list in `apps.json` makes the same wallpapers for the apps described in `launcher/js/apps.js` (TizenTube, TizenBrew, Hot IPTV, Internet).
+Apps without live content get a background drawn on the screen in their brand colours (`genart.js`, below), like tvOS.
 
 Device tiles for the Sources screen come from `tools/art/devices.json` (`--spec devices.json`).
 
@@ -57,16 +57,26 @@ Results are kept 30 days (3 days when nothing is found). Turn this off or start 
 
 ### Art made on the screen
 
-Whatever is still missing, `genart.js` draws once, in a canvas, and keeps in `localStorage` (about 100 KB per app, 875 KB for eight apps on the M8):
+Whatever is still missing, `genart.js` draws once, in a canvas, and keeps in `localStorage`:
 
 - a 500×300 tile: the logo cut out of its plain background, on that colour;
-- a 1920×1080 background: the same logo on large shapes in the app's colours.
+- a background, in the style chosen in *Settings › Appearance › Top Shelf › Otherwise*.
+
+**Sheets of light** (*Sheets of Light*, the default) are four or five sheets, each the area on one side of a smooth line across the screen, like Apple's wallpapers. A sheet is mostly its edge light: crisp at the line and fading inward, so the sheets below show through. The lines, which side each sheet fills, where its light falls and its hollows all follow from the app's ID, so an app always gets the same picture. The colours come from the app's main colour (the catalog's, or the icon's), with neighbouring hues only; a colourless brand gets graphite and silver. The light theme has tinted sheets with a soft shadow under each edge.
+
+The picture is blurred by 10% of the width, so it is drawn at 480×270 and the screen enlarges it: about 7 KB per theme and per app. Both themes are made once; switching the theme shows the other one without drawing again. Catalog apps get sheets in their catalog colour, with no logo search. Real artwork (an Apple TV screenshot, live content) still comes first.
+
+The other styles: *Large Logo*, the logo on a dark background with a soft halo in the app's colour (1920×1080, about 100 KB; a catalog app's logo is its catalog tile, cut out), or *Black*, plain dark behind every app, its own artwork included. What the apps show themselves has its own switches (*What You're Watching*, *What's Popular*).
 
 The logo comes from, in order: the app's own icon if it is at least 200 px, the App Store (exact name), TMDB, dashboard-icons and selfh.st by name, the app's icon at any size. With nothing, the app's name is the logo. A small logo is enlarged at most about 3 times: small rather than blurred.
 
 Local `file://` icons are readable in a canvas on the screen, Internet images need `crossOrigin`, and Vetro's icon address does not load there.
 
 ## Live Top Shelf
+
+**Your own content first.** Apps can publish rows for Samsung's home with the Smart Hub Preview API (`webapis.preview.setPreviewData`): Plex its *Continue Watching* and recently added films and series, Spotify your mixes and playlists. Samsung's content service keeps them in `/opt/usr/home/owner/apps_rw/com.samsung.tv.contentservicemanager/data/.preview.db`, in its own folder, so the launcher reads them through Vetro (`sqlite3 -readonly`). When the selected app has rows there, the Top Shelf shows their first 8 pictures, re-read every 10 minutes; otherwise the sources below. The app sends its rows itself, while it runs or after it was used, also when the launcher is the home app. Plex's 240×360 posters become the 1920×1080 artwork from the same server (`/art` instead of `/thumb/…` in the transcode address), and Spotify's album covers 2000 px instead of 640. These addresses can carry the app's token: they stay on the screen and are never logged.
+
+*Settings › Appearance › Top Shelf* sets what the Top Shelf shows, in this order: **What You're Watching** (above), **What's Popular** (the sources below), then the app's artwork, or for apps without one the style chosen in **Otherwise** (*Black* for a plain dark background). The two toggles are per profile; each one turned off is skipped. The keys' status is in *Online Services*.
 
 | App | Content | Source | Key |
 |---|---|---|---|

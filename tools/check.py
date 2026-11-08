@@ -28,6 +28,17 @@ for name in sorted(os.listdir(os.path.join(L, "bridge"))):
         if r.returncode:
             fail("syntax: bridge/%s\n%s" % (name, r.stderr.strip()))
 
+# 1b. ES5 for the oldest screens: functions their browser engine doesn't have. String.padStart stopped the
+# launcher at start on Tizen 4 (Chromium 56, #35); the others are missing on Tizen 6.0 (Chromium 76) too.
+TOO_NEW = {".padStart(": "ES2017", ".padEnd(": "ES2017", "Object.fromEntries(": "ES2019", ".flatMap(": "ES2019",
+           ".matchAll(": "ES2020", ".replaceAll(": "ES2021", "Promise.allSettled(": "ES2020", "structuredClone(": "2022"}
+for name in sorted(os.listdir(os.path.join(L, "js"))):
+    if name.endswith(".js") and ".local." not in name and name not in ("build.js",):
+        text = open(os.path.join(L, "js", name), encoding="utf-8").read()
+        for call, edition in TOO_NEW.items():
+            if call in text:
+                fail("js/%s uses %s (%s): too new for the browser of older screens, keep to ES5" % (name, call.strip(".("), edition))
+
 # 2. release manifest
 config = open(os.path.join(L, "config.xml"), encoding="utf-8").read()
 version = re.search(r'<widget[^>]*\sversion="([^"]+)"', config).group(1)

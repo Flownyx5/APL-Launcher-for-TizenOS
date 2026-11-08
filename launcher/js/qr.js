@@ -1,244 +1,195 @@
 /* ============================================================
-   qr.js — a small QR code generator (byte mode, versions 1 to 10).
-
-   Enough for an address of up to ~200 characters, drawn as SVG.
-   Follows the QR Code standard (ISO/IEC 18004): Reed-Solomon over
-   GF(256), interleaved blocks, the 8 masks with their penalty, format
-   and version information. Written for the phone remote (phone.js):
-   no library to download, nothing leaves the screen.
-     APL.qrSvg("http://192.168.1.11:8092/?t=…", 360) -> "<svg …>"
+   qr.js: a small QR code encoder (byte mode, error correction M,
+   versions 1 to 10: up to 216 characters). Written from the QR code standard
+   (ISO 18004), shared with APL TV. Used for the Ko-fi page in Settings › Support.
+   APL.qr.matrix(text) -> array of rows of booleans (true = dark)
+   APL.qr.canvas(text, px) -> <canvas> with a 4-module quiet zone
    ============================================================ */
 (function (global) {
     "use strict";
 
-    /* Error correction: [codewords per block, number of blocks] for versions 1-10 (index = version). */
-    var ECC = {
-        L: { per: [0, 7, 10, 15, 20, 26, 18, 20, 24, 30, 18], blocks: [0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 4], bits: 1 },
-        M: { per: [0, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26], blocks: [0, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5], bits: 0 }
-    };
+    // Error correction M: [EC codewords per block, blocks of group 1, data per block, blocks of group 2, data per block]
+    var EC_M = [null, [10, 1, 16, 0, 0], [16, 1, 28, 0, 0], [26, 1, 44, 0, 0], [18, 2, 32, 0, 0], [24, 2, 43, 0, 0],
+                [16, 4, 27, 0, 0], [18, 4, 31, 0, 0], [22, 2, 38, 2, 39], [22, 3, 36, 2, 37], [26, 4, 43, 1, 44]];
+    var ALIGN = [null, [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50]];
 
-    function rawModules(ver) {
-        var r = (16 * ver + 128) * ver + 64;
-        if (ver >= 2) {
-            var n = Math.floor(ver / 7) + 2;
-            r -= (25 * n - 10) * n - 55;
-            if (ver >= 7) r -= 36;
-        }
-        return r;
-    }
-    function dataCodewords(ver, e) { return Math.floor(rawModules(ver) / 8) - e.per[ver] * e.blocks[ver]; }
-
-    /* ---------- Reed-Solomon ---------- */
-    function mul(x, y) {
-        var z = 0;
-        for (var i = 7; i >= 0; i--) {
-            z = (z << 1) ^ ((z >>> 7) * 0x11D);
-            z ^= ((y >>> i) & 1) * x;
-        }
-        return z & 0xFF;
-    }
-    function divisor(degree) {
-        var r = [];
-        for (var i = 0; i < degree - 1; i++) r.push(0);
-        r.push(1);
-        var root = 1;
-        for (i = 0; i < degree; i++) {
-            for (var j = 0; j < r.length; j++) {
-                r[j] = mul(r[j], root);
-                if (j + 1 < r.length) r[j] ^= r[j + 1];
-            }
-            root = mul(root, 0x02);
-        }
-        return r;
-    }
-    function remainder(data, div) {
-        var r = div.map(function () { return 0; });
-        data.forEach(function (b) {
-            var f = b ^ r.shift();
-            r.push(0);
-            for (var i = 0; i < r.length; i++) r[i] ^= mul(div[i], f);
-        });
-        return r;
-    }
-
-    /* ---------- encoding ---------- */
     function utf8(s) {
-        var out = [], t = unescape(encodeURIComponent(s));
-        for (var i = 0; i < t.length; i++) out.push(t.charCodeAt(i));
+        var out = [];
+        for (var i = 0; i < s.length; i++) {
+            var c = s.charCodeAt(i);
+            if (c < 0x80) out.push(c);
+            else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 63));
+            else out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+        }
         return out;
     }
-
-    function encode(text, level) {
-        var e = ECC[level || "M"], bytes = utf8(text), ver;
-        for (ver = 1; ver <= 10; ver++) {
-            var countBits = ver < 10 ? 8 : 16;
-            if (4 + countBits + bytes.length * 8 <= dataCodewords(ver, e) * 8) break;
+    function gmul(x, y) {
+        var z = 0;
+        for (var i = 7; i >= 0; i--) { z = (z << 1) ^ ((z >>> 7) * 0x11d); z ^= ((y >>> i) & 1) * x; }
+        return z & 0xff;
+    }
+    function rsDivisor(deg) {
+        var r = []; for (var i = 0; i < deg - 1; i++) r.push(0); r.push(1);
+        var root = 1;
+        for (i = 0; i < deg; i++) {
+            for (var j = 0; j < r.length; j++) { r[j] = gmul(r[j], root); if (j + 1 < r.length) r[j] ^= r[j + 1]; }
+            root = gmul(root, 2);
         }
-        if (ver > 10) throw new Error("text too long for a QR code");
-        var bits = [];
-        function put(v, n) { for (var i = n - 1; i >= 0; i--) bits.push((v >>> i) & 1); }
-        put(4, 4);                                   // byte mode
-        put(bytes.length, ver < 10 ? 8 : 16);
-        bytes.forEach(function (b) { put(b, 8); });
-        var cap = dataCodewords(ver, e) * 8;
-        put(0, Math.min(4, cap - bits.length));      // terminator
-        put(0, (8 - bits.length % 8) % 8);
-        var data = [];
-        for (var i = 0; i < bits.length; i += 8) {
-            var v = 0;
-            for (var k = 0; k < 8; k++) v = (v << 1) | bits[i + k];
-            data.push(v);
-        }
-        for (var pad = 0xEC; data.length < cap / 8; pad ^= 0xEC ^ 0x11) data.push(pad);
-
-        // Blocks, error correction, interleaving
-        var nb = e.blocks[ver], eccLen = e.per[ver], raw = Math.floor(rawModules(ver) / 8);
-        var nShort = nb - raw % nb, shortLen = Math.floor(raw / nb), div = divisor(eccLen), blocks = [], at = 0;
-        for (i = 0; i < nb; i++) {
-            var dat = data.slice(at, at + shortLen - eccLen + (i < nShort ? 0 : 1));
-            at += dat.length;
-            var ecc = remainder(dat, div);
-            if (i < nShort) dat.push(0);
-            blocks.push(dat.concat(ecc));
-        }
-        var all = [];
-        for (i = 0; i < blocks[0].length; i++) {
-            for (var j = 0; j < blocks.length; j++) {
-                if (i !== shortLen - eccLen || j >= nShort) all.push(blocks[j][i]);
-            }
-        }
-        return draw(ver, e, all);
+        return r;
+    }
+    function rsRemainder(data, div) {
+        var r = div.map(function () { return 0; });
+        data.forEach(function (b) {
+            var f = b ^ r.shift(); r.push(0);
+            for (var i = 0; i < div.length; i++) r[i] ^= gmul(div[i], f);
+        });
+        return r;
     }
 
-    /* ---------- the matrix ---------- */
-    function draw(ver, e, codewords) {
-        var size = ver * 4 + 17, mod = [], fn = [];
-        for (var y = 0; y < size; y++) {
-            mod.push([]); fn.push([]);
-            for (var x = 0; x < size; x++) { mod[y].push(false); fn[y].push(false); }
+    function encode(text) {
+        var bytes = utf8(String(text)), ver = 0, e;
+        for (var v = 1; v <= 10; v++) {
+            e = EC_M[v];
+            var cap = e[1] * e[2] + e[3] * e[4];
+            if (4 + (v < 10 ? 8 : 16) + bytes.length * 8 <= cap * 8) { ver = v; break; }
         }
+        if (!ver) throw new Error("text too long for a QR code");
+        e = EC_M[ver];
+        var dataLen = e[1] * e[2] + e[3] * e[4], bits = [];
+        function put(val, n) { for (var i = n - 1; i >= 0; i--) bits.push((val >>> i) & 1); }
+        put(4, 4); put(bytes.length, ver < 10 ? 8 : 16);
+        bytes.forEach(function (b) { put(b, 8); });
+        put(0, Math.min(4, dataLen * 8 - bits.length));
+        while (bits.length % 8) bits.push(0);
+        var data = [];
+        for (var i = 0; i < bits.length; i += 8) { var b = 0; for (var j = 0; j < 8; j++) b = (b << 1) | bits[i + j]; data.push(b); }
+        for (var pad = 0xec; data.length < dataLen; pad ^= 0xec ^ 0x11) data.push(pad);
+
+        // Blocks, error correction, interleaving
+        var blocks = [], ecc = [], div = rsDivisor(e[0]), k = 0;
+        for (i = 0; i < e[1] + e[3]; i++) {
+            var n = i < e[1] ? e[2] : e[4], blk = data.slice(k, k + n);
+            k += n; blocks.push(blk); ecc.push(rsRemainder(blk, div));
+        }
+        var words = [], maxLen = Math.max(e[2], e[4]);
+        for (i = 0; i < maxLen; i++) blocks.forEach(function (bl) { if (i < bl.length) words.push(bl[i]); });
+        for (i = 0; i < e[0]; i++) ecc.forEach(function (ec) { words.push(ec[i]); });
+        return { ver: ver, words: words };
+    }
+
+    function matrix(text) {
+        var enc = encode(text), ver = enc.ver, size = 17 + ver * 4;
+        var mod = [], fn = [];
+        for (var y = 0; y < size; y++) { mod.push([]); fn.push([]); for (var x = 0; x < size; x++) { mod[y].push(false); fn[y].push(false); } }
         function set(x, y, dark) { mod[y][x] = dark; fn[y][x] = true; }
 
-        for (var i = 0; i < size; i++) { set(6, i, i % 2 === 0); set(i, 6, i % 2 === 0); }    // timing
-        [[3, 3], [size - 4, 3], [3, size - 4]].forEach(function (c) {                          // finders
+        for (var i = 0; i < size; i++) { set(6, i, i % 2 === 0); set(i, 6, i % 2 === 0); }
+        function finder(cx, cy) {
             for (var dy = -4; dy <= 4; dy++) for (var dx = -4; dx <= 4; dx++) {
-                var d = Math.max(Math.abs(dx), Math.abs(dy)), xx = c[0] + dx, yy = c[1] + dy;
+                var d = Math.max(Math.abs(dx), Math.abs(dy)), xx = cx + dx, yy = cy + dy;
                 if (xx >= 0 && xx < size && yy >= 0 && yy < size) set(xx, yy, d !== 2 && d !== 4);
             }
-        });
-        var pos = [];                                                                           // alignment
-        if (ver > 1) {
-            var n = Math.floor(ver / 7) + 2, step = Math.ceil((ver * 4 + 4) / (n * 2 - 2)) * 2;
-            pos = [6];
-            for (var p = size - 7; pos.length < n; p -= step) pos.splice(1, 0, p);
         }
-        pos.forEach(function (ay, a) {
-            pos.forEach(function (ax, b) {
-                if ((a === 0 && b === 0) || (a === 0 && b === pos.length - 1) || (a === pos.length - 1 && b === 0)) return;
-                for (var dy = -2; dy <= 2; dy++) for (var dx = -2; dx <= 2; dx++) set(ax + dx, ay + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
-            });
-        });
-        formatBits(0);                                                                          // reserved for now
+        finder(3, 3); finder(size - 4, 3); finder(3, size - 4);
+        var al = ALIGN[ver], last = al.length - 1;
+        for (i = 0; i < al.length; i++) for (var j = 0; j < al.length; j++) {
+            if ((i === 0 && j === 0) || (i === 0 && j === last) || (i === last && j === 0)) continue;
+            for (var dy2 = -2; dy2 <= 2; dy2++) for (var dx2 = -2; dx2 <= 2; dx2++) set(al[i] + dx2, al[j] + dy2, Math.max(Math.abs(dx2), Math.abs(dy2)) !== 1);
+        }
+        function format(mask) {
+            var d = (0 << 3) | mask, rem = d;               // M = 00
+            for (var q = 0; q < 10; q++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+            var b = ((d << 10) | rem) ^ 0x5412;
+            function bit(n) { return ((b >>> n) & 1) !== 0; }
+            for (q = 0; q <= 5; q++) set(8, q, bit(q));
+            set(8, 7, bit(6)); set(8, 8, bit(7)); set(7, 8, bit(8));
+            for (q = 9; q < 15; q++) set(14 - q, 8, bit(q));
+            for (q = 0; q < 8; q++) set(size - 1 - q, 8, bit(q));
+            for (q = 8; q < 15; q++) set(8, size - 15 + q, bit(q));
+            set(8, size - 8, true);
+        }
+        format(0);
         if (ver >= 7) {
             var rem = ver;
-            for (i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1F25);
+            for (i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1f25);
             var vb = (ver << 12) | rem;
             for (i = 0; i < 18; i++) {
-                var bit = ((vb >>> i) & 1) === 1, a2 = size - 11 + i % 3, b2 = Math.floor(i / 3);
-                set(a2, b2, bit); set(b2, a2, bit);
+                var c = ((vb >>> i) & 1) !== 0, a = size - 11 + (i % 3), bb = Math.floor(i / 3);
+                set(a, bb, c); set(bb, a, c);
             }
         }
-
-        function formatBits(mask) {
-            var d = (e.bits << 3) | mask, r = d;
-            for (var k = 0; k < 10; k++) r = (r << 1) ^ ((r >>> 9) * 0x537);
-            var b = ((d << 10) | r) ^ 0x5412;
-            function g(k) { return ((b >>> k) & 1) === 1; }
-            for (k = 0; k <= 5; k++) set(8, k, g(k));
-            set(8, 7, g(6)); set(8, 8, g(7)); set(7, 8, g(8));
-            for (k = 9; k < 15; k++) set(14 - k, 8, g(k));
-            for (k = 0; k < 8; k++) set(size - 1 - k, 8, g(k));
-            for (k = 8; k < 15; k++) set(8, size - 15 + k, g(k));
-            set(8, size - 8, true);
-            return b;
-        }
-
         // Data, in the zigzag order of the standard
-        var bitAt = 0, total = codewords.length * 8;
+        var words = enc.words, bi = 0;
         for (var right = size - 1; right >= 1; right -= 2) {
             if (right === 6) right = 5;
-            for (var vert = 0; vert < size; vert++) {
-                for (var j = 0; j < 2; j++) {
-                    var cx = right - j, up = ((right + 1) & 2) === 0, cy = up ? size - 1 - vert : vert;
-                    if (!fn[cy][cx] && bitAt < total) {
-                        mod[cy][cx] = ((codewords[bitAt >>> 3] >>> (7 - (bitAt & 7))) & 1) === 1;
-                        bitAt++;
-                    }
-                }
-            }
-        }
-
-        function masked(m, x, y) {
-            switch (m) {
-                case 0: return (x + y) % 2 === 0;
-                case 1: return y % 2 === 0;
-                case 2: return x % 3 === 0;
-                case 3: return (x + y) % 3 === 0;
-                case 4: return (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0;
-                case 5: return x * y % 2 + x * y % 3 === 0;
-                case 6: return (x * y % 2 + x * y % 3) % 2 === 0;
-                default: return ((x + y) % 2 + x * y % 3) % 2 === 0;
+            for (var vert = 0; vert < size; vert++) for (var jj = 0; jj < 2; jj++) {
+                var xx = right - jj, up = ((right + 1) & 2) === 0, yy = up ? size - 1 - vert : vert;
+                if (!fn[yy][xx] && bi < words.length * 8) { mod[yy][xx] = ((words[bi >>> 3] >>> (7 - (bi & 7))) & 1) !== 0; bi++; }
             }
         }
         function applyMask(m) {
-            for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) if (!fn[y][x] && masked(m, x, y)) mod[y][x] = !mod[y][x];
+            for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) {
+                if (fn[y][x]) continue;
+                var inv;
+                switch (m) {
+                    case 0: inv = (x + y) % 2 === 0; break;
+                    case 1: inv = y % 2 === 0; break;
+                    case 2: inv = x % 3 === 0; break;
+                    case 3: inv = (x + y) % 3 === 0; break;
+                    case 4: inv = (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0; break;
+                    case 5: inv = (x * y) % 2 + (x * y) % 3 === 0; break;
+                    case 6: inv = ((x * y) % 2 + (x * y) % 3) % 2 === 0; break;
+                    default: inv = ((x + y) % 2 + (x * y) % 3) % 2 === 0;
+                }
+                if (inv) mod[y][x] = !mod[y][x];
+            }
         }
-        /* Penalty (rules 1, 2 and 4 of the standard; rule 3 left out: it only refines the choice) */
         function penalty() {
-            var s = 0, dark = 0, x, y, run, last;
+            var p = 0, dark = 0, x, y, run, c;
             for (y = 0; y < size; y++) {
-                run = 0; last = null;
-                for (x = 0; x < size; x++) {
-                    if (mod[y][x]) dark++;
-                    if (mod[y][x] === last) { run++; if (run === 5) s += 3; else if (run > 5) s++; } else { last = mod[y][x]; run = 1; }
+                run = 1;
+                for (x = 1; x <= size; x++) {
+                    if (x < size && mod[y][x] === mod[y][x - 1]) run++;
+                    else { if (run >= 5) p += run - 2; run = 1; }
                 }
             }
             for (x = 0; x < size; x++) {
-                run = 0; last = null;
-                for (y = 0; y < size; y++) {
-                    if (mod[y][x] === last) { run++; if (run === 5) s += 3; else if (run > 5) s++; } else { last = mod[y][x]; run = 1; }
+                run = 1;
+                for (y = 1; y <= size; y++) {
+                    if (y < size && mod[y][x] === mod[y - 1][x]) run++;
+                    else { if (run >= 5) p += run - 2; run = 1; }
                 }
             }
             for (y = 0; y < size - 1; y++) for (x = 0; x < size - 1; x++) {
-                var c = mod[y][x];
-                if (c === mod[y][x + 1] && c === mod[y + 1][x] && c === mod[y + 1][x + 1]) s += 3;
+                c = mod[y][x];
+                if (c === mod[y][x + 1] && c === mod[y + 1][x] && c === mod[y + 1][x + 1]) p += 3;
             }
-            var total = size * size, k = Math.ceil(Math.abs(dark * 20 - total * 10) / total) - 1;
-            return s + Math.max(0, k) * 10;
+            for (y = 0; y < size; y++) for (x = 0; x < size; x++) if (mod[y][x]) dark++;
+            p += Math.floor(Math.abs(dark * 20 - size * size * 10) / (size * size)) * 10;
+            return p;
         }
-        var best = 0, bestScore = Infinity;
+        var best = 0, bestP = Infinity;
         for (var m = 0; m < 8; m++) {
-            applyMask(m); formatBits(m);
-            var sc = penalty();
-            if (sc < bestScore) { bestScore = sc; best = m; }
-            applyMask(m);                                   // undo (XOR)
+            applyMask(m); format(m);
+            var pp = penalty();
+            if (pp < bestP) { bestP = pp; best = m; }
+            applyMask(m);
         }
-        applyMask(best);
-        var fb = formatBits(best);
-        return { size: size, modules: mod, version: ver, mask: best, formatBits: fb };
+        applyMask(best); format(best);
+        return mod;
     }
 
-    function svg(text, px, level) {
-        var q = encode(text, level), quiet = 4, n = q.size + quiet * 2, d = "";
-        for (var y = 0; y < q.size; y++) for (var x = 0; x < q.size; x++) {
-            if (q.modules[y][x]) d += "M" + (x + quiet) + " " + (y + quiet) + "h1v1h-1z";
-        }
-        return '<svg xmlns="http://www.w3.org/2000/svg" width="' + px + '" height="' + px + '" viewBox="0 0 ' + n + " " + n +
-               '" shape-rendering="crispEdges"><rect width="' + n + '" height="' + n + '" fill="#fff"/><path d="' + d + '" fill="#000"/></svg>';
+    function canvas(text, px) {
+        var m = matrix(text), n = m.length, q = 4, scale = Math.max(1, Math.floor((px || 400) / (n + q * 2)));
+        var cv = document.createElement("canvas");
+        cv.width = cv.height = (n + q * 2) * scale;
+        var g = cv.getContext("2d");
+        g.fillStyle = "#fff"; g.fillRect(0, 0, cv.width, cv.height);
+        g.fillStyle = "#000";
+        for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) if (m[y][x]) g.fillRect((x + q) * scale, (y + q) * scale, scale, scale);
+        return cv;
     }
 
     global.APL = global.APL || {};
-    global.APL.qr = encode;
-    global.APL.qrSvg = svg;
-    global.APL._qrTest = { remainder: remainder, divisor: divisor, mul: mul, dataCodewords: dataCodewords, ECC: ECC };
+    global.APL.qr = { matrix: matrix, canvas: canvas };
 })(typeof window !== "undefined" ? window : this);

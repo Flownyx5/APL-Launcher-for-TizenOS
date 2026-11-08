@@ -1,25 +1,27 @@
 /* ============================================================
    genart.js — a logo and a background for apps with no artwork.
 
-   For an app the catalog doesn't know (sideloaded, app installed later),
-   the launcher makes by itself, only once, what the catalog gives the
-   others:
-     tile        500×300    the sharp logo, cut out from its background, on the app's color
-     background  1920×1080  the logo on large shapes in the app's colors
+   The launcher makes by itself, only once per app:
+     tile        500×300    for an app the catalog doesn't know (sideloaded, installed later):
+                            the sharp logo, cut out from its background, on the app's color
+     background  1920×1080  for every app without artwork of its own, catalog apps included
+                            (no background is shipped): light sheets in the app's colors for
+                            dark and light themes, or the logo on a halo of its color
 
    The logo comes, in this order: from the app's icon if it is big enough,
    from the App Store if the name matches exactly, from TMDB, from public icon
    catalogs, then from the app's icon even if small. With none of these,
    the app's name serves as the logo.
 
-   Kept on the screen (a few tens of KB per app): tiles and backgrounds then
-   cost no more than the catalog's.
+   A catalog app's logo is its catalog tile, cut out the same way: nothing to search.
+
+   Kept on the screen (a few tens of KB per app).
    ============================================================ */
 (function (global) {
     "use strict";
 
     var APL = global.APL, sys = APL.sys;
-    var VERSION = 1, PREFIX = "apl.gen.";
+    var VERSION = 3, PREFIX = "apl.gen.";        // 3: sheets in the logo's own colors, made again
     var TILE_W = 500, TILE_H = 300, BG_W = 1920, BG_H = 1080;
     var GOOD_ICON = 200;                 // below this, look for better before taking the app's icon
     var ICON_SETS = ["https://raw.githubusercontent.com/homarr-labs/dashboard-icons/main/png/",
@@ -127,8 +129,14 @@
                 }
             }
         }
-        var best = null;
+        var best = null, next = null;
         Object.keys(buckets).forEach(function (k) { if (!best || buckets[k].n > best.n) best = buckets[k]; });
+        // A second color of the logo (Samsung TV Plus blue and orange, TikTok pink and cyan): a hue well
+        // apart from the main one, and not a speck
+        Object.keys(buckets).forEach(function (k) {
+            var b = buckets[k];
+            if (b !== best && b.n >= best.n * 0.2 && hueGap(b.h / b.n, best.h / best.n) >= 50 && (!next || b.n > next.n)) next = b;
+        });
         if (!best && (uniform || !transparent)) {
             var e = toHsl(edge);
             if (e.s > 25 && e.l > 8 && e.l < 90) best = { n: 1, h: e.h, s: e.s, l: e.l };
@@ -139,9 +147,11 @@
             logoMode: (transparent || uniform) && share > 0.01 && share < 0.92,
             box: maxX < 0 ? null : { x: minX / w, y: minY / h, w: (maxX - minX + 1) / w, h: (maxY - minY + 1) / h },
             lum: count ? sum / count : 128,
-            accent: best ? { h: best.h / best.n, s: clamp(best.s / best.n, 50, 90), l: clamp(best.l / best.n, 40, 62) } : null
+            accent: best ? { h: best.h / best.n, s: clamp(best.s / best.n, 50, 90), l: clamp(best.l / best.n, 40, 62) } : null,
+            second: next ? { h: next.h / next.n, s: next.s / next.n, l: next.l / next.n } : null
         };
     }
+    function hueGap(a, b) { var d = Math.abs(((a - b) % 360 + 360) % 360); return Math.min(d, 360 - d); }
 
     /* The logo alone: its solid background becomes transparent, its margins are removed. */
     function cutOut(img, s) {
@@ -237,67 +247,251 @@
     }
 
     /* ---------- background ---------- */
-    /* Large shapes around the edge of the screen; the center stays calm for the logo. */
-    function paintBg(base, logo, hue, sat, seedText) {
-        var c = canvas(BG_W, BG_H), x = c.getContext("2d"), rnd = seeded(seedText), light = lum(base) > 170;
-        x.fillStyle = rgb(base);
+    /* Large Logo: dark, with a soft halo in the app's color behind the logo, the style of the old
+       catalog cards, now drawn here for every app. */
+    function paintBg(logo, hue, sat) {
+        var c = canvas(BG_W, BG_H), x = c.getContext("2d"), a = hslToRgb(hue, sat, 50), cy = BG_H * 0.44;
+        var o = "rgba(" + Math.round(a.r) + "," + Math.round(a.g) + "," + Math.round(a.b) + ",";
+        x.fillStyle = "#07080c";
         x.fillRect(0, 0, BG_W, BG_H);
-        var shifts = [0, 34, -30, 62, 180, -64, 16, 150], count = 8, turn = rnd() * Math.PI * 2, i;
-        for (i = 0; i < count; i++) {
-            var a = turn + i * Math.PI * 2 / count + (rnd() - 0.5) * 0.35;
-            var cx = BG_W / 2 + Math.cos(a) * BG_W * (0.47 + rnd() * 0.1);
-            var cy = BG_H / 2 + Math.sin(a) * BG_H * (0.48 + rnd() * 0.14);
-            var size = 260 + rnd() * 300, h = hue + shifts[i % shifts.length], l = light ? 72 + rnd() * 12 : 44 + rnd() * 22;
-            var g = x.createLinearGradient(cx - size, cy - size, cx + size, cy + size);
-            g.addColorStop(0, hsl(h, sat, l));
-            g.addColorStop(1, hsl(h + 18, sat, l - 12));
+        function halo(px, py, rx, ry, alpha, stop) {
+            x.save();
+            x.translate(px, py);
+            x.scale(1, ry / rx);
+            var g = x.createRadialGradient(0, 0, 0, 0, 0, rx);
+            g.addColorStop(0, o + alpha + ")");
+            g.addColorStop(stop, o + "0)");
             x.fillStyle = g;
-            x.beginPath();
-            if (i % 3 === 0) {
-                x.arc(cx, cy, size, 0, Math.PI * 2);
-            } else {
-                var sides = i % 3 === 1 ? 3 : 4, start = rnd() * Math.PI * 2, k;
-                for (k = 0; k < sides; k++) {
-                    var b = start + k * Math.PI * 2 / sides, rr = size * (1.1 + rnd() * 0.4);
-                    x[k ? "lineTo" : "moveTo"](cx + Math.cos(b) * rr, cy + Math.sin(b) * rr);
-                }
-                x.closePath();
-            }
-            x.fill();
+            x.fillRect(-rx, -rx, rx * 2, rx * 2);
+            x.restore();
         }
-        // A few thin, hand-drawn strokes
-        x.lineWidth = 3;
-        x.strokeStyle = light ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.4)";
-        for (i = 0; i < 3; i++) {
-            var ax = rnd() < 0.5 ? rnd() * 420 : BG_W - rnd() * 420, ay = rnd() * BG_H, ar = 120 + rnd() * 240;
-            x.beginPath();
-            x.ellipse(ax, ay, ar, ar * (0.5 + rnd() * 0.5), rnd() * Math.PI, 0, Math.PI * (1.2 + rnd()));
-            x.stroke();
-        }
-        // The center returns to the logo's color, and the bottom darkens under the dock
-        var cy2 = BG_H * 0.4;
-        x.save();
-        x.translate(BG_W / 2, cy2);
-        x.scale(1, 0.62);
-        var glow = x.createRadialGradient(0, 0, BG_W * 0.2, 0, 0, BG_W * 0.42), o = "rgba(" + Math.round(base.r) + "," + Math.round(base.g) + "," + Math.round(base.b) + ",";
-        glow.addColorStop(0, o + "1)");
-        glow.addColorStop(0.45, o + "0.82)");
-        glow.addColorStop(1, o + "0)");
-        x.fillStyle = glow;
-        x.fillRect(-BG_W, -BG_H * 2, BG_W * 2, BG_H * 4);
-        x.restore();
-        if (logo) drawLogo(x, logo, BG_W / 2, cy2, 820, logo.icon ? 400 : 320);
+        halo(BG_W / 2, cy, BG_W * 0.6, BG_H * 0.7, 0.42, 0.7);
+        halo(BG_W / 2, BG_H * 1.15, BG_W * 1.1, BG_H * 0.8, 0.22, 0.6);
+        if (logo) drawLogo(x, logo, BG_W / 2, cy, 820, logo.icon ? 400 : 320);
         return c.toDataURL("image/jpeg", 0.84);
     }
 
-    /* Settings › Home Screen › Background for Other Apps: the logo enlarged on the app's colors
-       (a small icon gets blurry), the colors alone, or one wallpaper for all of them. */
-    var WALLPAPER = "wallpaper", wallpaperUrl = null;
-    function bgMode() { var m = sys.pref("shelfArt"); return m === "colors" || m === WALLPAPER ? m : "logo"; }
-    function wallpaper() {
-        if (!wallpaperUrl) wallpaperUrl = paintBg(hslToRgb(226, 52, 24), null, 226, 58, "APL Launcher");
-        return wallpaperUrl;
+    /* ---------- background: light sheets (Settings › Appearance › Top Shelf › Otherwise) ----------
+       Four or five sheets, each the area on one side of a smooth line across the screen, like
+       Apple's wallpapers. A sheet is mostly its edge light: crisp at the line, fading inward, so the
+       sheets below show through. Lines, sides, light and hollows all follow from the app's id, the
+       colors from its main color (neighbouring hues only). Blurred by 10% of the width, so it is drawn
+       small and the screen enlarges it. One for the dark theme, one for the light one. */
+    var SW = 480, SH = 270, EDGE = 0.12;
+
+    // The previews' random sequence: the same app always gets the same sheets
+    function sheetRandom(str) {
+        var h = 2166136261, i;
+        for (i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+        return function () {
+            h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0;
+            return (h ^= h >>> 16) / 4294967296 + 0.5;
+        };
     }
+    function edgePoint(t) {                              // t in [0, 4): top, right, bottom, left, clockwise
+        t = ((t % 4) + 4) % 4;
+        var k = Math.floor(t), f = t - k;
+        return [[f, -0.02], [1.02, f], [1 - f, 1.02], [-0.02, 1 - f]][k];
+    }
+    var CORNERS = [[1 + EDGE, -EDGE], [1 + EDGE, 1 + EDGE], [-EDGE, 1 + EDGE], [-EDGE, -EDGE]];   // after top, right, bottom, left
+    function sheetPath(x, s, append) {
+        var p = s.pts.map(function (v) { return [v[0] * SW, v[1] * SH]; }), n = p.length, i;
+        if (!append) x.beginPath();
+        x.moveTo(p[0][0], p[0][1]);
+        for (i = 0; i < n - 1; i++) {
+            var p0 = p[Math.max(i - 1, 0)], p1 = p[i], p2 = p[i + 1], p3 = p[Math.min(i + 2, n - 1)];
+            x.bezierCurveTo(p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6, p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6, p2[0], p2[1]);
+        }
+        s.close.forEach(function (v) { x.lineTo(v[0] * SW, v[1] * SH); });
+        x.closePath();
+    }
+    /* One line from one side of the screen to another, closed along the border: that picks its side. */
+    function sheetLine(r) {
+        var t0 = r() * 4, t1 = t0 + 1.2 + r() * 1.6, a = edgePoint(t0), b = edgePoint(t1);
+        var n = 2 + Math.floor(r() * 2), pts = [a], i;
+        var dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy), nx = -dy / len, ny = dx / len;
+        for (i = 1; i <= n; i++) {
+            var f = i / (n + 1) + (r() - 0.5) * 0.12, amp = (r() - 0.5) * 0.3 * len;
+            pts.push([a[0] + dx * f + nx * amp, a[1] + dy * f + ny * amp]);
+        }
+        pts.push(b);
+        var close = [], k;
+        if (r() < 0.5) { for (k = Math.floor(t1); k < Math.floor(t0) + 4; k++) close.push(CORNERS[((k % 4) + 4) % 4]); }
+        else { for (k = Math.floor(t1 - 1e-9); k >= Math.floor(t0); k--) close.push(CORNERS[((k - 1) % 4 + 4) % 4]); }
+        return { pts: pts, close: close };
+    }
+    function covered(list) {
+        var c = canvas(SW / 8, SH / 8), x = c.getContext("2d"), on = 0, i;
+        x.scale(1 / 8, 1 / 8);
+        list.forEach(function (s) { sheetPath(x, s); x.fill(); });
+        var d = x.getImageData(0, 0, c.width, c.height).data;
+        for (i = 3; i < d.length; i += 4) if (d[i] > 127) on++;
+        return on / (d.length / 4);
+    }
+    function pointIn(s, r) {
+        var x = canvas(1, 1).getContext("2d"), i;
+        sheetPath(x, s);
+        for (i = 0; i < 30; i++) { var p = [0.1 + r() * 0.8, 0.1 + r() * 0.8]; if (x.isPointInPath(p[0] * SW, p[1] * SH)) return p; }
+        return null;
+    }
+    /* 4 or 5 sheets, each a fair share of the screen; together 60 to 86 % of it (never empty, never full). */
+    function sheetPlan(id, hue, two) {
+        var r, list, v;
+        for (v = 0; v < 12; v++) {
+            r = sheetRandom(id + "#" + v);
+            var n = 4 + Math.floor(r() * 2), tries = 0;
+            list = [];
+            while (list.length < n && tries++ < 40) {
+                var s = sheetLine(r), a = covered([s]);
+                if (a >= 0.12 && a <= 0.55) list.push(s);
+            }
+            var u = covered(list);
+            if (list.length === n && u > 0.6 && u < 0.86) break;
+        }
+        var side = [r() < 0.5 ? -1 : 1, r() < 0.5 ? -1 : 1], odd = [Math.floor(r() * list.length), Math.floor(r() * list.length)];
+        list.forEach(function (s, i) {
+            var nb = odd.indexOf(i), j = r();
+            // The logo's main color; one or two sheets in its second color if it has one, else a close
+            // neighbour. Small steps only: a wider one turned Crunchyroll's orange red.
+            if (nb >= 0 && two) { s.h = two.h + (j - 0.5) * 6; s.sat = two.s; s.lit = two.l; }
+            else s.h = hue + (nb >= 0 ? side[nb] * (5 + j * 5) : (j - 0.5) * 4);
+            s.h2 = s.h + (r() - 0.5) * 10;                                            // the rim, within ±5°
+            s.rimEnd = s.h + (r() - 0.5) * 10;
+            var m = s.pts[Math.floor(r() * s.pts.length)], far = s.pts[Math.floor(r() * s.pts.length)];
+            s.l = [m[0], m[1], far[0] + (r() - 0.5) * 0.6, far[1] + (r() - 0.5) * 0.6];   // where the light falls along the edge
+            s.rimDir = [s.pts[0][0], s.pts[0][1], s.pts[s.pts.length - 1][0], s.pts[s.pts.length - 1][1]];
+            s.drift = [r(), r(), r(), r(), (r() < 0.5 ? -1 : 1) * (6 + r() * 8)];
+            s.pockets = [];
+            for (var k = 0, np = Math.floor(r() * 3); k < np; k++) { var p = pointIn(s, r); if (p) s.pockets.push([p[0], p[1], 0.1 + r() * 0.12, 0.35 + r() * 0.35]); }
+        });
+        return list;
+    }
+    /* Strength by distance to the sheet's edge: everything outside it, blurred, seen only inside it.
+       Wide ones at a quarter size: canvas caps the blur radius (and it is cheaper). */
+    function falloff(s, blur, times, k) {
+        k = k || 1;
+        var o = canvas(SW * k, SH * k), x = o.getContext("2d"), i;
+        x.scale(k, k);
+        x.save();
+        x.translate(-SW * 4, 0);
+        x.beginPath(); x.rect(-SW, -SH, SW * 3, SH * 3); sheetPath(x, s, true);
+        x.translate(SW * 4, 0);
+        x.shadowOffsetX = SW * 4 * k; x.shadowBlur = blur * k; x.shadowColor = "#fff"; x.fillStyle = "#000";
+        for (i = 0; i < times; i++) x.fill("evenodd");
+        x.restore();
+        x.globalCompositeOperation = "destination-in"; sheetPath(x, s); x.fill();
+        if (k === 1) return o;
+        var big = canvas(SW, SH), g = big.getContext("2d");
+        if ("imageSmoothingQuality" in g) g.imageSmoothingQuality = "high";
+        g.drawImage(o, 0, 0, SW, SH);
+        g.globalCompositeOperation = "destination-in"; sheetPath(g, s); g.fill();   // the edge stays crisp
+        return big;
+    }
+    function lightMask(x, l, stops) {
+        x.globalCompositeOperation = "destination-in";
+        var m = x.createLinearGradient(l[0] * SW, l[1] * SH, l[2] * SW, l[3] * SH);
+        stops.forEach(function (st) { m.addColorStop(st[0], "rgba(0,0,0," + st[1] + ")"); });
+        x.fillStyle = m; x.fillRect(0, 0, SW, SH);
+    }
+    /* Dark yellows read as olive: they lean towards orange. A yellow kept bright (Pluto TV, DAZN) stays yellow. */
+    function warm(h, light, lit) { h = ((h % 360) + 360) % 360; return (!light && lit < 46 && h > 38 && h < 75) ? h - 10 * (1 - Math.abs(h - 56) / 19) : h; }
+    /* In the dark theme a sheet is as bright as the logo's color, within limits: a fixed dark one
+       turned yellow olive, orange brown and cyan teal. */
+    function sheetLight(l) { return l === undefined || l === null ? 38 : clamp(l, 34, 52); }
+    function paintSheets(list, sat, light, lit) {
+        var c = canvas(SW, SH), x = c.getContext("2d");
+        x.fillStyle = light ? hsl(warm(list[0].h, true), Math.min(sat, 45) * 0.6, 84) : "#000";
+        x.fillRect(0, 0, SW, SH);
+        list.forEach(function (s) {
+            if (light) {
+                // Light theme: a soft shadow just outside the sheet, on what lies below
+                var sh = canvas(SW, SH), y = sh.getContext("2d");
+                y.save(); y.translate(-SW * 4, 0); sheetPath(y, s); y.translate(SW * 4, 0);
+                y.shadowOffsetX = SW * 4 + SW * 0.004; y.shadowOffsetY = SW * 0.006; y.shadowBlur = SW * 0.035;
+                y.shadowColor = hsl(s.h, (s.sat === undefined ? sat : clamp(s.sat, 55, 92)) * 0.6, 28, 0.38); y.fill(); y.restore();
+                y.globalCompositeOperation = "destination-out"; sheetPath(y, s); y.fill();
+                x.drawImage(sh, 0, 0);
+            }
+            var body = canvas(SW, SH), b = body.getContext("2d");
+            var ss = s.sat === undefined ? sat : clamp(s.sat, 55, 92), sl = s.lit === undefined ? lit : sheetLight(s.lit);
+            b.drawImage(falloff(s, SW * 0.012, 1), 0, 0);
+            b.drawImage(falloff(s, SW * 0.32, 2, 0.25), 0, 0);
+            lightMask(b, s.l, light ? [[0, 1], [1, 0.6]] : [[0, 1], [1, 0.35]]);
+            b.globalCompositeOperation = "source-in";
+            var d = s.drift, dg = b.createLinearGradient(d[0] * SW, d[1] * SH, d[2] * SW, d[3] * SH);
+            dg.addColorStop(0, hsl(warm(s.h + d[4] * 0.5, light, sl), ss, light ? 56 : sl));
+            dg.addColorStop(1, hsl(warm(s.h, light, sl), ss, light ? 50 : sl));
+            b.fillStyle = dg; b.fillRect(0, 0, SW, SH);
+            b.globalCompositeOperation = "source-atop";
+            s.pockets.forEach(function (k) {                                         // hollows inside the sheet
+                var pg = b.createRadialGradient(k[0] * SW, k[1] * SH, 0, k[0] * SW, k[1] * SH, k[2] * SW);
+                pg.addColorStop(0, light ? "rgba(255,255,255," + (k[3] * 0.25) + ")" : "rgba(0,0,0," + k[3] + ")");
+                pg.addColorStop(1, "rgba(0,0,0,0)");
+                b.fillStyle = pg; b.fillRect(0, 0, SW, SH);
+            });
+            var rim = canvas(SW, SH), q = rim.getContext("2d");                      // the pale rim where the light falls
+            q.drawImage(falloff(s, SW * 0.008, 1), 0, 0);
+            q.drawImage(falloff(s, SW * 0.05, 2), 0, 0);
+            lightMask(q, s.l, [[0, 1], [0.45, 0.25], [0.8, 0]]);
+            q.globalCompositeOperation = "source-in";
+            var rd = s.rimDir, rg = q.createLinearGradient(rd[0] * SW, rd[1] * SH, rd[2] * SW, rd[3] * SH), rs = ss * (light ? 0.4 : 0.65);
+            rg.addColorStop(0, hsl(warm(s.h2, light, sl), rs, light ? 92 : 82));
+            rg.addColorStop(1, hsl(warm(s.rimEnd, light, sl), rs, light ? 92 : 82));
+            q.fillStyle = rg; q.fillRect(0, 0, SW, SH);
+            x.drawImage(body, 0, 0);
+            x.globalAlpha = light ? 0.8 : 0.95; x.drawImage(rim, 0, 0); x.globalAlpha = 1;
+        });
+        return blurred(c, 0.10).toDataURL("image/jpeg", 0.9);
+    }
+    /* Blur by a share of the width: canvas filter at half size, else smooth down- and up-scaling. */
+    function blurred(src, share) {
+        var w = SW / 2, h = SH / 2, half = canvas(w, h), x = half.getContext("2d"), out = canvas(SW, SH), o = out.getContext("2d");
+        if ("imageSmoothingQuality" in o) o.imageSmoothingQuality = "high";
+        if ("filter" in x) {
+            var m = w * share * 2;
+            x.filter = "blur(" + (w * share) + "px)";
+            x.drawImage(src, -m, -m, w + 2 * m, h + 2 * m);                          // a little larger: no soft border
+            o.drawImage(half, 0, 0, SW, SH);
+            return out;
+        }
+        var cur = src, size = [SW, SH];
+        while (size[0] > SW * share * 2) {
+            size = [Math.max(2, Math.round(size[0] / 2)), Math.max(2, Math.round(size[1] / 2))];
+            var next = canvas(size[0], size[1]), n = next.getContext("2d");
+            if ("imageSmoothingQuality" in n) n.imageSmoothingQuality = "high";
+            n.drawImage(cur, 0, 0, size[0], size[1]);
+            cur = next;
+        }
+        o.drawImage(cur, 0, 0, SW, SH);
+        return out;
+    }
+    function hexHsl(hex) {
+        var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ""));
+        if (!m) return null;
+        var v = parseInt(m[1], 16);
+        return toHsl({ r: v >> 16, g: (v >> 8) & 255, b: v & 255 });
+    }
+    /* Both themes; a color without saturation (black, white) gives graphite / silver. */
+    /* main: the app's color {h, s, l}; st: what study() found in its tile or logo, for a second color. */
+    function sheets(id, main, st) {
+        var grey = main.s < 15, two = grey ? null : secondColour(main, st);
+        var list = sheetPlan(id, main.h, two), s = grey ? 6 : clamp(main.s, 55, 92), l = grey ? 38 : sheetLight(main.l);
+        return { dark: paintSheets(list, s, false, l), light: paintSheets(list, s, true, l) };
+    }
+    /* The logo's other color, if it has a clear one far enough from the main color. */
+    function secondColour(main, st) {
+        if (!st) return null;
+        var c = st.second && hueGap(st.second.h, main.h) >= 50 ? st.second
+              : st.accent && hueGap(st.accent.h, main.h) >= 50 ? st.accent : null;
+        return c && c.s >= 35 ? c : null;
+    }
+
+    /* Settings › Appearance › Top Shelf › Otherwise: light sheets in the app's colors (the default), or
+       its logo on a halo of its color. Black (a plain dark Top Shelf, launcher.js) still needs the tiles:
+       they are made as for the sheets. */
+    var SHEETS = "sheets", LOGO = "logo";
+    function bgMode() { return sys.pref("shelfArt") === LOGO ? LOGO : SHEETS; }
+    function lightTheme() { return !!(document.body && document.body.classList.contains("theme-light")); }
 
     /* ---------- for one app ---------- */
     function fontName() {
@@ -305,21 +499,32 @@
     }
     function hashHue(text) { return Math.floor(seeded(text)() * 360); }
 
-    function paint(app, img) {
-        var hue = hashHue(app.name || app.id), sat = 66, base, logo;
+    /* tile: the catalog's tile, read for a second color (its main one is the catalog's). */
+    function paint(app, img, tile) {
+        var hue = hashHue(app.name || app.id), sat = 66, lit = null, base, logo, mode = bgMode(), known = hexHsl(app.accent), st = null;
+        var out = { mode: mode };
+        // An app with its tile and its color already (catalog): only the sheets, nothing to look at
+        if (!img && known && (app.tile || app.tileHtml)) {
+            var both = sheets(app.id, known, tile ? study(tile) : null);
+            out.bgDark = both.dark; out.bgLight = both.light;
+            return out;
+        }
         if (img) {
-            var s = study(img);
-            if (s.accent) { hue = s.accent.h; sat = s.accent.s; }
-            base = baseColour(s, hue);
-            logo = s.logoMode && s.box ? cutOut(img, s) : { icon: img };
+            st = study(img);
+            if (st.accent) { hue = st.accent.h; sat = st.accent.s; lit = st.accent.l; }
+            base = baseColour(st, hue);
+            logo = st.logoMode && st.box ? cutOut(img, st) : { icon: img };
         } else {
             // Nothing found: the app's name serves as the logo
             base = hslToRgb(hue, 58, 26);
             logo = { text: app.name || "", font: fontName(), colour: "#fff" };
         }
-        var mode = bgMode();
-        return { tile: paintTile(base, logo), accent: rgb(hslToRgb(hue, sat, 50)), mode: mode,
-                 bg: mode === WALLPAPER ? WALLPAPER : paintBg(base, mode === "colors" ? null : logo, hue, sat, app.id) };
+        if (known) { hue = known.h; sat = known.s; lit = known.l; }
+        out.tile = paintTile(base, logo);
+        out.accent = rgb(hslToRgb(hue, sat, 50));
+        if (mode === SHEETS) { var two = sheets(app.id, { h: hue, s: sat, l: lit }, st); out.bgDark = two.dark; out.bgLight = two.light; }
+        else out.bg = paintBg(logo, hue, sat);
+        return out;
     }
 
     function stored(app) {
@@ -331,14 +536,39 @@
     function put(app, r) {
         try { global.localStorage.setItem(PREFIX + app.id, JSON.stringify(r)); } catch (e) {}   // full: made again at the next start-up
     }
+    function bgOf(r) { return r.bgDark ? (lightTheme() ? r.bgLight : r.bgDark) : r.bg; }
     function use(app, r) {
         var changed = false;
-        if (!app.tile && !app.tileHtml) { app.tile = r.tile; app.madeTile = true; changed = true; }
-        if (!app.bg && !app.shelfHtml) { app.bg = r.bg === WALLPAPER ? wallpaper() : r.bg; app.madeBg = true; app.bgHasLogo = r.bg !== WALLPAPER && bgMode() === "logo"; changed = true; }
-        if (!app.accent) app.accent = r.accent;
+        if (!app.tile && !app.tileHtml && r.tile) { app.tile = r.tile; app.madeTile = true; changed = true; }
+        if (!app.bg && !app.shelfHtml && (r.bg || r.bgDark)) {
+            app.bg = bgOf(r); app.madeBg = true; changed = true;
+            app.bgHasLogo = bgMode() === LOGO;                                  // screen saver: no second logo over it
+            if (r.bgDark) { app.bgBlur = app.bg; app.sheets = r; }                     // already blurred: the grid uses it as is
+        }
+        if (!app.accent && r.accent) app.accent = r.accent;
         return changed;
     }
-    function missing(app) { return !app.folder && ((!app.tile && !app.tileHtml) || (!app.bg && !app.shelfHtml)); }
+    function missing(app) {
+        return !app.folder && ((!app.tile && !app.tileHtml) || (!app.bg && !app.shelfHtml));
+    }
+    /* Before painting again: what this file gave the app goes. */
+    function undo(app) {
+        if (!app.madeBg) return;
+        app.bg = null;
+        if (app.sheets) app.bgBlur = null;
+        app.sheets = null;
+        app.madeBg = false;
+    }
+    /* The theme changed: the sheets of the other theme, already made. */
+    function retheme(apps) {
+        var changed = false;
+        apps.forEach(function (a) {
+            if (!a.sheets) return;
+            var bg = bgOf(a.sheets);
+            if (bg !== a.bg) { a.bg = a.bgBlur = bg; changed = true; }
+        });
+        return changed;
+    }
 
     /* At start-up: what has already been made. */
     function applyCached(app) {
@@ -349,11 +579,19 @@
 
     /* One app: find its logo and paint, only once. */
     function make(app, art) {
-        if (!missing(app) || sys.PREVIEW) return Promise.resolve(false);
+        if (!missing(app)) return Promise.resolve(false);
+        // Tile and color known (catalog): the sheets need no logo, nothing to search
+        // (its tile is still read, for the logo's second color)
+        var tileOnly = (app.tile || app.tileHtml) && hexHsl(app.accent) && bgMode() === SHEETS;
+        // A catalog app in the other styles: its tile is the logo, cut out like an icon (no search)
+        var ownTile = !tileOnly && app.tile && !app.madeTile;
+        if (sys.PREVIEW && !tileOnly && !ownTile) return Promise.resolve(false);      // the preview searches nothing online
         var r = stored(app);
         if (r) return Promise.resolve(use(app, r));
-        return findLogo(app, art).then(function (img) {
-            var out = paint(app, img);
+        var logoP = tileOnly ? Promise.resolve(null) : ownTile ? load(app.tile) : findLogo(app, art);
+        var tileP = tileOnly && app.tile ? load(app.tile) : Promise.resolve(null);
+        return Promise.all([logoP, tileP]).then(function (got) {
+            var out = paint(app, got[0], got[1]);
             out.v = VERSION;
             out.of = String(app.icon || "");
             put(app, out);
@@ -372,5 +610,5 @@
         } catch (e) {}
     }
 
-    APL.genArt = { make: make, applyCached: applyCached, missing: missing, clear: clear };
+    APL.genArt = { make: make, applyCached: applyCached, missing: missing, clear: clear, undo: undo, retheme: retheme };
 })(window);

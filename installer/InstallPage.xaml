@@ -148,6 +148,19 @@
                         </StackPanel>
                         <Border Style="{StaticResource Separator}"/>
 
+                        <Grid Margin="0,14,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,20,0" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource Text.Label}" Text="Also install APL TV"/>
+                                <TextBlock Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextWrapping="Wrap" Text="An IPTV player in the same style, for your own M3U playlists and Xtream accounts. It comes with no channels. Uses the TMDB key above."/>
+                            </StackPanel>
+                            <CheckBox x:Name="AplTvToggle" Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="False"/>
+                        </Grid>
+                        <Border Style="{StaticResource Separator}"/>
+
                         <Grid Margin="0,14,0,2">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>

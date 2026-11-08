@@ -24,7 +24,7 @@ namespace APL.Setup
         private readonly StackPanel formView, progressView, finishView;
         private readonly TextBox ipBox, tmdbBox, youTubeBox, fanartBox, logBox;
         private readonly Button findButton, checkAgain, addSite, installButton, retryButton, backButton, openVetro, remapButton, continueButton, newInstall;
-        private readonly CheckBox optimizeAfter;
+        private readonly CheckBox optimizeAfter, aplTvToggle;
         private readonly Grid vetroMark, footerMark, failMark, doneMark;
         private readonly TextBlock vetroText, vetroHelp, footerHint, overallText, overallPercent, failText;
         private readonly StackPanel scanPanel, pcRows, sitesList, remapStatus;
@@ -66,6 +66,7 @@ namespace APL.Setup
             continueButton = F<Button>("ContinueButton");
             newInstall = F<Button>("NewInstall");
             optimizeAfter = F<CheckBox>("OptimizeAfter");
+            aplTvToggle = F<CheckBox>("AplTvToggle");
             vetroMark = F<Grid>("VetroMark");
             footerMark = F<Grid>("FooterMark");
             failMark = F<Grid>("FailMark");
@@ -191,7 +192,7 @@ namespace APL.Setup
             if (!Vetro.IsIPv4(ip)) return;
             int seq = ++statusSeq;
             if (!quiet) RenderVetro(true);
-            var info = await Vetro.StatusAsync(ip, 2500, CancellationToken.None);
+            var info = await Vetro.StatusAsync(ip, 2500, CancellationToken.None, true);
             if (seq != statusSeq || ip != Main.Ip) return;   // the address changed meanwhile
             bool changed = !Main.VetroChecked || (Main.Vetro == null) != (info == null) ||
                            (info != null && (info.AgentReady != Main.Vetro.AgentReady || info.Version != Main.Vetro.Version));
@@ -435,17 +436,7 @@ namespace APL.Setup
                 PcRow(Status.Fail, T("No Samsung certificate"),
                       T("The screen only accepts apps signed by you. Create an author and a distributor certificate in Tizen Studio's Certificate Manager (Samsung Certificate Extension), or with Apps2Samsung."));
 
-            bool cs = Json.Bool(Check, "csharp"), net6 = Json.Bool(Check, "net6");
-            if (cs && net6)
-                PcRow(Status.Ok, T("C# compiler and .NET 6"), T("APL Overlay will be installed too: Control Center over videos, Alexa glow, closing unused apps."));
-            else
-            {
-                var links = new List<string>();
-                if (!cs) { links.Add(T("Build Tools for Visual Studio")); links.Add(BuildToolsDownload); }
-                if (!net6) { links.Add(T(".NET 6 runtime")); links.Add(Net6Download); }
-                PcRow(Status.Warn, T("C# compiler and .NET 6 · optional"),
-                      T("Needed for APL Overlay: Control Center over videos, Alexa glow, closing unused apps."), links.ToArray());
-            }
+            // APL Overlay comes built in the launcher's package (hybrid .wgt): no C# compiler or .NET 6 needed on the PC any more.
         }
 
         /// <summary>C:\tizen-studio\tools\ide\bin\tizen.bat → C:\tizen-studio</summary>
@@ -586,13 +577,14 @@ namespace APL.Setup
             string sitesJson = "[" + string.Join(",", Sites().Select(s => "{\"name\":" + Json.Quote(s.Name) + ",\"url\":" + Json.Quote(s.Url) + "}")) + "]";
             // Base64: JSON quotes do not survive powershell.exe's command line reliably.
             string sitesArg = Convert.ToBase64String(Encoding.UTF8.GetBytes(sitesJson));
-            var args = new[] { "-Unattended", "-TvIp", Main.Ip, "-Tmdb", tmdb, "-YouTube", yt, "-Fanart", fanart, "-Sites", sitesArg };
+            var args = new List<string> { "-Unattended", "-TvIp", Main.Ip, "-Tmdb", tmdb, "-YouTube", yt, "-Fanart", fanart, "-Sites", sitesArg };
+            if (aplTvToggle.IsChecked == true) args.Add("-AplTv");
 
             BeginProgress();
             ScriptResult r;
             try
             {
-                r = await Main.Runner.Run("install.ps1", args, T("Installing…"), OnLine, new[] { tmdb, yt, fanart }, true);
+                r = await Main.Runner.Run("install.ps1", args.ToArray(), T("Installing…"), OnLine, new[] { tmdb, yt, fanart }, true);
             }
             catch (Exception ex)
             {

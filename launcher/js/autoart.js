@@ -9,7 +9,7 @@
      2. TMDB (with your key): recognises the streaming service (TF1+, M6+,
         france.tv, Molotov, ARTE…) to show its current movies and series
         in the Top Shelf, and its official logo as a fallback.
-     3. Music apps are spotted (live Top albums in France).
+     3. Music apps are spotted (live Top albums in the screen's country).
    Results are kept 30 days on the screen (3 days if nothing is
    found): a single search per app, in the background, without slowing down.
    The App Store only counts if the name matches exactly: "Overscan" and
@@ -112,14 +112,15 @@
         }).catch(function () { return null; });
     }
 
-    /* ---------- 2. TMDB: streaming services in France ---------- */
+    /* ---------- 2. TMDB: streaming services in the screen's country ---------- */
     var providersP = null;
     function providers() {
         if (!KEYS.tmdb) return Promise.resolve([]);
         if (providersP) return providersP;
-        var c = cacheGet("__providers");
+        var region = APL.live ? APL.live.region() : "FR";                // a list per country (what streams there)
+        var c = cacheGet("__providers" + region);
         if (c && !c.miss && Date.now() - c.t < 7 * DAY) return (providersP = Promise.resolve(c.list));
-        var q = "?api_key=" + KEYS.tmdb + "&watch_region=FR&language=" + APL.locale;
+        var q = "?api_key=" + KEYS.tmdb + "&watch_region=" + region + "&language=" + APL.locale;
         providersP = Promise.all([
             getJson(TMDB + "/watch/providers/tv" + q).catch(function () { return { results: [] }; }),
             getJson(TMDB + "/watch/providers/movie" + q).catch(function () { return { results: [] }; })
@@ -130,7 +131,7 @@
                 seen[p.provider_id] = true;
                 list.push({ id: p.provider_id, name: p.provider_name, logo: p.logo_path });
             });
-            if (list.length) cachePut("__providers", { list: list });
+            if (list.length) cachePut("__providers" + region, { list: list });
             return list;
         });
         return providersP;
@@ -191,7 +192,8 @@
     /* All the apps, one after another, in the background. onChange: redraw. */
     var running = false;
     function run(apps, onChange) {
-        if (running || !sys.pref("autoArt") || sys.PREVIEW) return;
+        if (running || !sys.pref("autoArt")) return;
+        if (sys.PREVIEW) { previewArt(apps, onChange); return; }
         running = true;
         var queue = apps.filter(wanted), dirty = false, n = 0;
         (function next() {
@@ -214,6 +216,19 @@
         })();
     }
 
+    /* The PC preview and the online demo: no search online, only what genart.js paints from the catalog
+       (the Sheets of Light behind the catalog's apps), so the demo looks like a screen. */
+    function previewArt(apps, onChange) {
+        if (!APL.genArt) return;
+        running = true;
+        var queue = apps.filter(wanted), dirty = false;
+        (function next() {
+            if (!queue.length) { running = false; if (dirty) onChange(); return; }
+            APL.genArt.make(queue.shift(), null).then(function (made) { if (made) dirty = true; }, function () {})
+                .then(function () { setTimeout(next, 30); });
+        })();
+    }
+
     /* At start-up: what is already in memory applies right away. */
     function applyCached(apps) {
         apps.filter(wanted).forEach(function (a) {
@@ -230,14 +245,14 @@
             if (APL.genArt) APL.genArt.clear();
             apps.forEach(function (a) {
                 if (a.madeTile) { a.tile = null; a.madeTile = false; }
-                if (a.madeBg) { a.bg = null; a.madeBg = false; }
+                if (a.madeBg) { if (APL.genArt) APL.genArt.undo(a); else { a.bg = null; a.madeBg = false; } }
             });
             providersP = null; running = false; run(apps, onChange);
         },
         /* Only the backgrounds made by genart.js, painted again in the chosen style: nothing searched again. */
         restyle: function (apps, onChange) {
             if (APL.genArt) APL.genArt.clear();
-            apps.forEach(function (a) { if (a.madeBg) { a.bg = null; a.madeBg = false; } });
+            apps.forEach(function (a) { if (a.madeBg) { if (APL.genArt) APL.genArt.undo(a); else { a.bg = null; a.madeBg = false; } } });
             running = false; run(apps, onChange);
         }
     };

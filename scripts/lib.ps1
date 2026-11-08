@@ -144,10 +144,17 @@ function Invoke-Native {
 #  copy the package to the screen, check its hash, install it with
 #  Vetro's /install function, then check the list of apps.
 # ------------------------------------------------------------------
+# Vetro's port: 8099, or the one it was built with (VETRO_PORT=…, when another app holds 8099). APL Launcher Setup
+# finds it and passes it in APL_VETRO_PORT (installer/Vetro.cs).
+function Get-VetroPort {
+    if ("$env:APL_VETRO_PORT" -match '^\d{4,5}$') { return [int]$env:APL_VETRO_PORT }
+    return 8099
+}
+
 function Test-Vetro {
     param([string]$Ip)
     try {
-        $st = Invoke-RestMethod -Uri "http://$Ip`:8099/status" -TimeoutSec 8
+        $st = Invoke-RestMethod -Uri "http://$Ip`:$(Get-VetroPort)/status" -TimeoutSec 8
         return [bool]($st.agent -and $st.agent.connected)
     } catch { return $false }
 }
@@ -158,6 +165,44 @@ function Invoke-VetroExec {
     $r = Invoke-RestMethod -Uri "$Base/exec" -Method Post -ContentType 'application/json' -Body $body -TimeoutSec $Timeout
     if (-not $r.ok) { throw (Tr "the screen refused a command ($($r.stderr)$($r.error))" "l'écran a refusé une commande ($($r.stderr)$($r.error))") }
     return [string]$r.output
+}
+
+# A vconf value read through Vetro, '' when it can't be read
+function Get-VconfValue {
+    param([string]$Base, [string]$Key)
+    try { $o = Invoke-VetroExec $Base "vconftool get $Key 2>&1" } catch { return '' }
+    if ($o -match 'value = (\S+)') { return $Matches[1] }
+    return ''
+}
+
+# What the screen runs, read through Vetro: its Tizen version (/etc/info.ini, "Model=Tizen9/TV;", 0 when
+# unknown) and whether .NET 6 or newer is there. APL Overlay, the .NET bridge and the start-up service of the
+# full package need it: on Tizen 6.5 (The Frame 2022, issue #21) they don't run, and with them goes everything
+# the launcher asks Vetro. $null when Vetro does not answer.
+function Get-ScreenPlatform {
+    param([string]$Base)
+    try {
+        $o = Invoke-VetroExec $Base ("grep -o -E 'Tizen[0-9]+' /etc/info.ini 2>/dev/null | head -1; " +
+                                     "ls -d /usr/share/dotnet/shared/Microsoft.NETCore.App/[6-9].* /usr/share/dotnet/shared/Microsoft.NETCore.App/[1-9][0-9].* 2>/dev/null | head -1; true")
+    } catch { return $null }
+    $tizen = 0
+    if ($o -match 'Tizen(\d+)') { $tizen = [int]$Matches[1] }
+    [pscustomobject]@{ Tizen = $tizen; DotNet6 = [bool]($o -match 'Microsoft\.NETCore\.App/\d') }
+}
+
+# "Start on APL Launcher" undone: when the launcher is the screen's home app (db/appfw/home_appid, opened at
+# power-on with Autorun Smart Hub), the firmware's own home app goes back (db/first_screen/type, else
+# Samsung's home), read back. Returns the app set back, '' when nothing needed it.
+function Reset-ScreenHomeApp {
+    param([string]$Base)
+    if ((Get-VconfValue $Base 'db/appfw/home_appid') -notlike 'APLauncher*') { return '' }
+    $original = Get-VconfValue $Base 'db/first_screen/type'
+    if (-not $original -or $original -like 'APLauncher*' -or $original -notmatch '^[A-Za-z0-9_.-]+$') { $original = 'com.samsung.tv.csfs' }
+    Invoke-VetroExec $Base "vconftool set -f -t string db/appfw/home_appid $original" | Out-Null
+    if ((Get-VconfValue $Base 'db/appfw/home_appid') -ne $original) {
+        throw (Tr "the screen kept APL Launcher as its home app" "l'écran garde APL Launcher comme application d'accueil")
+    }
+    return $original
 }
 
 # Expiry of the certificates a .wgt is signed with (the first, signer's, certificate of author-signature.xml
@@ -190,8 +235,18 @@ function Get-WgtCertExpiry {
 
 function Install-ViaVetro {
     param([string]$Ip, [string]$Wgt, [string]$AppId = "APLauncher.Home", [string]$Name = "APL Launcher", [switch]$NoLaunch)
-    $base = "http://$Ip`:8099"
+    $base = "http://$Ip`:$(Get-VetroPort)"
     $tmp = "/tmp/apl-" + (($AppId -split '\.')[0]).ToLower() + ".wgt"
+    # What the screen must show afterwards: an older package left in place still has the same id
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [IO.Compression.ZipFile]::OpenRead($Wgt)
+    try {
+        $reader = New-Object IO.StreamReader($zip.GetEntry('config.xml').Open())
+        $version = ([regex]::Match($reader.ReadToEnd(), '<widget[^>]*\sversion="([^"]+)"')).Groups[1].Value
+        $reader.Close()
+        $hybrid = [bool]$zip.GetEntry('tizen-manifest.xml')
+    } finally { $zip.Dispose() }
+    if (-not $version) { throw (Tr "$Wgt has no version in its config.xml." "$Wgt n'a pas de version dans son config.xml.") }
     $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($Wgt))
     $chunk = 48000
     Invoke-VetroExec $base ": > $tmp.b64" | Out-Null
@@ -217,7 +272,13 @@ function Install-ViaVetro {
 
     # 2) Check the screen's package list.
     function Test-Installed {
-        try { return [bool]((Invoke-VetroExec $base "pkgcmd -l 2>/dev/null | grep -i '$pkg'").Trim()) } catch { return $false }
+        try {
+            $n = Invoke-VetroExec $base "pkgcmd -l 2>/dev/null | grep -iF '[$pkg]' | grep -cF 'version [$version]' || true"
+            if (($n.Trim() -split '\s+')[-1] -in @('', '0')) { return $false }
+            if (-not $hybrid) { return $true }
+            $n = Invoke-VetroExec $base "app_launcher -l 2>/dev/null | grep -c '$pkg.Overlay' || true"
+            return (($n.Trim() -split '\s+')[-1] -notin @('', '0'))
+        } catch { return $false }
     }
     $found = Test-Installed
     if (-not $found) {
@@ -233,7 +294,7 @@ function Install-ViaVetro {
     }
     try { Invoke-VetroExec $base "rm -f $tmp" | Out-Null } catch {}
     if (-not $found) {
-        throw (Tr "the screen did not install $Name. Send me all the text above ('Response from the screen')." "l'écran n'a pas installé $Name. Envoie-moi tout le texte au-dessus (« Réponse de l'écran »).")
+        throw (Tr "the screen did not install $Name $version. Send me all the text above ('Response from the screen')." "l'écran n'a pas installé $Name $version. Envoie-moi tout le texte au-dessus (« Réponse de l'écran »).")
     }
     Write-Host (Tr "        $Name is installed." "        $Name est installé.") -ForegroundColor Green
     if ($NoLaunch) { return }

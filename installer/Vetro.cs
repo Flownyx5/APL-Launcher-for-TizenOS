@@ -18,15 +18,33 @@ namespace APL.Setup
         public string Model;
         /// <summary>False when /status says Vetro's root agent is not connected yet (the scripts need it).</summary>
         public bool AgentReady = true;
+        /// <summary>The port Vetro answered on: 8099, or the one it was built with.</summary>
+        public int Port = Vetro.DefaultPort;
     }
 
     /// <summary>
-    /// The only network traffic of the app itself: GET http://&lt;ip&gt;:8099/status.
+    /// The only network traffic of the app itself: GET http://&lt;ip&gt;:8099/status (or Vetro's other port).
     /// No proxy (a corporate proxy cannot reach the screen and must not see local addresses).
     /// </summary>
     internal static class Vetro
     {
-        internal const int Port = 8099;
+        internal const int DefaultPort = 8099;
+        /// <summary>
+        /// Also asked on the chosen address: Vetro can be built with another port (VETRO_PORT=… node build.cjs), which some
+        /// people do because another app holds 8099 (tizen-youtube; Reddit, 1.0.22). On the screen, the launcher and
+        /// APL Overlay look through every open port (overlay/VetroPort.cs).
+        /// </summary>
+        private static readonly int[] UsualPorts = { 8098, 8100, 8097, 9000, 9099, 8090, 8088, 8080, 8888, 9090, 8199, 18099 };
+        private static int port = DefaultPort;
+        internal static int Port { get { return port; } }
+
+        /// <summary>The chosen screen's Vetro port, for the links and the scripts, which read it from APL_VETRO_PORT
+        /// (lib.ps1, Get-VetroPort); the consoles started from Tools inherit it too.</summary>
+        internal static void UsePort(int p)
+        {
+            port = p;
+            Environment.SetEnvironmentVariable("APL_VETRO_PORT", p == DefaultPort ? null : p.ToString());
+        }
         private static readonly HttpClient Http = new HttpClient(new HttpClientHandler { UseProxy = false, AllowAutoRedirect = false })
         {
             Timeout = Timeout.InfiniteTimeSpan   // each call brings its own deadline
@@ -43,22 +61,33 @@ namespace APL.Setup
 
         internal static string Url(string ip) { return "http://" + ip.Trim() + ":" + Port; }
 
-        /// <summary>Null when nothing answers like Vetro within the deadline.</summary>
-        internal static async Task<VetroInfo> StatusAsync(string ip, int timeoutMs, CancellationToken cancel)
+        /// <summary>Null when nothing answers like Vetro within the deadline. <paramref name="otherPorts"/>: the usual other
+        /// ports too, at the same time (8099 wins when it answers).</summary>
+        internal static async Task<VetroInfo> StatusAsync(string ip, int timeoutMs, CancellationToken cancel, bool otherPorts = false)
+        {
+            if (!otherPorts) return await StatusOnAsync(ip, DefaultPort, timeoutMs, cancel).ConfigureAwait(false);
+            var ports = new[] { DefaultPort }.Concat(UsualPorts).ToArray();
+            VetroInfo[] found = await Task.WhenAll(ports.Select(p => StatusOnAsync(ip, p, timeoutMs, cancel))).ConfigureAwait(false);
+            return found.FirstOrDefault(f => f != null);
+        }
+
+        private static async Task<VetroInfo> StatusOnAsync(string ip, int onPort, int timeoutMs, CancellationToken cancel)
         {
             using (var cts = CancellationTokenSource.CreateLinkedTokenSource(cancel))
             {
                 cts.CancelAfter(timeoutMs);
                 try
                 {
-                    using (var resp = await Http.GetAsync(Url(ip) + "/status", HttpCompletionOption.ResponseContentRead, cts.Token).ConfigureAwait(false))
+                    using (var resp = await Http.GetAsync("http://" + ip.Trim() + ":" + onPort + "/status", HttpCompletionOption.ResponseContentRead, cts.Token).ConfigureAwait(false))
                     {
                         if (resp.StatusCode != HttpStatusCode.OK) return null;
                         string body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
                         object json;
                         if (body.Length > 200000 || !Json.TryParse(body, out json) || !(json is Dictionary<string, object>)) return null;
-                        var info = new VetroInfo { Ip = ip.Trim(), Version = Json.Str(json, "version") };
-                        object agent = Json.Get(json, "agent");
+                        object agent = Json.Get(json, "agent"), app = Json.Get(json, "app");
+                        // Another port could be any app's: only Vetro's own fields count there
+                        if (onPort != DefaultPort && !(agent is Dictionary<string, object>) && !(app is Dictionary<string, object>)) return null;
+                        var info = new VetroInfo { Ip = ip.Trim(), Port = onPort, Version = Json.Str(json, "version") ?? Json.Str(app, "version") };
                         if (agent is Dictionary<string, object> && Json.Get(agent, "connected") is bool)
                             info.AgentReady = Json.Bool(agent, "connected");
                         info.Model = Json.Str(json, "model") ?? Json.Str(json, "modelName") ?? Json.Str(json, "deviceName");

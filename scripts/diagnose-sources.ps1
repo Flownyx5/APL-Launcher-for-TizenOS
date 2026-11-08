@@ -12,7 +12,7 @@ Write-Host (Tr "  Sources diagnostic (read-only)" "  Diagnostic des sources (lec
 $savedIp = Get-SavedTvIp
 $ip = Read-Host ((Tr "  Screen IP address" "  Adresse IP de l'écran") + $(if ($savedIp) { " [$savedIp]" } else { "" }))
 if ([string]::IsNullOrWhiteSpace($ip)) { $ip = $savedIp }
-$base = "http://$ip`:8099"
+$base = "http://$ip`:$(Get-VetroPort)"
 try { Invoke-RestMethod -Uri "$base/status" -TimeoutSec 8 | Out-Null } catch {
     Write-Host (Tr "  Vetro is not responding on ${base}: turn on the screen and open Vetro, then try again." "  Vetro ne répond pas sur $base : allume l'écran et ouvre Vetro, puis relance.") -ForegroundColor Red
     Read-Host (Tr "  Press Enter to close" "  Entrée pour fermer"); exit 1

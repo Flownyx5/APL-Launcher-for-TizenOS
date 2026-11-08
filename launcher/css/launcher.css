@@ -3,6 +3,7 @@
    1920x1080 surface. Measurements taken from Apple TV screenshots:
      dock      : x 42→1878, y 783→1008, radius 46, light glass
      icons     : 250x150, gap 50, radius 20, focus x1.2 with no outline
+                 (6 per row; 5 or 7 in Settings: launcher.js sizes() sets the variables below)
      2nd row   : runs off the bottom of the screen (y ≈ 1052)
      status    : time + avatar, top right
    Three states (class on <body>):
@@ -22,8 +23,11 @@
 
 :root {
     --ease: cubic-bezier(0.25, 1, 0.5, 1);   /* tvOS inertia */
+    --cols: 6;
     --tile-w: 250px;
     --tile-h: 150px;
+    --dock-top: 783px;
+    --dock-h: 225px;
     --gap-x: 50px;
     --radius: 20px;
 }
@@ -49,10 +53,33 @@ html, body {
     background-position: center;
     opacity: 0;
     transform: scale(1);
-    transition: opacity 220ms ease;
+    transition: opacity 300ms ease;                  /* FADE_MS in launcher.js */
     will-change: opacity, transform;                 /* layer ready in advance: the fade redraws nothing */
 }
 .bg.is-active { opacity: 1; }
+/* A backdrop picture is an <img> (launcher.js showPicture): a decoded bitmap is
+   painted whole, where a CSS background on this layer filled itself in a line at
+   a time from the top as it decoded. */
+.bg > img {
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+}
+.bg.is-slide > img { animation: bgSlideImg var(--glass-ms, 460ms) var(--glass-ease, ease) both; }
+@keyframes bgSlideImg { from { transform: translateX(40px); } to { transform: translateX(0); } }
+.mode-grid .bg.is-slide > img, .perf .bg.is-slide > img, .reduce-motion .bg.is-slide > img { animation: none; }
+.bg.is-instant { transition: none; }                 /* shown at once under the one fading out (launcher.js) */
+/* A backdrop change slides in as it fades, so a new app, the next title or a
+   step along the row all read as one movement. */
+.bg.is-slide { animation: bgSlide var(--glass-ms, 460ms) var(--glass-ease, ease) both; }
+@keyframes bgSlide {
+    /* A move of the picture itself, not of its box: the glass slices the same
+       geometry, so it can make the same move and stay lined up. */
+    from { opacity: 0; background-position: calc(50% + 40px) 50%; }
+    to   { opacity: 1; background-position: 50% 50%; }
+}
+.mode-grid .bg.is-slide, .perf .bg.is-slide, .reduce-motion .bg.is-slide { animation: none; }
 
 /* Generated brand card for apps with no artwork (Tizen icon + name) */
 .brandcard {
@@ -134,12 +161,14 @@ html, body {
     box-shadow: inset 0 0 0 2px rgba(255,255,255,0.18);
 }
 .mode-full .status, .mode-grid .status { opacity: 0; }
+.status.is-alone { padding-right: 24px; }          /* a single profile: no avatar (profiles.js) */
+.status.is-alone .status__avatar { display: none; }
 
 /* ===================== FULL-SCREEN HINT ===================== */
 .hint {
     position: fixed;
     left: 0; right: 0;
-    top: 704px;
+    top: calc(var(--dock-top) - 79px);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -166,12 +195,14 @@ html, body {
 }
 
 /* Top Shelf movie title and rating: on the left, without touching the hint in the center */
-.shelfinfo { position: fixed; left: 90px; top: 650px; width: 640px; z-index: 9; color: #fff; opacity: 0; pointer-events: none; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85); transition: opacity 220ms ease; }
+.shelfinfo { position: fixed; left: 90px; top: calc(var(--dock-top) - 133px); width: 640px; z-index: 9; color: #fff; opacity: 0; pointer-events: none; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85); transition: opacity 220ms ease; }
 .shelfinfo.is-visible { opacity: 1; }
 .mode-grid .shelfinfo, .has-wdg .shelfinfo { opacity: 0; }
 .mode-full .shelfinfo { top: 910px; width: 1200px; }
 .shelfinfo__title { font-size: 44px; font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.shelfinfo__meta { margin-top: 6px; font-size: 26px; font-weight: 500; color: rgba(255, 255, 255, 0.88); }
+.shelfinfo__open { display: none; margin-top: 14px; font-size: 24px; font-weight: 600; color: rgba(255, 255, 255, 0.95); }
+.mode-full .shelfinfo.can-open .shelfinfo__open { display: block; }
+.shelfinfo__meta { margin-top: 6px; font-size: 26px; font-weight: 500; color: rgba(255, 255, 255, 0.88); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ===================== HOME (dock + rows) ===================== */
 .home {
@@ -187,9 +218,9 @@ html, body {
 .dock {
     position: absolute;
     left: 42px;
-    top: 783px;
+    top: var(--dock-top);
     width: 1836px;
-    height: 225px;
+    height: var(--dock-h);
     border-radius: 46px;
     background: rgba(118, 118, 128, 0.24);           /* tvOS light glass */
     -webkit-backdrop-filter: blur(50px) saturate(1.8);
@@ -198,10 +229,10 @@ html, body {
 }
 .row0, .rows {
     display: grid;
-    grid-template-columns: repeat(6, var(--tile-w));
+    grid-template-columns: repeat(var(--cols), var(--tile-w));
     column-gap: var(--gap-x);
 }
-.row0 { padding: 37px 43px; }
+.row0 { padding: calc((var(--dock-h) - var(--tile-h)) / 2) 43px; }
 .rows {
     position: absolute;
     left: 85px;
@@ -472,7 +503,7 @@ html, body {
     position: absolute;
     top: 52px;
     right: 60px;
-    width: 600px;
+    width: 582px;          /* the 534 px grid plus its 24 px insets */
     opacity: 0;
     transform: translateY(-14px) scale(0.97);
     transform-origin: 100% 0;
@@ -492,8 +523,15 @@ html, body {
     background: radial-gradient(circle at 35% 30%, #7cc4ff, #2f6bdc 55%, #1b2f86 100%);
     box-shadow: inset 0 0 0 2px rgba(255,255,255,0.22);
 }
-.cc__viewport { max-height: 920px; overflow: hidden; padding: 12px 24px 24px; margin: -12px -24px 0; }   /* 24 px: room for an enlarged row (1.06 × 600 px) */
-.cc__body { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; transition: transform 260ms var(--ease); }
+.cc__viewport { max-height: 920px; overflow: hidden; padding: 8px 24px 12px; margin: -12px -24px 0; }   /* 24 px: room for an enlarged row (1.06 × 586 px) */
+/* One grid for every tile, 534 px wide: 260 + 14 + 260. 260 px is the narrowest
+   column the French labels fit in on one line ("Économiseur", "Minuterie");
+   wider than that only makes every tile a longer rectangle. */
+.cc__body { display: grid; grid-template-columns: repeat(2, 260px); justify-content: center; gap: 14px; transition: transform 260ms var(--ease); }
+/* The power tile is square: two 123 px rows and their 14 px gap are exactly its
+   260 px width, and the two tiles beside it fill those rows instead of floating. */
+.cc__body--main { grid-template-rows: 123px 123px; }
+.cc__body--main > .cc__t--big + .cc__t, .cc__body--main > .cc__t--big + .cc__t + .cc__t { height: 100%; }
 .cc__body--audio, .cc__body--pair, .cc__body--airplay { grid-template-columns: 1fr; gap: 12px; }
 
 /* glass: translucent, light edge (perf: opaque, no blur) */
@@ -510,20 +548,29 @@ html, body {
 }
 .cc__t--big {
     grid-row: span 2;
-    height: 252px;
-    border-radius: 58px;
+    width: 260px;
+    height: 100%;           /* the two 121 px rows it spans */
+    border-radius: 44px;
     flex-direction: column;
     justify-content: center;
     gap: 16px;
 }
 .cc__t--big .cc__title { font-size: 26px; }
-.cc__t--pill { height: 118px; border-radius: 59px; gap: 14px; padding: 0 22px 0 20px; min-width: 0; }
+.cc__t--pill { height: 96px; border-radius: 48px; gap: 14px; padding: 0 22px 0 20px; min-width: 0; }
+.cc__t--wide { grid-column: span 2; height: 96px; border-radius: 48px; gap: 14px; padding: 0 22px 0 20px; }   /* Screensaver, Settings */
 .cc__t--pill .cc__ico { width: 56px; height: 56px; }
 .cc__t--pill .cc__title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 24px; }
-.cc__rounds { grid-column: span 2; display: flex; justify-content: space-between; padding: 0 4px; }
-.cc__t--round { width: 112px; height: 112px; border-radius: 50%; justify-content: center; }
-.cc__caption { grid-column: span 2; height: 26px; margin-top: -6px; text-align: center; font-size: 22px; font-weight: 500; color: rgba(255,255,255,0.75); }
-.cc__t--slider { grid-column: span 2; height: 104px; border-radius: 52px; gap: 20px; padding: 0 30px 0 28px; }
+/* The device name under Wi-Fi or Audio is a label, not a detail to clip. */
+.cc__t--pill .cc__sub { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.15; font-size: 19px; }
+/* The circles take an equal share of the row, so four of them fill the 534 px
+   grid exactly (4 × 120 + 3 × 18); a row of one (Search) is marked solo by
+   controlcenter.js and stays a small button. */
+.cc__rounds { grid-column: span 2; display: flex; justify-content: center; align-items: center; gap: 18px; height: 120px; padding: 0; }
+.cc__t--round { flex: 1 1 0; max-width: 120px; height: 120px; border-radius: 50%; justify-content: center; }
+.cc__rounds--solo, .cc__rounds--solo .cc__t--round { height: 88px; max-width: 88px; }
+.cc__caption { display: block; grid-column: span 2; height: 20px; margin-top: -4px; text-align: center; font-size: 19px; font-weight: 500; line-height: 20px; color: rgba(255,255,255,0.78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Spans both columns: 260 + 14 + 260 = 534, the width of the grid. */
+.cc__t--slider { grid-column: span 2; height: 96px; border-radius: 48px; gap: 20px; padding: 0 26px 0 24px; }
 .cc__t--row { min-height: 104px; border-radius: 52px; gap: 18px; padding: 14px 30px 14px 22px; }
 .cc__ico {
     flex: none;
@@ -621,7 +668,12 @@ html, body {
 }
 .saver__label.is-shown { opacity: 1; }
 .saver.is-dark .saver__img { opacity: 0 !important; }
-.saver.is-dark .saver__time { top: 46%; right: auto; left: 0; width: 100%; text-align: center; font-size: 150px; font-weight: 300; }
+/* Centred on the screen: the box itself, one line high (top: 46% put its top there, the digits ~58 px low) */
+.saver.is-dark .saver__time { top: 50%; right: auto; left: 0; width: 100%; text-align: center; font-size: 150px; font-weight: 300;
+    line-height: 1; transform: translateY(-50%); }
+/* The moving clock (screensaver.js, placeClock sets its corner): it fades out, changes corner, fades back in */
+.saver.is-moving .saver__time { transition: opacity 900ms ease; }
+.saver.is-moving .saver__time.is-away { opacity: 0; }
 
 /* ===================== REDUCE MOTION ===================== */
 .reduce-motion *, .reduce-motion *::after { transition-duration: 0ms !important; animation: none !important; }
@@ -759,8 +811,12 @@ html, body {
 }
 .aplalert.is-open .aplalert__box { transform: scale(1); }
 .aplalert__title { margin: 0 0 18px; font-size: 46px; font-weight: 700; color: #fff; }
-.aplalert__msg { margin: 0 0 46px; font-size: 30px; line-height: 1.35; color: rgba(255, 255, 255, 0.62); }
+.aplalert__msg { margin: 0 0 46px; font-size: 30px; line-height: 1.35; color: rgba(255, 255, 255, 0.62); white-space: pre-line; }
 .aplalert__buttons { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+/* A QR code under the message (Settings › Support › Support APL Launcher): dark modules on white, sharp */
+.aplalert__qr { display: flex; flex-direction: column; align-items: center; margin: -14px 0 40px; }
+.aplalert__qr canvas { width: 300px; height: 300px; padding: 22px; border-radius: 34px; background: #fff; image-rendering: pixelated; box-shadow: 0 24px 60px rgba(0,0,0,0.45); }
+.aplalert__qrurl { margin-top: 20px; font-size: 26px; font-weight: 600; color: rgba(255,255,255,0.8); }
 .aplalert__btn {
     width: 600px;
     height: 86px;
@@ -813,22 +869,29 @@ html, body {
 }
 .perf .sources__dim { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(6, 8, 14, 0.9); }
 .sources__title { position: absolute; top: 120px; left: 0; right: 0; text-align: center; font-size: 56px; font-weight: 700; }
-.sources__row { position: absolute; left: 0; right: 0; top: 360px; display: flex; justify-content: center; gap: 44px; }
+.sources__row { position: absolute; left: 0; right: 0; top: 360px; display: flex; justify-content: center; gap: 44px; padding: 0 96px; }
 .sources__row.is-picking { top: 250px; flex-wrap: wrap; gap: 26px 30px; padding: 0 140px; }
+/* As wide as 400 px, narrower when the screen has more inputs than fit (4 HDMI ports and AirPlay):
+   the row keeps its margins and the focused card (×1.1) stays on screen */
 .scard {
-    width: 400px;
+    flex: 0 1 400px;
+    min-width: 0;
     display: flex; flex-direction: column; align-items: center; gap: 10px;
     color: #fff;
     transition: transform 260ms var(--spring, ease);
 }
 .scard__art {
     position: relative;
-    width: 400px; height: 240px; border-radius: 36px;
+    width: 100%; aspect-ratio: 5 / 3; border-radius: 36px;
     background: #222 center / cover no-repeat;
     box-shadow: 0 14px 30px rgba(0,0,0,0.3);
     transition: transform 260ms var(--spring, ease), box-shadow 260ms ease;
     display: flex; align-items: center; justify-content: center;
     margin-bottom: 10px;
+}
+/* Before Chromium 88 (Tizen 6.0 / 6.5) there is no aspect-ratio: the previous height, a little narrower */
+@supports not (aspect-ratio: 5 / 3) {
+    .scard__art { height: 240px; }
 }
 .scard__art--glass {
     background: rgba(118, 126, 146, 0.28);
@@ -836,13 +899,42 @@ html, body {
 }
 .scard__ico { width: 120px; height: 120px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.12); }
 .scard__name { position: relative; z-index: 2; font-size: 32px; font-weight: 700; text-align: center; }
-.scard__sub { position: relative; z-index: 2; font-size: 22px; color: rgba(255,255,255,0.6); text-align: center; min-height: 26px; }
+.scard__sub { position: relative; z-index: 2; font-size: 22px; color: rgba(255,255,255,0.6); text-align: center; min-height: 26px; max-width: 100%; }
 .sources.is-picking .sources__hint { display: none; }
+/* Under Sources, nothing of the Home Screen shows through: no Top Shelf title, dock or rows, clock or hint */
+.has-sources .shelfinfo, .has-sources .home, .has-sources .status, .has-sources .hint { opacity: 0; }
+
+/* ===================== SEARCH (search.js) ===================== */
+.search { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 36; opacity: 0; pointer-events: none; transition: opacity 220ms ease; }
+.search.is-open { opacity: 1; pointer-events: auto; }
+.search__dim { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: rgba(6, 8, 14, 0.82); -webkit-backdrop-filter: blur(40px) saturate(1.4); backdrop-filter: blur(40px) saturate(1.4); }
+.perf .search__dim { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(6, 8, 14, 0.94); }
+.search__field { position: absolute; top: 96px; left: 90px; right: 90px; height: 84px; font-size: 64px; font-weight: 600; letter-spacing: -0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search__field.is-empty { color: rgba(255, 255, 255, 0.35); }
+.search__keys { position: absolute; top: 220px; left: 90px; right: 90px; display: flex; gap: 6px; }
+.search__key { flex: 1 1 0; height: 64px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 500; color: rgba(255, 255, 255, 0.85); transition: transform 150ms var(--ease), background 150ms ease; }
+.search__key--wide { flex: 0 0 auto; padding: 0 22px; font-size: 24px; }
+.search__key.is-focused { background: #fff; color: #111; transform: scale(1.15); }
+.search__results { position: absolute; top: 400px; left: 85px; display: grid; grid-template-columns: repeat(var(--cols, 6), var(--tile-w)); column-gap: var(--gap-x); row-gap: 90px; }
+.search__results .tile__label { opacity: 1; }
+.search__empty { position: absolute; top: 330px; left: 90px; font-size: 26px; font-weight: 600; color: rgba(255, 255, 255, 0.6); }
+.has-search .shelfinfo, .has-search .home, .has-search .status, .has-search .hint { opacity: 0; }
+/* Search's hint, top left across from the status pill: a magnifier on the Home Screen, "▲ Search" in full screen.
+   Search also has a button in the Control Center (controlcenter.js); this stays, because it is how the Home
+   Screen itself says Search is up there. */
+.search-hint { position: fixed; top: 50px; left: 42px; z-index: 9; height: 60px; padding: 0 18px; display: flex; align-items: center; gap: 10px; border-radius: 30px;
+    background: rgba(26, 28, 36, 0.68); color: rgba(255, 255, 255, 0.9); font-size: 24px; font-weight: 600; transition: opacity 400ms ease; pointer-events: none; }
+.search-hint__chevron, .search-hint__text { display: none; }
+.search-hint__chevron { width: 13px; height: 13px; margin: 6px 2px 0 4px; border-left: 3px solid currentColor; border-top: 3px solid currentColor; border-radius: 2px; transform: rotate(45deg); }
+.mode-full .search-hint__chevron, .mode-full .search-hint__text { display: block; }
+.mode-grid .search-hint, .has-wdg .search-hint, .has-cc .search-hint, .has-sources .search-hint, .has-search .search-hint,
+.has-settings .search-hint, .has-profiles .search-hint { opacity: 0; }
+.theme-light .search-hint { background: rgba(236, 238, 244, 0.7); color: #1c1c1e; }
 .scard.is-focused .scard__art { transform: scale(1.1); box-shadow: 0 34px 60px rgba(0,0,0,0.55); }
 .scard.is-focused .scard__art--glass { background: #f5f5f7; color: #1c1c1e; }
 .scard.is-focused .scard__art--glass .scard__ico { background: rgba(0,0,0,0.07); }
-.scard--small { width: 300px; gap: 6px; }
-.scard--small .scard__art { width: 300px; height: 180px; border-radius: 28px; }
+.scard--small { flex: 0 0 240px; width: 240px; gap: 6px; }                     /* six a row: the 16 cards fit in three rows */
+.scard--small .scard__art { width: 240px; height: 144px; border-radius: 24px; }
 .scard--small .scard__name { font-size: 24px; }
 .scard--small .scard__sub { font-size: 18px; min-height: 0; }
 .sources__hint { position: absolute; bottom: 130px; left: 0; right: 0; text-align: center; font-size: 24px; color: rgba(255,255,255,0.55); }
@@ -930,7 +1022,7 @@ html, body {
 .folder__input { width: 800px; background: none; border: 0; border-bottom: 3px solid currentColor; color: inherit; font: inherit; text-align: center; outline: none; }
 .folder__grid {
     position: absolute; top: 260px; left: 85px;
-    display: grid; grid-template-columns: repeat(6, var(--tile-w)); column-gap: var(--gap-x); row-gap: 90px;
+    display: grid; grid-template-columns: repeat(var(--cols), var(--tile-w)); column-gap: var(--gap-x); row-gap: 90px;
 }
 .folder .tile.is-focused .tile__label { opacity: 1; }
 
@@ -1040,7 +1132,6 @@ html, body {
 .sw__widgets .wdg__bar { left: 14px; right: 14px; bottom: 8px; height: 5px; }
 .sw__widgets .wdg__logo { left: 14px; bottom: 44px; max-height: 50px; }
 
-/* ===================== OLD SCREENS (Tizen 6.0 and earlier, Chromium < 84) =====================
    `gap` works only in grids there, not in flex rows: the same spacing with margins.
    launcher.js puts .no-flexgap on <html> when the screen ignores it. */
 
@@ -1324,3 +1415,108 @@ html, body {
 .tile.is-launching .tile__card { transform: scale(1.16); opacity: 0; transition: transform 230ms cubic-bezier(0.2, 0.7, 0.2, 1), opacity 210ms ease-in; }
 .tile.is-launching .tile__card::before { animation: none; }
 .veil.is-slow { transition-duration: 240ms; }
+=======
+/* ===================== LIQUID GLASS =====================
+   The dock, the Control Center's tiles and the status pill, like tvOS 26: a clear sheet, lightly tinted,
+   with light pooling in its top left corner, a thick rim that catches the light where it is lit (top
+   left) and again on the far edge (bottom right), a faint glow along its bottom and a soft shadow under
+   it. Static gradients and a masked rim, no live blur: the same cost with visual effects off (.perf,
+   the default on the screen). Declared last, it overrides the glass above. */
+.dock, .perf .dock,
+.status, .perf .status,
+.cc__t, .perf .cc__t {
+    background:
+        radial-gradient(120% 90% at 12% 0%, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 70%),
+        linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.01) 50%, rgba(255,255,255,0.03) 100%),
+        rgba(26, 28, 36, 0.40);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.22),         /* the top edge catching the light */
+        inset 0 0 14px rgba(255,255,255,0.07),        /* lensing: the glass a little brighter along its edges */
+        0 12px 32px rgba(0,0,0,0.24);
+}
+.dock::before, .status::before, .cc__t::before {
+    content: "";
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    border-radius: inherit;
+    padding: 1px;                                     /* a hairline: the mask keeps only this ring */
+    background: linear-gradient(135deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.10) 24%,
+                rgba(255,255,255,0.02) 50%, rgba(255,255,255,0.06) 76%, rgba(255,255,255,0.24) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+}
+/* The dock: the picture behind it, frosted (launcher.js sets the soft copy and lines it up), under the tint.
+   No live blur under it, even with visual effects on: it would be computed and never seen */
+.dock, .perf .dock {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background:
+        radial-gradient(120% 90% at 12% 0%, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 70%),
+        linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.01) 50%, rgba(255,255,255,0.03) 100%),
+        linear-gradient(rgba(26, 28, 36, 0.40), rgba(26, 28, 36, 0.40)),
+        var(--glass-img, none) -42px var(--glass-y, -783px) / 1920px 1080px no-repeat;
+}
+/* Without blur behind them, the Control Center's tiles need more tint than the dock to stay readable */
+.cc__t, .perf .cc__t {
+    background:
+        radial-gradient(120% 90% at 12% 0%, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 70%),
+        linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.01) 50%, rgba(255,255,255,0.03) 100%),
+        rgba(26, 28, 36, 0.72);
+}
+/* The focused tile stays the bright Apple one, with its shadow */
+.cc__t.is-focused, .perf .cc__t.is-focused { box-shadow: 0 20px 44px rgba(0,0,0,0.38); }
+.cc__t.is-focused::before { opacity: 0; }
+
+/* One right edge for the dock, the status pill and the Control Center; the Home Screen steps back under
+   the Control Center (dock, rows and the Top Shelf title), like the status pill and the hint */
+.status { right: 42px; }
+.cc__panel { right: 42px; }
+.home { transition: transform 200ms var(--ease), opacity 220ms ease; }   /* its slide kept */
+.has-cc .home, .has-cc .shelfinfo { opacity: 0; }
+
+.theme-light .dock, .theme-light.perf .dock,
+.theme-light .status, .theme-light.perf .status,
+.theme-light .cc__t, .theme-light.perf .cc__t {
+    background:
+        radial-gradient(120% 90% at 12% 0%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0.35) 70%),
+        linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.35) 50%, rgba(255,255,255,0.45) 100%),
+        rgba(236, 238, 244, 0.30);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), inset 0 0 14px rgba(255,255,255,0.35), 0 10px 28px rgba(0,0,0,0.12);
+}
+.theme-light .cc__t, .theme-light.perf .cc__t { background-color: rgba(236, 238, 244, 0.6); }
+.theme-light .dock::before, .theme-light .status::before, .theme-light .cc__t::before {
+    background: linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.35) 25%,
+                rgba(0,0,0,0.04) 55%, rgba(255,255,255,0.25) 80%, rgba(255,255,255,0.6) 100%);
+}
+.theme-light .cc__t.is-focused, .theme-light.perf .cc__t.is-focused { box-shadow: 0 20px 44px rgba(0,0,0,0.26); }
+/* The light dock, frosted too (after the light glass above, which it refines) */
+.theme-light .dock, .theme-light.perf .dock {
+    background:
+        radial-gradient(120% 90% at 12% 0%, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.35) 45%, rgba(255,255,255,0.15) 70%),
+        linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.25) 100%),
+        linear-gradient(rgba(236, 238, 244, 0.45), rgba(236, 238, 244, 0.45)),
+        var(--glass-img, none) -42px var(--glass-y, -783px) / 1920px 1080px no-repeat;
+}
+
+/* The status pill: more tint than the dock, the time stays readable over a bright picture (snow, white posters) */
+.status, .perf .status {
+    background:
+        radial-gradient(120% 90% at 12% 0%, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 70%),
+        linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.01) 50%, rgba(255,255,255,0.03) 100%),
+        rgba(26, 28, 36, 0.68);
+}
+.theme-light .status, .theme-light.perf .status { background-color: rgba(236, 238, 244, 0.7); }
+
+/* A round button that is on keeps its color (Game Mode green…), with visual effects off too: the glass
+   rules above have the same weight and came later */
+.cc__t--round.is-on, .perf .cc__t--round.is-on, .theme-light .cc__t--round.is-on, .theme-light.perf .cc__t--round.is-on {
+    background: var(--tint, #0a84ff); color: #fff;
+}
+.cc__t--round.is-focused.is-on, .perf .cc__t--round.is-focused.is-on,
+.theme-light .cc__t--round.is-focused.is-on, .theme-light.perf .cc__t--round.is-focused.is-on {
+    background: #f5f5f7; color: var(--tint, #0a84ff);
+}
+
+/* ===================== OLD SCREENS (Tizen 6.0 and earlier, Chromium < 84) ==============

@@ -19,12 +19,6 @@
       "tile": {
         "bg": "#000000",
         "h": 0.64
-      },
-      "shelf": {
-        "bg": "#050505",
-        "glow": "#e50914",
-        "h": 330,
-        "text": "NETFLIX"
       }
     },
     {
@@ -45,11 +39,6 @@
       "tile": {
         "bg": "#0f171e",
         "w": 0.74
-      },
-      "shelf": {
-        "bg": "#0b1219",
-        "glow": "#1399ff",
-        "w": 960
       }
     },
     {
@@ -70,12 +59,6 @@
         "bg": "#ffffff",
         "h": 0.46
       },
-      "shelf": {
-        "bg": "#0f0f0f",
-        "glow": "#ff0000",
-        "h": 250,
-        "text": "YouTube"
-      },
       "live": "youtube"
     },
     {
@@ -84,7 +67,7 @@
       "eyebrow": "STREAMING",
       "accent": "#113ccf",
       "match": [
-        "disney"
+        "disney(?!.*hotstar)"
       ],
       "ids": [
         "3201901017640"
@@ -97,11 +80,6 @@
       "tile": {
         "bg": "linear-gradient(160deg,#1b2b6b 0%,#0a1235 100%)",
         "w": 0.66
-      },
-      "shelf": {
-        "bg": "#050a26",
-        "glow": "#2a5bd7",
-        "w": 900
       }
     },
     {
@@ -121,11 +99,6 @@
       "tile": {
         "bg": "#000000",
         "w": 0.62
-      },
-      "shelf": {
-        "bg": "#000000",
-        "glow": "#5a5a66",
-        "w": 760
       }
     },
     {
@@ -145,12 +118,6 @@
       "tile": {
         "bg": "#121212",
         "h": 0.62
-      },
-      "shelf": {
-        "bg": "#0a0a0a",
-        "glow": "#1ed760",
-        "h": 300,
-        "text": "Spotify"
       }
     },
     {
@@ -170,12 +137,6 @@
         "bg": "#9146ff",
         "h": 0.56
       },
-      "shelf": {
-        "bg": "#1d0d3d",
-        "glow": "#9146ff",
-        "h": 300,
-        "text": "Twitch"
-      },
       "live": "games"
     },
     {
@@ -193,12 +154,6 @@
       "tile": {
         "bg": "#121216",
         "h": 0.62
-      },
-      "shelf": {
-        "bg": "#0b0a10",
-        "glow": "#a238ff",
-        "h": 300,
-        "text": "Deezer"
       }
     },
     {
@@ -222,12 +177,6 @@
         "bg": "#1f2326",
         "h": 0.62
       },
-      "shelf": {
-        "bg": "#121416",
-        "glow": "#e5a00d",
-        "h": 300,
-        "text": "Plex"
-      },
       "live": "trending"
     },
     {
@@ -248,11 +197,25 @@
         "bg": "#1b1238",
         "h": 0.66
       },
-      "shelf": {
-        "bg": "#0f0a24",
-        "glow": "#7b5bf5",
-        "h": 300,
-        "text": "Stremio"
+      "live": "trending"
+    },
+    {
+      "key": "apltv",
+      "name": "APL TV",
+      "eyebrow": "TELEVISION",
+      "accent": "#4c7dff",
+      "match": [
+        "^apl tv"
+      ],
+      "ids": [
+        "APLTVMedia.TV"
+      ],
+      "logo": {
+        "src": "file:apltv.png"
+      },
+      "tile": {
+        "bg": "#141a2c",
+        "h": 0.42
       },
       "live": "trending"
     },
@@ -273,12 +236,6 @@
         "bg": "#1c1c1e",
         "h": 0.6
       },
-      "shelf": {
-        "bg": "#0c0e14",
-        "glow": "#0b98ef",
-        "h": 260,
-        "text": "TV Plus"
-      },
       "system": true,
       "live": "trending"
     },
@@ -298,13 +255,71 @@
       "tile": {
         "bg": "#f47521",
         "h": 0.6
-      },
-      "shelf": {
-        "bg": "#2a1204",
-        "glow": "#f47521",
-        "h": 290,
-        "text": "Crunchyroll"
       }
+    },
+    {
+      "key": "jiohotstar",
+      "name": "JioHotstar",
+      "eyebrow": "STREAMING",
+      "accent": "#1f80e0",
+      "match": [
+        "hotstar"
+      ],
+      "ids": [
+        "fiZNCxMH9Y.Hotstar"
+      ],
+      "logo": {
+        "src": "file:jiohotstar.png",
+        "crop": true
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#16244a 0%,#070b18 100%)",
+        "w": 0.8
+      }
+    },
+    {
+      "key": "sonyliv",
+      "name": "Sony LIV",
+      "eyebrow": "STREAMING",
+      "accent": "#f2b11b",
+      "match": [
+        "^sony ?liv"
+      ],
+      "ids": [
+        "EUKHUxrGQA.SonyLIV"
+      ],
+      "logo": {
+        "src": "file:sonyliv.png",
+        "icon": true
+      },
+      "tile": {
+        "bg": "#000000",
+        "h": 0.98
+      }
+    },
+    {
+      "key": "nuvio",
+      "name": "Nuvio",
+      "eyebrow": "MEDIA LIBRARY",
+      "accent": "#a855f7",
+      "match": [
+        "^nuvio"
+      ],
+      "ids": [
+        "NuvioTV001.NuvioTV",
+        "NuvioTVH01.NuvioTVHosted",
+        "NuvioTV002.NuvioNative",
+        "NuvioTV003.NuvioLite"
+      ],
+      "logo": {
+        "src": "file:nuvio.png",
+        "crop": true
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#171a33 0%,#0b0d18 100%)",
+        "w": 0.72
+      },
+      "live": "trending"
     },
     {
       "key": "paramountplus",
@@ -322,12 +337,6 @@
       "tile": {
         "bg": "#0064ff",
         "h": 0.62
-      },
-      "shelf": {
-        "bg": "#020b2a",
-        "glow": "#0064ff",
-        "h": 300,
-        "text": "Paramount+"
       }
     },
     {
@@ -346,11 +355,6 @@
       "tile": {
         "bg": "#ffffff",
         "w": 0.7
-      },
-      "shelf": {
-        "bg": "#f2f2f4",
-        "glow": "#fff200",
-        "w": 900
       }
     },
     {
@@ -369,12 +373,6 @@
         "bg": "#14202b",
         "h": 0.62
       },
-      "shelf": {
-        "bg": "#0a121a",
-        "glow": "#17b2e7",
-        "h": 300,
-        "text": "Kodi"
-      },
       "live": "trending"
     },
     {
@@ -392,12 +390,6 @@
       "tile": {
         "bg": "#101018",
         "h": 0.62
-      },
-      "shelf": {
-        "bg": "#0a0a12",
-        "glow": "#7a5cd6",
-        "h": 300,
-        "text": "Jellyfin"
       },
       "live": "trending"
     },
@@ -418,12 +410,6 @@
         "bg": "#15bfff",
         "h": 0.56
       },
-      "shelf": {
-        "bg": "#03202e",
-        "glow": "#15bfff",
-        "h": 290,
-        "text": "SmartThings"
-      },
       "hide": true
     },
     {
@@ -442,12 +428,6 @@
       "tile": {
         "bg": "#bf0000",
         "h": 0.5
-      },
-      "shelf": {
-        "bg": "#200000",
-        "glow": "#bf0000",
-        "h": 240,
-        "text": "Rakuten TV"
       }
     },
     {
@@ -467,11 +447,6 @@
         "bg": "#0c161c",
         "h": 0.62
       },
-      "shelf": {
-        "bg": "#070c10",
-        "glow": "#4a5560",
-        "h": 320
-      },
       "live": "sports"
     },
     {
@@ -489,12 +464,6 @@
       },
       "tile": {
         "h": 1.1
-      },
-      "shelf": {
-        "bg": "#040b24",
-        "glow": "#1f5bff",
-        "h": 460,
-        "text": "Vetro"
       }
     },
     {
@@ -515,12 +484,6 @@
       "tile": {
         "h": 1.12
       },
-      "shelf": {
-        "bg": "#04122b",
-        "glow": "#1d8cf8",
-        "h": 460,
-        "text": "App Store"
-      },
       "system": true
     },
     {
@@ -538,12 +501,6 @@
       },
       "tile": {
         "h": 1.1
-      },
-      "shelf": {
-        "bg": "#1a0509",
-        "glow": "#fa2d48",
-        "h": 460,
-        "text": "Musique"
       }
     },
     {
@@ -563,11 +520,6 @@
       "tile": {
         "bg": "linear-gradient(160deg,#2a1a6e 0%,#0b0a2a 100%)",
         "h": 0.5
-      },
-      "shelf": {
-        "bg": "#07061c",
-        "glow": "#5822b4",
-        "h": 330
       }
     },
     {
@@ -587,11 +539,6 @@
       "tile": {
         "bg": "#000000",
         "w": 0.74
-      },
-      "shelf": {
-        "bg": "#000000",
-        "glow": "#3a3a46",
-        "w": 1000
       }
     },
     {
@@ -612,11 +559,6 @@
       "tile": {
         "bg": "linear-gradient(160deg,#0f1d5c 0%,#050a26 100%)",
         "h": 0.34
-      },
-      "shelf": {
-        "bg": "#050a22",
-        "glow": "#2448e0",
-        "h": 250
       }
     },
     {
@@ -637,11 +579,6 @@
       "tile": {
         "bg": "#0d0d10",
         "h": 0.5
-      },
-      "shelf": {
-        "bg": "#08080a",
-        "glow": "#e4202f",
-        "h": 330
       }
     },
     {
@@ -660,11 +597,6 @@
       "tile": {
         "bg": "#000000",
         "h": 0.34
-      },
-      "shelf": {
-        "bg": "#050505",
-        "glow": "#fa481c",
-        "h": 240
       }
     },
     {
@@ -682,11 +614,6 @@
       "tile": {
         "bg": "linear-gradient(160deg,#2d1452 0%,#12061f 100%)",
         "h": 0.62
-      },
-      "shelf": {
-        "bg": "#0e0518",
-        "glow": "#5c2d91",
-        "h": 420
       },
       "live": "sports"
     },
@@ -707,11 +634,6 @@
         "bg": "linear-gradient(160deg,#1a2a9c 0%,#0a0f45 100%)",
         "w": 0.8
       },
-      "shelf": {
-        "bg": "#050824",
-        "glow": "#2236c8",
-        "w": 1100
-      },
       "live": "sports"
     },
     {
@@ -730,11 +652,6 @@
         "bg": "#ffffff",
         "w": 0.72
       },
-      "shelf": {
-        "bg": "#f2f2f4",
-        "glow": "#e30613",
-        "w": 900
-      },
       "live": "sports"
     },
     {
@@ -752,11 +669,6 @@
       "tile": {
         "bg": "linear-gradient(160deg,#0d1650 0%,#050820 100%)",
         "w": 0.74
-      },
-      "shelf": {
-        "bg": "#040718",
-        "glow": "#1d4bff",
-        "w": 1000
       },
       "live": "sports"
     },
@@ -778,11 +690,6 @@
         "bg": "#e2001a",
         "w": 0.7
       },
-      "shelf": {
-        "bg": "#1c0003",
-        "glow": "#e2001a",
-        "w": 1000
-      },
       "live": "sports"
     },
     {
@@ -803,12 +710,6 @@
         "bg": "linear-gradient(160deg,#16911a 0%,#0b5a0b 100%)",
         "h": 0.6
       },
-      "shelf": {
-        "bg": "#031a03",
-        "glow": "#107c10",
-        "h": 330,
-        "text": "Xbox"
-      },
       "live": "gamepass"
     },
     {
@@ -827,12 +728,6 @@
         "bg": "#000000",
         "h": 0.52
       },
-      "shelf": {
-        "bg": "#030500",
-        "glow": "#76b900",
-        "h": 300,
-        "text": "GeForce NOW"
-      },
       "live": "games"
     },
     {
@@ -850,12 +745,6 @@
       "tile": {
         "bg": "#0f0a24",
         "h": 0.62
-      },
-      "shelf": {
-        "bg": "#09061a",
-        "glow": "#9146ff",
-        "h": 320,
-        "text": "Luna"
       },
       "live": "games"
     },
@@ -878,12 +767,6 @@
         "bg": "linear-gradient(160deg,#1b2838 0%,#0e141c 100%)",
         "h": 0.62
       },
-      "shelf": {
-        "bg": "#080c12",
-        "glow": "#2a75bb",
-        "h": 320,
-        "text": "Steam"
-      },
       "live": "games"
     },
     {
@@ -904,12 +787,6 @@
         "bg": "linear-gradient(160deg,#2b3542 0%,#12161c 100%)",
         "h": 0.62
       },
-      "shelf": {
-        "bg": "#0b0e13",
-        "glow": "#5b8def",
-        "h": 320,
-        "text": "Moonlight"
-      },
       "live": "games"
     },
     {
@@ -927,12 +804,6 @@
       "tile": {
         "bg": "#101410",
         "h": 0.62
-      },
-      "shelf": {
-        "bg": "#070a07",
-        "glow": "#52b54b",
-        "h": 320,
-        "text": "Emby"
       },
       "live": "trending"
     },
@@ -952,11 +823,6 @@
       "tile": {
         "bg": "#0b0b0f",
         "w": 0.66
-      },
-      "shelf": {
-        "bg": "#05050a",
-        "glow": "#3c4cff",
-        "w": 900
       }
     },
     {
@@ -975,12 +841,6 @@
       "tile": {
         "bg": "#000000",
         "h": 0.5
-      },
-      "shelf": {
-        "bg": "#000000",
-        "glow": "#33ffee",
-        "h": 280,
-        "text": "TIDAL"
       }
     },
     {
@@ -999,12 +859,6 @@
       "tile": {
         "bg": "#000000",
         "h": 0.56
-      },
-      "shelf": {
-        "bg": "#020408",
-        "glow": "#0070ef",
-        "h": 300,
-        "text": "Qobuz"
       }
     },
     {
@@ -1023,11 +877,6 @@
       "tile": {
         "bg": "#0f1111",
         "w": 0.6
-      },
-      "shelf": {
-        "bg": "#060808",
-        "glow": "#25d1da",
-        "w": 800
       }
     },
     {
@@ -1045,12 +894,6 @@
       "tile": {
         "bg": "#ffffff",
         "h": 0.56
-      },
-      "shelf": {
-        "bg": "#140303",
-        "glow": "#ff0000",
-        "h": 300,
-        "text": "YouTube Kids"
       }
     },
     {
@@ -1069,12 +912,6 @@
         "bg": "#000000",
         "h": 0.56
       },
-      "shelf": {
-        "bg": "#030303",
-        "glow": "#ff0000",
-        "h": 300,
-        "text": "Music"
-      },
       "live": "youtube-music"
     },
     {
@@ -1092,12 +929,6 @@
       "tile": {
         "bg": "#000000",
         "h": 0.58
-      },
-      "shelf": {
-        "bg": "#030305",
-        "glow": "#25f4ee",
-        "h": 320,
-        "text": "TikTok"
       }
     },
     {
@@ -1117,12 +948,6 @@
         "bg": "linear-gradient(160deg,#1d1d24 0%,#000 100%)",
         "h": 0.5
       },
-      "shelf": {
-        "bg": "#050508",
-        "glow": "#4b5cff",
-        "h": 280,
-        "text": "Dailymotion"
-      },
       "live": "dailymotion"
     },
     {
@@ -1141,12 +966,6 @@
       "tile": {
         "bg": "#1ab7ea",
         "h": 0.5
-      },
-      "shelf": {
-        "bg": "#03161d",
-        "glow": "#1ab7ea",
-        "h": 280,
-        "text": "Vimeo"
       }
     },
     {
@@ -1166,12 +985,6 @@
       "tile": {
         "bg": "#f5f5f7",
         "h": 0.62
-      },
-      "shelf": {
-        "bg": "#08081a",
-        "glow": "#7b5cff",
-        "h": 340,
-        "text": "Microsoft 365"
       }
     },
     {
@@ -1191,11 +1004,6 @@
       "tile": {
         "bg": "#0b5cff",
         "w": 0.56
-      },
-      "shelf": {
-        "bg": "#020a24",
-        "glow": "#0b5cff",
-        "w": 860
       }
     },
     {
@@ -1215,12 +1023,6 @@
         "bg": "linear-gradient(160deg,#1f2026 0%,#0f1013 100%)",
         "h": 0.62
       },
-      "shelf": {
-        "bg": "#0c0d10",
-        "glow": "#e91c34",
-        "h": 360,
-        "text": "FRAnime"
-      },
       "live": "anime"
     },
     {
@@ -1239,13 +1041,6 @@
         "bg": "#F4F4F0",
         "h": 0.96
       },
-      "shelf": {
-        "bg": "#120607",
-        "glow": "#dc2626",
-        "h": 440,
-        "text": "Movix",
-        "icon": true
-      },
       "live": "trending"
     },
     {
@@ -1261,31 +1056,7 @@
       },
       "tile": {
         "h": 1.12
-      },
-      "shelf": {
-        "bg": "#0f1013",
-        "glow": "#9a9aa2",
-        "h": 460,
-        "text": "Settings"
       }
-    }
-  ],
-  "wallpapers": [
-    {
-      "key": "tizentube",
-      "accent": "#1fb6e6"
-    },
-    {
-      "key": "tizenbrew",
-      "accent": "#7b5bf5"
-    },
-    {
-      "key": "hotiptv",
-      "accent": "#ff7a1a"
-    },
-    {
-      "key": "internet",
-      "accent": "#2b6fff"
     }
   ]
 }

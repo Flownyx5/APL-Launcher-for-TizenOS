@@ -11,7 +11,7 @@ using System.Windows.Threading;
 [assembly: AssemblyTitle("APL Launcher Setup")]
 [assembly: AssemblyProduct("APL Launcher")]
 [assembly: AssemblyDescription("Installs APL Launcher on a Samsung Tizen screen through Vetro")]
-[assembly: AssemblyCopyright("Copyright (c) 2026 Knikt — MIT License")]
+[assembly: AssemblyCopyright("Copyright (c) 2026 Knikt (Gero Corp.) — MIT License")]
 [assembly: AssemblyVersion(APL.Setup.BuildInfo.Version)]
 [assembly: AssemblyFileVersion(APL.Setup.BuildInfo.Version)]
 [assembly: AssemblyInformationalVersion(APL.Setup.BuildInfo.Version)]

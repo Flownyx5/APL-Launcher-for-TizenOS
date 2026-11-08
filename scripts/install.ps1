@@ -4,13 +4,15 @@
 #  2. saves the TMDB (and YouTube) key if you have one
 #  3. finds your Samsung certificate
 #  4. builds the launcher
-#  5. installs the launcher and APL Overlay on the screen (through Vetro), and opens the launcher
+#  5. installs the launcher and APL Overlay on the screen (through Vetro), and opens the launcher;
+#     with -AplTv (or a yes), APL TV too, the IPTV player in the launcher's style
 #  Nothing else is installed.
 # ============================================================
 param(
     [string]$TvIp,
     [string]$Tmdb, [string]$YouTube, [string]$Fanart,
     [string]$Sites,       # websites as apps: JSON [{"name":"…","url":"https://…"}], or that JSON in base64
+    [switch]$AplTv,       # also installs APL TV, the IPTV player (06-install-apltv.ps1)
     [switch]$Unattended,  # started by APL Launcher Setup: no questions
     [switch]$CheckOnly    # only says what this PC has (APL-CHECK); changes nothing
 )
@@ -240,11 +242,15 @@ function Find-SigningProfile {
         }
         if ($best) { $script:profileXml = $bestXml; return $best }
     }
-    # Fallback: from the list of profiles (leaving out profiles without saved passwords).
+    # Fallback: from the list of profiles (leaving out profiles without saved passwords). The CLI first
+    # prints "Loaded in '...\profiles.xml'." and a header: only the lines after "[Profile Name]" are names.
+    # ("Loaded" was taken for a profile, and the package came out unsigned: #36.)
     $names = @()
-    foreach ($line in ((Invoke-Native $tizen @('security-profiles', 'list')).Output -split "`n")) {
-        $n = ($line.Trim() -split '\s+')[0]
-        if ($n -and $n -notmatch '^\[|^-|Profile|^APLLauncher$') { $names += $n }
+    $lines = @((Invoke-Native $tizen @('security-profiles', 'list')).Output -split "`n")
+    $header = [array]::FindIndex([string[]]$lines, [Predicate[string]]{ param($l) $l -match '^\s*\[Profile Name\]' })
+    for ($i = $header + 1; $i -lt $lines.Count; $i++) {
+        $n = ($lines[$i].Trim() -split '\s+')[0]
+        if ($n -and $n -notmatch "^\[|^-|Profile|^APLLauncher$|^Loaded$|'|\.xml") { $names += $n }
     }
     $t = $names | Where-Object { $_ -match 'tizentube' } | Select-Object -First 1
     if ($t) { return $t }
@@ -415,14 +421,29 @@ Write-Host (Tr "        Profile: $signProfile" "        Profil : $signProfile") 
 
 # ---------- 4. build ----------
 Step 4 (Tr "Building the launcher…" "Compilation du launcher…")
+# Tizen 6.x: the full package's .NET apps (APL Overlay, the bridge, the start-up service) don't run there, and
+# the launcher reaches Vetro through that bridge (The Frame 2022, issue #21): the launcher's own package then,
+# with its web bridge. Without APL Overlay the launcher keeps Home and gives the other buttons back to Samsung.
+$webOnly = $false
+if (Test-Vetro $TvIp) {
+    $platform = Get-ScreenPlatform "http://$TvIp`:$(Get-VetroPort)"
+    if ($platform) {
+        $webOnly = ($platform.Tizen -ge 1 -and $platform.Tizen -lt 7) -or ($platform.Tizen -eq 0 -and -not $platform.DotNet6)
+        $seen = if ($platform.Tizen) { "Tizen $($platform.Tizen)" } else { Tr "an unknown Tizen version" "une version de Tizen inconnue" }
+        if ($webOnly) {
+            Write-Host (Tr "        The screen runs $($seen): APL Overlay needs Tizen 7 or newer, so the launcher is installed on its own." "        L'écran est sous $seen : APL Overlay demande Tizen 7 ou plus, le launcher est donc installé seul.") -ForegroundColor Yellow
+            Write-Host (Tr "        Home, the Home Screen and the settings work; the Control Center over videos and Alexa need APL Overlay." "        Home, l'écran d'accueil et les réglages marchent ; le Centre de contrôle sur les vidéos et Alexa demandent APL Overlay.") -ForegroundColor Yellow
+        }
+    }
+}
 if ($certPwdFile -and $signProfile -eq 'APLPartner') {
     Write-Host (Tr "        If you are asked for 'Author password' or 'Distributor password':" "        Si on te demande « Author password » ou « Distributor password » :") -ForegroundColor Yellow
     Write-Host (Tr "        open $certPwdFile with Notepad, copy its content, right-click to paste, Enter." "        ouvre $certPwdFile avec le Bloc-notes, copie son contenu, clic droit pour coller, Entrée.") -ForegroundColor Yellow
 }
 $sf = "$env:USERPROFILE\Downloads\sf-pro-display_2"
 try {
-    if (Test-Path $sf) { & "$PSScriptRoot\03-build-launcher.ps1" -ProfileName $signProfile -TizenCli $tizen -SfProDir $sf }
-    else { & "$PSScriptRoot\03-build-launcher.ps1" -ProfileName $signProfile -TizenCli $tizen }
+    if (Test-Path $sf) { & "$PSScriptRoot\03-build-launcher.ps1" -ProfileName $signProfile -TizenCli $tizen -SfProDir $sf -WebOnly:$webOnly }
+    else { & "$PSScriptRoot\03-build-launcher.ps1" -ProfileName $signProfile -TizenCli $tizen -WebOnly:$webOnly }
 } catch { Fail ((Tr "the build failed: " "la compilation a échoué : ") + $_.Exception.Message) }
 
 # An expired certificate signs without a word, then the screen refuses the package: say it here.
@@ -452,10 +473,25 @@ if (Test-Vetro $TvIp) {
     }
 }
 
-if (Test-Vetro $TvIp) {
+if ($webOnly) {
+    # No APL Overlay: the launcher puts the Home rule back on itself at start-up and frees the other buttons
+    # (launcher/js/overlay.js), also when this replaces a full package that had them.
+    Write-Host (Tr "        Without APL Overlay: the launcher keeps the Home button itself." "        Sans APL Overlay : le launcher garde lui-même la touche Home.")
+} elseif (Test-Vetro $TvIp) {
     Write-Host (Tr "        Control Center over videos (APL Overlay)…" "        Centre de contrôle sur les vidéos (APL Overlay)…")
     try { & "$PSScriptRoot\05-build-overlay.ps1" -TvIp $TvIp -ProfileName $signProfile -TizenCli $tizen }
-    catch { Write-Host ((Tr "        APL Overlay was not installed: " "        APL Overlay n'a pas été installé : ") + $_.Exception.Message + (Tr " The launcher works anyway." " Le launcher marche quand même.")) -ForegroundColor DarkYellow }
+    catch { Write-Host ((Tr "        The remote's buttons were not set up: " "        Les boutons de la télécommande n'ont pas été configurés : ") + $_.Exception.Message + (Tr " The launcher works anyway." " Le launcher marche quand même.")) -ForegroundColor DarkYellow }
+}
+
+# APL TV, the IPTV player in the launcher's style (your own M3U playlists and Xtream accounts): only when asked.
+if (-not $Quiet -and -not $AplTv) {
+    $a = Ask (Tr "Also install APL TV, the IPTV player for your own playlists? (y/N)" "Installer aussi APL TV, le lecteur IPTV pour tes propres playlists ? (o/N)") ""
+    $AplTv = [bool]($a -match '^(y|yes|o|oui)$')
+}
+if ($AplTv) {
+    Write-Host (Tr "        APL TV (IPTV player)…" "        APL TV (lecteur IPTV)…")
+    try { & "$PSScriptRoot\06-install-apltv.ps1" -TvIp $TvIp -ProfileName $signProfile -TizenCli $tizen -Sdb $sdb -NoLaunch }
+    catch { Write-Host ((Tr "        APL TV was not installed: " "        APL TV n'a pas été installé : ") + $_.Exception.Message + (Tr " The launcher works anyway." " Le launcher marche quand même.")) -ForegroundColor DarkYellow }
 }
 
 Write-Host ""
@@ -470,7 +506,7 @@ Write-Host (Tr "   A) On the screen: Settings > All Settings > Advanced Features
 Write-Host (Tr "        - 'Autorun Smart Hub'  -> OFF" "        - « Lancer Smart Hub automatiquement »        -> DÉSACTIVÉ")
 Write-Host (Tr "        - 'Autorun Last App'   -> ON" "        - « Lancer automatiquement la dernière app »  -> ACTIVÉ")
 Write-Host ""
-Write-Host (Tr "   B) On this PC, open  http://$TvIp`:8099  (Vetro) > Remapper tab:" "   B) Sur ce PC, ouvre  http://$TvIp`:8099  (Vetro) > onglet Remapper :")
+Write-Host (Tr "   B) On this PC, open  http://$TvIp`:$(Get-VetroPort)  (Vetro) > Remapper tab:" "   B) Sur ce PC, ouvre  http://$TvIp`:$(Get-VetroPort)  (Vetro) > onglet Remapper :")
 Write-Host (Tr "        in the device list, pick your remote: 'Smart Control 2016' if it is" "        dans la liste des appareils, choisis ta télécommande : « Smart Control 2016 » si elle est")
 Write-Host (Tr "        paired over Bluetooth, 'wt61p807 rc device' if it only works over infrared;" "        appairée en Bluetooth, « wt61p807 rc device » si elle marche en infrarouge seulement ;")
 Write-Host (Tr "        listen for a key > press HOME > open the app 'APL Launcher' > Save" "        écouter une touche > appuie sur HOME > ouvrir l'app « APL Launcher » > Enregistrer")

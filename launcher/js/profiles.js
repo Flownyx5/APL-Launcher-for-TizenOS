@@ -61,6 +61,9 @@
     function paintStatus() {
         var a = document.querySelector(".status__avatar");
         if (a) { a.classList.add("is-profile"); paint(a, P.current()); }
+        // A single profile: nothing to tell apart, the time stays alone (profiles are still in Control Center)
+        var s = document.querySelector(".status");
+        if (s) s.classList.toggle("is-alone", P.list().length < 2);
     }
 
     function buildDom() {

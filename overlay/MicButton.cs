@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace APL
 {
@@ -61,19 +62,28 @@ namespace APL
         /// Started once: a newer script takes the pid file, and the old one stops at its next key.
         /// The screen refuses to run a script file that Samsung did not sign ("the file is NOT
         /// signed"), but not a command: the script goes to sh -c, the way Vetro runs its own.
+        /// After a full start this app can be up a minute before Vetro (the launcher shows a second after
+        /// power-on and opens it): tried again every 15 s until Vetro runs it, for 5 minutes at most.
         /// </summary>
         private static async void StartReader()
         {
-            try
+            string code = Convert.ToBase64String(Encoding.UTF8.GetBytes(Reader));
+            string run = Script + ".run";
+            for (int tries = 1; tries <= 20; tries++)
             {
-                string code = Convert.ToBase64String(Encoding.UTF8.GetBytes(Reader));
-                string run = Script + ".run";
-                string answer = await Vetro.Exec("{ echo " + code + " | base64 -d > " + Script + "; " +
-                                 "[ \"$(md5sum < " + Script + ")\" = \"$(md5sum 2>/dev/null < " + run + ")\" ] && kill -0 $(cat " + PidFile + " 2>/dev/null) 2>/dev/null || " +
-                                 "{ cp " + Script + " " + run + "; (sh -c \"$(cat " + run + ")\" >/dev/null 2>&1 &); }; } 2>&1");
-                if (answer.Trim().Length > 0) Program.Note("mic reader: " + answer.Trim());
+                try
+                {
+                    string answer = await Vetro.ExecWhenReady("{ echo " + code + " | base64 -d > " + Script + "; " +
+                                     "[ \"$(md5sum < " + Script + ")\" = \"$(md5sum 2>/dev/null < " + run + ")\" ] && kill -0 $(cat " + PidFile + " 2>/dev/null) 2>/dev/null || " +
+                                     "{ cp " + Script + " " + run + "; (sh -c \"$(cat " + run + ")\" >/dev/null 2>&1 &); }; } 2>&1");
+                    if (answer.Trim().Length > 0) Program.Note("mic reader: " + answer.Trim());
+                    if (tries > 1) Program.Note("mic reader: started, try " + tries);
+                    return;
+                }
+                catch (Exception ex) { if (tries == 1) Program.Note("mic reader: " + ex.Message + ", trying again until Vetro answers"); }
+                await Task.Delay(15000);
             }
-            catch (Exception ex) { Program.Note("mic reader: " + ex.Message); }
+            Program.Note("mic reader: Vetro never answered");
         }
     }
 }

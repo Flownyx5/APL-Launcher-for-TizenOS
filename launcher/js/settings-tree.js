@@ -29,6 +29,8 @@
     function toggle(label, key, desc) { return { type: "toggle", label: label, key: key, desc: desc }; }
     function choice(label, key, options, desc, apply) { return { type: "choice", label: label, key: key, options: options, desc: desc, apply: apply }; }
     function action(label, run, desc, icon) { return { type: "action", label: label, run: run, desc: desc, icon: icon }; }
+    /* A row that only works through Vetro: without it on the screen, it says so (settings.js, needsVetro). */
+    function vetro(item) { item.vetro = true; return item; }
     /* Real setting of the screen (sys.native): slider without "options", otherwise a list of values. */
     function n(id, label, desc, options, format) { return { type: "native", id: id, label: label, desc: desc, options: options, format: format }; }
     var ON_OFF = [[0, APL.t("Off")], [1, APL.t("On")]];
@@ -71,10 +73,70 @@
         return menu(APL.t("Settings"), "display", [
 
             action(APL.t("Control Center"), function () { APL.settings.close(); APL.controlCenter.open(); },
-                APL.t("Also opens with the ⏯ button on the remote, or by holding Home."), "sliders"),
+                APL.t("Also opens with the play/pause button on the remote, or by holding Home."), "sliders"),
 
-            choice(APL.t("Appearance"), "appearance", [["light", APL.t("Light")], ["dark", APL.t("Dark")], ["auto", APL.t("Automatic")]],
-                APL.t("Light or dark for backgrounds and menus. Automatic switches to dark at sunset and to light at sunrise.")),
+            /* -------- Appearance -------- */
+            menu(APL.t("Appearance"), "sun", [
+                choice(APL.t("Theme"), "appearance", [["light", APL.t("Light")], ["dark", APL.t("Dark")], ["auto", APL.t("Automatic")]],
+                    APL.t("Light or dark for backgrounds and menus. Automatic switches to dark at sunset and to light at sunrise.")),
+                menu(APL.t("Top Shelf"), "photo", [
+                    toggle(APL.t("What You're Watching"), "hubShelf",
+                        APL.t("Continue Watching from Plex, your Spotify mixes… for the apps that share them with Samsung's home screen.")),
+                    toggle(APL.t("What's Popular"), "liveShelf",
+                        APL.t("Trending films, series and videos on each service, top albums, games, sports. Films and series need a TMDB key, videos a YouTube key (see Online Services).")),
+                    choice(APL.t("Otherwise"), "shelfArt",
+                        [["sheets", APL.t("Sheets of Light")], ["logo", APL.t("Large Logo")], ["black", APL.t("Black")]],
+                        APL.t("Apps with their own artwork keep it (YouTube, Netflix, Steam…). For the others: soft sheets of light in their colors, or their logo on a halo of their color. Black: plain dark behind every app, artwork included."),
+                        function () { if (APL.restyleArt) APL.restyleArt(); }),
+                    menu(APL.t("Online Services"), "globe", [
+                        info(APL.t("TMDB Key"), function () { return APL.live && APL.live.keys().tmdb ? APL.t("Configured") : APL.t("Missing"); },
+                            APL.t("Films and series in What's Popular. Set it in APL Launcher Setup.")),
+                        info(APL.t("YouTube Key"), function () { return APL.live && APL.live.keys().youtube ? APL.t("Configured") : APL.t("Missing"); },
+                            APL.t("Optional: trending videos in TizenTube's Top Shelf.")),
+                        info(APL.t("Fanart.tv Key"), function () { return APL.live && APL.live.keys().fanart ? APL.t("Configured") : APL.t("Missing"); },
+                            APL.t("Optional: HD backgrounds for movies and shows. Set it in APL Launcher Setup."))
+                    ], APL.t("The keys are set in APL Launcher Setup, on the PC."))
+                ], APL.t("The Top Shelf shows the first one available, top to bottom. Turn one off to skip it.")),
+                toggle(APL.t("Visual Effects"), "visualEffects", APL.t("Blur and glass. Prettier but slower: off by default so the screen stays smooth.")),
+                toggle(APL.t("Dynamic Backdrops"), "cleanFrameBackdrops",
+                    APL.t("A film or series that service streams right now, on the apps that have nothing of their own to show: the storefront's trending list for your country (JustWatch, no key). Apps with a Top Shelf keep it - What You're Watching, What's Popular, Plex, Spotify and the players' Continue Watching come first.")),
+                toggle(APL.t("Slow Background Motion"), "bgMotion", APL.t("A slow camera move over the Home Screen images. Pretty, but it keeps the screen very busy and slows everything else down."))
+            ], APL.t("Theme, Top Shelf, visual effects.")),
+
+            /* -------- Home Screen -------- */
+            menu(APL.t("Home Screen"), "grid", [
+                menu(APL.t("Show on Home Screen"), "apps", [
+                    // The launcher's own Smart Hub tile first: the way out to Samsung's home
+                    { type: "hide", label: "Smart Hub", id: "apl.samsunghome",
+                      desc: APL.t("A tile that opens Samsung's Smart Hub, the way out now that the Home button opens the launcher. Press Home there to come back.") }
+                ].concat(apps.map(function (a) {
+                    return { type: "hide", label: a.name, id: a.id, desc: APL.t("OK to show or hide “{name}” on the Home Screen.", { name: a.name }) };
+                })), APL.t("Choose the apps shown on the Home Screen.")),
+                info(APL.t("Rearrange"), function () { return APL.t("Hold OK"); },
+                    APL.t("On the Home Screen, hold OK on an app: Edit Home Screen, Hide App or Delete App.")),
+                action(APL.t("Reset Home Screen"), function () {
+                    if (APL.resetHomeOrder) APL.resetHomeOrder();
+                    APL.toast(APL.t("Original layout restored"), true);
+                }, APL.t("Puts the apps back in their original order (your apps, Settings, Sources, then the others)."), "reset"),
+                choice(APL.t("Apps per Row"), "appsPerRow", [[5, "5"], [6, "6"], [7, "7"]],
+                    APL.t("In the dock and in every row below. 5: bigger tiles, 7: more apps with a Top Shelf.")),
+                toggle(APL.t("Search Hidden Apps"), "searchHidden",
+                    APL.t("Search also finds the apps hidden from the Home Screen. Off: only what the Home Screen and its folders show.")),
+                toggle(APL.t("Full Screen Hint"), "showHint", APL.t("Shows “Press ▲ for full screen” on the Home Screen.")),
+                toggle(APL.t("Return to the Launcher"), "homeReturn", APL.t("When an app closes, or when Samsung's home opens on its own (a phone app's Home button, a remote Vetro doesn't intercept), the screen comes back here. Samsung's home opened from the launcher's Smart Hub tile stays."))
+            ], APL.t("The apps shown, their order, and coming back here.")),
+
+            /* -------- Remote and Devices -------- */
+            menu(APL.t("Remote and Devices"), "remote", [
+                choice(APL.t("Play/Pause Button"), "pauseKey", [["controlcenter", APL.t("Control Center")], ["playpause", APL.t("Play and Pause")]],
+                    APL.t("What the play/pause button does while an app is in front: open the Control Center over it, or play and pause in the app. On the Home Screen it always opens the Control Center, and holding Home opens it everywhere.")),
+                vetro(action(APL.t("Set Up the Remote Buttons"), function () { APL.overlay.setUpButtons(); },
+                    APL.t("Sends Home and ⏯ to APL Launcher in Vetro, as APL Launcher Setup does. For a launcher installed from a phone with Apps2Samsung, or when Home opens Samsung's home again."), "remote")),
+                vetro(action(APL.t("Alexa on the Microphone Button"), function () { APL.settings.close(); APL.services.alexaMic(); },
+                    APL.t("Do this once: in the Voice menu, choose Amazon Alexa and sign in to your Amazon account. Then hold the microphone button on the remote and talk to Alexa."), "mic")),
+                toggle("Alexa (Echo Dot)", "alexaBridge", APL.t("Say “Alexa, discover my devices” once. Then: “Alexa, turn on TizenTube”, “Alexa, turn off the screen”, “Alexa, turn on the AirPods”, “Alexa, turn on game mode”.")),
+                action("Bluetooth", openAudio, APL.t("Connect or pair AirPods, headphones or a speaker."), "bluetooth")
+            ], APL.t("The remote's buttons, Alexa, Bluetooth.")),
 
             menu(APL.t("Living Home Screen"), "sun", [
                 toggle(APL.t("Light of the Day"), "ambient", APL.t("A soft tint over the Top Shelf follows the sun where you are: pink at dawn, golden at sunset, blue at night.")),
@@ -158,6 +220,10 @@
                     APL.t("Aerial: the Apple TV flyover videos, streamed live (China, Hawaii, London, space station…). Without a network, it switches to the app artwork.")),
                 choice(APL.t("Video Quality"), "aerialQuality", [["auto", APL.t("Automatic")], ["1080", "1080p"], ["4k", "4K"]],
                     APL.t("Automatic: 1080p on older screens (they start in a second or two), 4K on recent ones. While the first video loads, an app's artwork shows.")),
+                choice(APL.t("Move the Clock"), "screensaverClockMove",
+                    [[0, APL.t("Off")], [1, APL.t("Every minute")], [2, APL.t("Every 2 minutes")], [3, APL.t("Every 3 minutes")], [4, APL.t("Every 4 minutes")], [5, APL.t("Every 5 minutes")]],
+                    APL.t("For OLED screens: the clock goes round the four corners, a few pixels off each time, so no spot stays lit for hours.") +
+                    (APL.sys.isOled && APL.sys.isOled() ? " " + APL.t("This screen is an OLED: it's on unless you turn it off.") : "")),
                 menu(APL.t("Aerial Themes"), "photo", [
                     flag(APL.t("Cities"), "cityscape", APL.t("New York, London, Hong Kong, Dubai…")),
                     flag(APL.t("Earth from Space"), "space", APL.t("Views from the International Space Station.")),
@@ -180,64 +246,26 @@
                     info(APL.t("Gateway"), function () { return sys.network().gateway; }),
                     info(APL.t("DNS Server"), function () { return sys.network().dns; })
                 ], APL.t("Network status and addresses.")),
-                action("Bluetooth", openAudio, APL.t("Connect or pair AirPods, headphones or a speaker."), "bluetooth"),
                 action("AirPlay", function () { APL.settings.close(); APL.controlCenter.openAirPlay(); }, APL.t("Stream from an iPhone, iPad or Mac."), "airplay"),
                 menu("HDMI", "hdmi", [
                     n("hdmiBlack", APL.t("HDMI Black Level"), APL.t("Change it if blacks look gray or crushed."), [[0, APL.t("Normal")], [1, APL.t("Auto")], [2, APL.t("Low")]])
                 ], APL.t("HDMI input settings."))
-            ], APL.t("Network, Bluetooth, AirPlay, HDMI.")),
-
-            /* -------- Advanced Features -------- */
-            menu(APL.t("Advanced Features"), "sparkle", [
-                toggle(APL.t("“Full screen” hint"), "showHint", APL.t("Shows “Press ▲ for full screen” on the Home Screen.")),
-                toggle(APL.t("Return to the Launcher"), "homeReturn", APL.t("When an app closes, or when Samsung's home opens on its own (a phone app's Home button, a remote Vetro doesn't intercept), the screen comes back here. Samsung's home opened from the launcher's Smart Hub tile stays.")),
-                action(APL.t("Alexa on the microphone button"), function () { APL.settings.close(); APL.services.alexaMic(); },
-                    APL.t("Do this once: in the Voice menu, choose Amazon Alexa and sign in to your Amazon account. Then hold the microphone button on the remote and talk to Alexa."), "mic"),
-                toggle("Alexa (Echo Dot)", "alexaBridge", APL.t("Say “Alexa, discover my devices” once. Then: “Alexa, turn on TizenTube”, “Alexa, turn off the screen”, “Alexa, turn on the AirPods”, “Alexa, turn on game mode”.")),
-                toggle(APL.t("Slow Background Motion"), "bgMotion", APL.t("A slow camera move over the Home Screen images. Pretty, but it keeps the screen very busy and slows everything else down.")),
-                menu(APL.t("Start Screen Option"), "power", [
-                    n("smartHub", APL.t("Autorun Smart Hub"), APL.t("Leave it off so you no longer land on the Samsung home screen."), ON_OFF)
-                ], APL.t("Make the screen start on APL Launcher."))
-            ], APL.t("Return to the launcher, Alexa, backgrounds, start-up.")),
+            ], APL.t("Network, AirPlay, HDMI.")),
 
             /* -------- Apps -------- */
             menu(APL.t("Apps"), "apps", [
-                menu(APL.t("Show on Home Screen"), "apps", [
-                    // The launcher's own Smart Hub tile first: the way out to Samsung's home
-                    { type: "hide", label: "Smart Hub", id: "apl.samsunghome",
-                      desc: APL.t("A tile that opens Samsung's Smart Hub, the way out now that the Home button opens the launcher. Press Home there to come back.") }
-                ].concat(apps.map(function (a) {
-                    return { type: "hide", label: a.name, id: a.id, desc: APL.t("OK to show or hide “{name}” on the Home Screen.", { name: a.name }) };
-                })), APL.t("Choose the apps shown on the Home Screen.")),
-                info(APL.t("Rearrange"), function () { return APL.t("Hold OK"); },
-                    APL.t("On the Home Screen, hold OK on an app: Edit Home Screen, Hide App or Delete App.")),
-                action(APL.t("Reset Home Screen"), function () {
-                    if (APL.resetHomeOrder) APL.resetHomeOrder();
-                    APL.toast(APL.t("Original layout restored"), true);
-                }, APL.t("Puts the apps back in their original order (your apps, Settings, Sources, then the others)."), "reset"),
-                toggle(APL.t("Automatic Artwork"), "autoArt",
-                    APL.t("The launcher finds each app's logo, background and current content on its own (Apple's App Store, TMDB), even for apps installed later. Otherwise, it makes them from the app's icon.")),
-                choice(APL.t("Background for Other Apps"), "shelfArt",
-                    [["logo", APL.t("Logo on Its Colors")], ["colors", APL.t("Its Colors Only")], ["wallpaper", APL.t("APL Wallpaper")]],
-                    APL.t("Top Shelf of the apps that have no artwork of their own: their logo enlarged on their colors, their colors alone, or the same wallpaper for all of them."),
-                    function () { if (APL.restyleArt) APL.restyleArt(); }),
+                toggle(APL.t("Find Logos and Artwork Online"), "autoArt",
+                    APL.t("The launcher finds each app's logo and artwork on its own (Apple's App Store, TMDB), even for apps installed later. Otherwise, it makes them from the app's icon.")),
                 action(APL.t("Search for Artwork Again"), function () {
                     if (APL.refreshArt) APL.refreshArt();
                     APL.toast(APL.t("Searching for artwork in the background…"), true);
                 }, APL.t("Clears the artwork found and searches again for all apps."), "reset"),
-                toggle(APL.t("Dynamic Top Shelf"), "liveShelf", APL.t("Shows the movies, shows and videos of the moment in the Top Shelf (Netflix, Prime, Disney+, TizenTube…).")),
-                info(APL.t("TMDB Key"), function () { return APL.live && APL.live.keys().tmdb ? APL.t("Configured") : APL.t("Missing"); },
-                    APL.t("Put it in launcher/js/keys.local.js on the PC, then rebuild.")),
-                info(APL.t("YouTube Key"), function () { return APL.live && APL.live.keys().youtube ? APL.t("Configured") : APL.t("Missing"); },
-                    APL.t("Optional: trending videos in TizenTube's Top Shelf.")),
-                info(APL.t("Fanart.tv Key"), function () { return APL.live && APL.live.keys().fanart ? APL.t("Configured") : APL.t("Missing"); },
-                    APL.t("Optional: HD backgrounds for movies and shows. Set it in APL Launcher Setup.")),
                 info(APL.t("Installed Apps"), function () { return String(apps.length); }),
-                toggle(APL.t("Close unused apps"), "idleClose",
-                    APL.t("An app left in the background for more than 10 minutes closes on its own, TizenTube included: the screen keeps its memory and stays smooth. The app in front is never closed, nor are the Home Screen, the TV inputs and AirPlay.")),
-                action(APL.t("Free Up Memory"), function () { APL.freeMemory(); },
-                    APL.t("Closes the apps left open behind the launcher (Netflix, Disney+, Samsung's YouTube…). They reopen normally, but start over from the beginning. TizenTube stays ready."), "reset")
-            ], APL.t("Apps shown on the Home Screen and their artwork.")),
+                vetro(toggle(APL.t("Close Unused Apps"), "idleClose",
+                    APL.t("An app left in the background for more than 10 minutes closes on its own, TizenTube included: the screen keeps its memory and stays smooth. The app in front is never closed, nor are the Home Screen, the TV inputs and AirPlay."))),
+                vetro(action(APL.t("Free Up Memory"), function () { APL.freeMemory(); },
+                    APL.t("Closes the apps left open behind the launcher (Netflix, Disney+, Samsung's YouTube…). They reopen normally, but start over from the beginning. TizenTube stays ready."), "reset"))
+            ], APL.t("Artwork found online, apps left open, memory.")),
 
             /* -------- General & Privacy -------- */
             menu(APL.t("General & Privacy"), "sliders", [
@@ -245,7 +273,8 @@
                     APL.t("Automatic follows the screen's language. The launcher restarts to apply it."),
                     function (v) { if (v !== language) setTimeout(function () { global.location.reload(); }, 400); }),
                 toggle(APL.t("24-Hour Time"), "clock24", APL.t("Time format on the Home Screen and in Control Center.")),
-                toggle(APL.t("Visual Effects (blur, glass)"), "visualEffects", APL.t("Prettier but slower. Off by default so the screen stays smooth.")),
+                n("homeApp", APL.t("Start on APL Launcher"), APL.t("The screen opens APL Launcher at power-on, about a second after the picture, instead of the TV input. Off: the screen starts as before."), ON_OFF),
+                vetro(toggle(APL.t("Close Apps at Start-Up"), "bootCleanup", APL.t("Once per full power-on, closes what the system opens on its own: Netflix, TV Plus, Disney+, Samsung Internet, Art Mode, the pieces of the Samsung home screen and the blocked services. Frees about 350 MB."))),
                 menu(APL.t("Power and Energy Saving"), "leaf", [
                     n("ecoSensor", APL.t("Brightness Optimization"), APL.t("Lowers the brightness in a dark room."), ON_OFF),
                     n("energy", APL.t("Power Saving Mode"), APL.t("Reduces power consumption."), ON_OFF)
@@ -256,16 +285,15 @@
                         APL.t("Zoom: the tile grows until it fills the screen, as on Apple TV. Fade: the tile grows a little and fades while the screen goes black, smooth on every screen. Automatic: fade on older screens (Tizen 6), zoom on recent ones."))
                 ], APL.t("Launcher animations.")),
                 menu(APL.t("Samsung Services"), "shield", [
-                    action(APL.t("Block All"), function () { APL.services.cutAll(); },
-                        APL.t("Stops the Samsung services below from starting. They go away at the screen's next full restart. Nothing is uninstalled."), "shield"),
+                    vetro(action(APL.t("Block All"), function () { APL.services.cutAll(); },
+                        APL.t("Stops the Samsung services below from starting. They go away at the screen's next full restart. Nothing is uninstalled."), "shield")),
                     action(APL.t("Restore All"), function () { APL.services.restoreAll(); },
                         APL.t("Brings back what was blocked here, at the screen's next start-up."), "reset")
                 ].concat(APL.services.groups.map(function (g) {
                     return { type: "service", label: g.label, group: g, desc: g.desc };
                 })), APL.t("Stops what the launcher no longer needs from starting.")),
-                toggle(APL.t("Close Apps at Start-Up"), "bootCleanup", APL.t("Once per full power-on, closes what the system opens on its own: Netflix, TV Plus, Disney+, Samsung Internet, Art Mode, the pieces of the Samsung home screen and the blocked services. Frees about 350 MB.")),
                 { type: "samsung", label: APL.t("Samsung Settings"), desc: APL.t("For what the screen keeps for its own menus: changing Wi-Fi, time, language, Samsung account, parental controls, privacy, reset.") }
-            ], APL.t("Clock, energy, accessibility, Samsung Settings.")),
+            ], APL.t("Clock, start-up, energy, accessibility, Samsung Settings.")),
 
             /* -------- Routines (routines.js) -------- */
             menu(APL.t("Routines"), "night", [
@@ -308,6 +336,17 @@
                     action(APL.t("Go Back to the Installed Version"), function () { if (APL.updater) APL.updater.reset(); },
                         APL.t("Forgets the downloaded updates and goes back to the version installed by APL Launcher Setup."), "reset")
                 ], APL.t("Automatic updates from GitHub.")),
+                action(APL.t("Support APL Launcher"), function () {
+                    var page = "https://ko-fi.com/knikt", qr = document.createElement("div");
+                    qr.className = "aplalert__qr";
+                    if (APL.qr) qr.appendChild(APL.qr.canvas(page, 360));
+                    var url = document.createElement("div");
+                    url.className = "aplalert__qrurl";
+                    url.textContent = page.replace(/^https?:\/\//, "");
+                    qr.appendChild(url);
+                    APL.alert({ title: APL.t("Support APL Launcher"), message: APL.t("Scan the code with your phone's camera. Thank you!"),
+                                node: qr, buttons: [{ label: APL.t("OK") }] });
+                }, APL.t("APL Launcher is free and made by one person. If you like it, you can buy me a coffee on Ko-fi: OK shows a code to scan with your phone."), "sparkle"),
                 menu(APL.t("About This Screen"), "info", [
                     info(APL.t("Name"), function () { return sys.product().name; }),
                     info(APL.t("Model"), function () { return sys.product().model; }),
@@ -316,7 +355,9 @@
                     info(APL.t("Resolution"), sys.display),
                     info(APL.t("Storage"), sys.storage),
                     info(APL.t("IP Address"), function () { return sys.network().ip; }),
-                    info("APL Launcher", function () { return APL.t("Version {v}", { v: sys.version }); }),
+                    info(APL.t("Link to Vetro"), function () { return sys.vetroLink(); },
+                        APL.t("How the launcher talks to Vetro. Through the bridge it reads the screen's settings; without it, orders still go out but the settings show Unavailable.")),
+                    info("APL Launcher", function () { return APL.t("Version {v}", { v: sys.version }); }, APL.t("Created by Knikt (Gero Corp.)")),
                     info(APL.t("Sources"), function () { return "TMDB, YouTube, App Store, Apple Music"; },
                         APL.t("Movies and shows: This product uses the TMDB API but is not endorsed or certified by TMDB."))
                 ], APL.t("Model, software and storage."))

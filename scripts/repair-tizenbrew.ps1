@@ -55,7 +55,7 @@ Write-Host "  ==============================================" -ForegroundColor W
 $savedIp = Get-SavedTvIp
 $TvIp = Read-Host ((Tr "  Screen IP address" "  Adresse IP de l'écran") + $(if ($savedIp) { " [$savedIp]" } else { "" }))
 if ([string]::IsNullOrWhiteSpace($TvIp)) { $TvIp = $savedIp }
-$base = "http://$TvIp`:8099"
+$base = "http://$TvIp`:$(Get-VetroPort)"
 Write-Host ""
 
 # ---------- 0. Vetro ----------
@@ -183,7 +183,7 @@ else {
                 $keep = @($all | Where-Object { $_ -notmatch $NEEDED })
                 [void](Post '/dns' @{ action = 'apply'; enabled = [bool]$dns.enabled; domains = $keep })
                 Ok (Tr "Sites removed from the filter." "Sites retirés du filtre.")
-            } catch { Bad (Tr "Vetro refused the change." "Vetro a refusé le changement.") (Tr "In Vetro (http://$TvIp`:8099) > DNS, remove them by hand." "Dans Vetro (http://$TvIp`:8099) > DNS, retire-les à la main.") }
+            } catch { Bad (Tr "Vetro refused the change." "Vetro a refusé le changement.") (Tr "In Vetro (http://$TvIp`:$(Get-VetroPort)) > DNS, remove them by hand." "Dans Vetro (http://$TvIp`:$(Get-VetroPort)) > DNS, retire-les à la main.") }
         }
     } else { Ok (Tr "The filter blocks no YouTube, TizenBrew or module site ($($all.Count) addresses blocked)." "Le filtre ne bloque aucun site de YouTube, TizenBrew ou de ses modules ($($all.Count) adresses bloquées).") }
 }

@@ -174,7 +174,9 @@
         remote.appendChild(keys);
 
         help = el("div", "pv-help",
-            APL.t("Hold OK = app menu") + "<br>" + APL.t("Keyboard: arrows, Enter, Esc, C") + "<br>" + APL.t("Preview: apps don't open"));
+            APL.t("Hold OK = app menu") + "<br>" + APL.t("Keyboard: arrows, Enter, Esc, C") + "<br>" + APL.t("Preview: apps don't open") +
+            // The demo's Top Shelf (liveshelf.js, demoSource): Blender Studio's open movies
+            (APL.live && !APL.live.keys().tmdb ? "<br>" + APL.t("Demo films: Blender Studio (CC BY), pictures from TMDB") : ""));
         remote.appendChild(help);
 
         // Outside the scaled-down screen: the remote sits next to <body>, not inside it.

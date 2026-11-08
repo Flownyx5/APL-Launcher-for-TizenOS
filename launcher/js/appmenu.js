@@ -84,15 +84,16 @@
     }
 
     /* ---------- confirmation box (tvOS alert) ---------- */
-    var alertRoot, alertTitle, alertMsg, alertBtns, alertNav, alertSpec = null;
+    var alertRoot, alertTitle, alertMsg, alertExtra, alertBtns, alertNav, alertSpec = null;
 
     function buildAlert() {
         alertRoot = el("div", "aplalert");
         var box = el("div", "aplalert__box");
         alertTitle = el("h2", "aplalert__title");
         alertMsg = el("p", "aplalert__msg");
+        alertExtra = el("div", "aplalert__extra");              // spec.node: a picture under the message (a QR code)
         alertBtns = el("div", "aplalert__buttons");
-        box.appendChild(alertTitle); box.appendChild(alertMsg); box.appendChild(alertBtns);
+        box.appendChild(alertTitle); box.appendChild(alertMsg); box.appendChild(alertExtra); box.appendChild(alertBtns);
         alertRoot.appendChild(box);
         document.body.appendChild(alertRoot);
         alertNav = new APL.Nav({
@@ -111,6 +112,9 @@
         alertTitle.textContent = spec.title || "";
         alertMsg.textContent = spec.message || "";
         alertMsg.style.display = spec.message ? "" : "none";
+        alertExtra.innerHTML = "";
+        if (spec.node) alertExtra.appendChild(spec.node);
+        alertExtra.style.display = spec.node ? "" : "none";
         alertBtns.innerHTML = "";
         var btns = spec.buttons.map(function (b) {
             var e = el("div", "aplalert__btn" + (b.destructive ? " is-destructive" : ""));

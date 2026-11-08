@@ -32,7 +32,7 @@ Write-Host "  ==============================================" -ForegroundColor W
 $savedIp = Get-SavedTvIp
 $TvIp = Read-Host ((Tr "  Screen IP address" "  Adresse IP de l'écran") + $(if ($savedIp) { " [$savedIp]" } else { "" }))
 if ([string]::IsNullOrWhiteSpace($TvIp)) { $TvIp = $savedIp }
-$base = "http://$TvIp`:8099"
+$base = "http://$TvIp`:$(Get-VetroPort)"
 if (-not (Test-Vetro $TvIp)) {
     Write-Host (Tr "  Vetro is not responding: open Vetro on the screen, wait 1 minute and try again." "  Vetro ne répond pas : ouvre Vetro sur l'écran, attends 1 minute et relance.") -ForegroundColor Yellow
     Read-Host (Tr "  Press Enter to close" "  Entrée pour fermer"); exit 1

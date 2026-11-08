@@ -85,7 +85,7 @@
     function restartWhenIdle() {
         setTimeout(function wait() {
             var open = (APL.settings && APL.settings.isOpen()) || (APL.controlCenter && APL.controlCenter.isOpen()) ||
-                       (APL.contextMenu && APL.contextMenu.isOpen()) || (APL.sources && APL.sources.isOpen()) || (APL.screensaver && APL.screensaver.isActive()) ||
+                       (APL.contextMenu && APL.contextMenu.isOpen()) || (APL.sources && APL.sources.isOpen()) || (APL.search && APL.search.isOpen()) || (APL.screensaver && APL.screensaver.isActive()) ||
                        document.hidden;
             if (open) { setTimeout(wait, 20000); return; }
             global.location.reload();

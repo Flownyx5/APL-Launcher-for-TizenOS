@@ -45,6 +45,7 @@
         sleepAt: 0,                 // timestamp of the scheduled sleep
         screensaverDelay: 5,        // minutes, 0 = never
         screensaverStyle: "aerial", // "aerial" (Apple videos) | "art" (app artwork) | "dark"
+        screensaverClockMove: 0,    // minutes between two corners of the screen saver's clock, 0 = it stays put
         uiSounds: true,             // small navigation clicks, like on Apple TV
         hiddenApps: [],
         appOrder: [],
@@ -53,10 +54,14 @@
         pinnedSources: [],          // inputs shown on the Home Screen as tiles (sources.js)
         autoUpdate: true,           // launcher updates from GitHub, on their own
         autoArt: true,              // logos, backgrounds and content found automatically (App Store, TMDB)
-        shelfArt: "logo",           // Top Shelf of apps without artwork: "logo" | "colors" | "wallpaper" (genart.js)
+        appsPerRow: 6,              // dock and grid: 5, 6 or 7 (launcher.js sizes())
+        searchHidden: false,        // Search also finds the hidden apps (search.js)
+        shelfArt: "sheets",         // Top Shelf of apps without artwork: "sheets" | "logo" | "black" (genart.js, launcher.js)
         smartHubTileSet: false,     // the Smart Hub tile was hidden once in this profile (it starts hidden)
-        liveShelf: true,            // dynamic Top Shelf (TMDB / YouTube)
+        hubShelf: true,             // Top Shelf: the apps' own Smart Hub rows first (liveshelf.js)
+        liveShelf: true,            //   then the content of the moment (TMDB / YouTube…), then shelfArt
         visualEffects: PREVIEW,     // blur / glass: costly on the screen, off by default
+        cleanFrameBackdrops: false, // a poster only where an app shows nothing of its own (app-art.js)
         gameWanted: false,          // Game Mode requested (applied when switching to an input)
         ccHintCount: 0,             // number of times the Control Center tip has been shown
         appearance: "dark",         // "dark" | "light" | "auto" (follows the sun)
@@ -67,7 +72,9 @@
         alexaBridge: true,          // the Echo Dot can open apps (overlay/Alexa.cs)
         servicesCut: {},            // blocked Samsung services and their original settings (services.js)
         bootCleanup: true,          // once per power-on: closes what Samsung opens on its own
+        homeAppSaved: null,         // { home, autostart } before "Start on APL Launcher", put back when it is turned off
         idleClose: true,            // an app left in the background for 10 min is closed (overlay/IdleApps.cs)
+        pauseKey: "controlcenter",  // ⏯ in an app: "controlcenter" | "playpause", the app's own (overlay/Program.cs)
         language: "auto",           // "auto" (screen language) | "en" | "fr": read at start-up by i18n.js
         aerialQuality: "auto",      // "auto" (1080p on older screens, 4K otherwise) | "1080" | "4k"
         ambient: true,              // the Home Screen's light follows the time of day (ambient.js)
@@ -83,10 +90,19 @@
         nightState: null,           // "Good Night" running: what to put back the next morning (routines.js)
         openAnim: "auto"            // opening an app: "auto" (fade on older screens, zoom otherwise) | "zoom" | "fade" | "none"
     };
+    /* OLED panels, told by the model the screen reports: the S8x / S9x TVs from 2022 on, whatever the
+       region letters (QE55S95BATXXU, QN65S90FAEXZA, KQ65SD95AFXKR…), and the Odyssey OLED monitors with
+       Smart TV, whose code has an S where the Neo (mini LED) ones have an N (LS49CG954SUXEN, LS34BG850SNXGO,
+       LS32DG802SUXEN). A still picture can mark them, so the screen saver's clock moves there unless the
+       viewer chose otherwise (Settings › Screen Saver › Move the Clock). PC preview: ?oled. */
+    var OLED_RE = /^[A-Z]{2}\d{2}S[A-Z]?[89]\d|^LS\d{2}[A-Z]G[689]\d{2}S/;
+    var OLED = PREVIEW ? /[?&]oled\b/.test(global.location.search)
+        : OLED_RE.test(String((function () { try { return wa.productinfo.getRealModel(); } catch (e) { return ""; } })() || "").toUpperCase());
+    if (OLED) DEFAULTS.screensaverClockMove = 2;
     /* Screen settings (shared) and the settings of each profile in the household:
        Home Screen layout, hidden apps, preferences, recent apps. */
     var PROFILE_KEYS = { hiddenApps: 1, appOrder: 1, clock24: 1, showHint: 1, reduceMotion: 1, dnd: 1,
-                         uiSounds: 1, screensaverStyle: 1, screensaverDelay: 1, liveShelf: 1, recentApps: 1,
+                         uiSounds: 1, screensaverStyle: 1, screensaverDelay: 1, screensaverClockMove: 1, liveShelf: 1, hubShelf: 1, recentApps: 1,
                          appearance: 1, folders: 1, aerialHidden: 1, smartHubTileSet: 1, kidsMode: 1, kidsApps: 1 };
     DEFAULTS.recentApps = [];
     var COLORS = ["#ff9f0a", "#30d158", "#0a84ff", "#bf5af2", "#ff375f", "#64d2ff", "#ffd60a", "#ac8e68"];
@@ -106,6 +122,17 @@
         save("apl.profiles", household);
     }
     var pprefs = load("apl.prefs." + household.current, {});
+    // Up to 1.0.19, Otherwise also had App Colors (now Large Logo) and the APL wallpaper (now Black)
+    var OLD_ART = { colors: "logo", wallpaper: "black", all: "black" };
+    if (OLD_ART[prefs.shelfArt]) { prefs.shelfArt = OLD_ART[prefs.shelfArt]; save("apl.prefs", prefs); }
+    // Up to 1.0.14, "App Backgrounds" off (per profile) gave a plain dark Top Shelf: now shelfArt "black"
+    household.list.forEach(function (p) {
+        var pp = p.id === household.current ? pprefs : load("apl.prefs." + p.id, {});
+        if (!("appBackgrounds" in pp)) return;
+        if (pp.appBackgrounds === false && p.id === household.current) { prefs.shelfArt = "black"; save("apl.prefs", prefs); }
+        delete pp.appBackgrounds;
+        save("apl.prefs." + p.id, pp);
+    });
 
     function currentProfile() {
         for (var i = 0; i < household.list.length; i++) if (household.list[i].id === household.current) return household.list[i];
@@ -124,6 +151,34 @@
     }
     var listeners = {};
     function onPref(k, fn) { (listeners[k] = listeners[k] || []).push(fn); }
+
+    /* Is Vetro on the screen at all (vetrotvapp.app, vetrotvapp.svc)? Installed from Apps2Samsung's TV-Store
+       without root (a Q72D on Reddit), the Home key stays Samsung's: Return to the Launcher, which needs no
+       Vetro, then replaced Samsung's home as soon as Home showed it, with no way back to Samsung's menus. Without
+       Vetro it is off unless chosen, and the settings that need Vetro say so (settings.js). Asked again at every
+       start; any doubt (the list can't be read) counts as Vetro there, so nothing changes. */
+    var noVetro = false;
+    function markNoVetro() {
+        if (noVetro) return;
+        noVetro = true;
+        var before = pref("homeReturn");
+        DEFAULTS.homeReturn = false;
+        if (pref("homeReturn") !== before) (listeners.homeReturn || []).forEach(function (fn) { fn(false); });
+    }
+    function detectVetro() {
+        if (PREVIEW) {
+            // The PC preview has no Vetro to look for: ?novetro shows the screen without it
+            if (global.location && /[?&]novetro\b/.test(global.location.search)) markNoVetro();
+            return;
+        }
+        try {
+            tz.application.getAppsInfo(function (list) {
+                for (var i = 0; i < list.length; i++) if (/^vetrotvapp\./.test(list[i].id)) return;
+                markNoVetro();
+            }, function () {});
+        } catch (e) {}
+    }
+    detectVetro();
 
     /* ---------- profiles ---------- */
     var profileListeners = [];
@@ -388,7 +443,19 @@
        Used for the REAL picture settings (backlight, contrast, sharpness,
        color…) and to close the Samsung home. Body sent as text/plain: no
        preflight request, Vetro reads the JSON whatever the type. */
-    var VETRO = "http://127.0.0.1:8099";
+    /* Vetro's port: 8099, or the one Vetro was built with (VETRO_PORT=…, when another app holds 8099). The bridge
+       finds it on its own (bridge/service.js, overlay/VetroPort.cs); the launcher learns it from /status, where
+       Vetro gives a port that is not the usual one, and keeps it for the direct calls and icons. */
+    var VETRO_PORT_KEY = "apl.vetroPort";
+    var vetroPortNum = (function () { var p = parseInt(load(VETRO_PORT_KEY, 0), 10); return p >= 1024 && p <= 65535 ? p : 8099; })();
+    function vetroUrl(path) { return "http://127.0.0.1:" + vetroPortNum + (path || ""); }
+    function notePort(s) {
+        if (!s || !s.app || typeof s.app !== "object" || !s.app.version) return;
+        var p = parseInt(s.app.port, 10) || 8099;
+        if (p === vetroPortNum || p < 1024 || p > 65535) return;
+        vetroPortNum = p;
+        if (p === 8099) { try { global.localStorage.removeItem(VETRO_PORT_KEY); } catch (e) {} } else save(VETRO_PORT_KEY, p);
+    }
     /* Vetro only lets the screen's apps read its answers for /status, /probe and
        /screen. The launcher's private bridge (bridge/service.js, a service in this package) makes
        the other requests and sends the answer back through a trusted Tizen message port
@@ -417,23 +484,45 @@
         bridgeStarting.then(done, done);
         return bridgeStarting;
     }
+    /* Before Tizen 7 (The Frame 2022 on 6.5, #21) the bridge's answers never came back through the trusted
+       port alone. There the launcher also attaches its port to each request, and opens a plain port the
+       bridge can answer through (bridge/service.js tries them in turn and logs which one works). Never on
+       Tizen 9: its service router crashes when a request carries a port. */
+    var oldTizen = null;
+    function isOldTizen() {
+        if (oldTizen === null) {
+            oldTizen = safe(function () {
+                return parseFloat(tz.systeminfo.getCapability("http://tizen.org/feature/platform.version")) < 7;
+            }, false) === true;
+        }
+        return oldTizen;
+    }
+    var plainReplyPort = null;
+    function onReply(data) {
+        var m = {};
+        for (var i = 0; i < data.length; i++) m[data[i].key] = data[i].value;
+        // An event sent by the bridge on its own (text typed on the phone remote)
+        if (m.event) { bridgeEvents.forEach(function (fn) { try { fn(m.event, m.body || ""); } catch (e) {} }); return; }
+        var p = pending[m.id];
+        if (!p) return;
+        // Large answers arrive in several pieces (a piece sent again by another port counts once)
+        var part = parseInt(m.part, 10) || 0;
+        if (p.chunks[part] === undefined) p.got++;
+        p.chunks[part] = m.body || "";
+        if (p.got < (parseInt(m.parts, 10) || 1)) return;
+        delete pending[m.id]; clearTimeout(p.timer);
+        p.resolve({ status: parseInt(m.status, 10) || 0, body: p.chunks.join("") });
+    }
     function ensureReplyPort() {
         if (replyPort) return replyPort;
         replyPort = tz.messageport.requestTrustedLocalMessagePort("APL_BRIDGE_REPLY");
-        replyPort.addMessagePortListener(function (data) {
-            var m = {};
-            for (var i = 0; i < data.length; i++) m[data[i].key] = data[i].value;
-            // An event sent by the bridge on its own (text typed on the phone remote)
-            if (m.event) { bridgeEvents.forEach(function (fn) { try { fn(m.event, m.body || ""); } catch (e) {} }); return; }
-            var p = pending[m.id];
-            if (!p) return;
-            // Large answers arrive in several pieces
-            p.chunks[parseInt(m.part, 10) || 0] = m.body || "";
-            p.got++;
-            if (p.got < (parseInt(m.parts, 10) || 1)) return;
-            delete pending[m.id]; clearTimeout(p.timer);
-            p.resolve({ status: parseInt(m.status, 10) || 0, body: p.chunks.join("") });
-        });
+        replyPort.addMessagePortListener(onReply);
+        if (isOldTizen() && !plainReplyPort) {
+            try {
+                plainReplyPort = tz.messageport.requestLocalMessagePort("APL_BRIDGE_REPLY_PLAIN");
+                plainReplyPort.addMessagePortListener(onReply);
+            } catch (e) {}
+        }
         return replyPort;
     }
     var bridgeEvents = [];
@@ -449,17 +538,21 @@
         }
         try { send(); return Promise.resolve(); } catch (e) { return startBridge().then(send); }
     }
-    function bridgeRequest(method, path, body) {
+    function bridgeRequest(method, path, body, waitMs) {
         if (PREVIEW || !tz || !tz.messageport || Date.now() < bridgeDownUntil) return Promise.reject(new Error("bridge unavailable"));
         function send() {
             return new Promise(function (resolve, reject) {
                 var remote = tz.messageport.requestTrustedRemoteMessagePort(BRIDGE_ID, BRIDGE_PORT);   // throws if not started
                 ensureReplyPort();
                 var id = String(++seq);
-                pending[id] = { resolve: resolve, chunks: [], got: 0, timer: setTimeout(function () { delete pending[id]; reject(new Error("timeout")); }, 60000) };
-                // No port attached: the service answers through its own trusted port (see bridge/service.js)
-                remote.sendMessage([{ key: "id", value: id }, { key: "method", value: method },
-                                    { key: "path", value: path }, { key: "body", value: body || "" }]);
+                pending[id] = { resolve: resolve, chunks: [], got: 0, timer: setTimeout(function () { delete pending[id]; reject(new Error("timeout")); }, waitMs || 60000) };
+                // No port attached on Tizen 7 and newer: the service answers through its own trusted port (see bridge/service.js)
+                var msg = [{ key: "id", value: id }, { key: "method", value: method },
+                           { key: "path", value: path }, { key: "body", value: body || "" }];
+                if (isOldTizen()) {
+                    try { remote.sendMessage(msg, replyPort); return; } catch (e) {}
+                }
+                remote.sendMessage(msg);
             });
         }
         return send().catch(function (e) {
@@ -488,7 +581,7 @@
             if (r.status >= 400) throw new Error("Vetro " + r.status);
             return JSON.parse(r.body);
         }, function () {
-            return global.fetch(VETRO + path).then(function (r) { if (!r.ok) throw new Error("Vetro " + r.status); return r.json(); },
+            return global.fetch(vetroUrl(path)).then(function (r) { if (!r.ok) throw new Error("Vetro " + r.status); return r.json(); },
                 function () { throw new Error(APL.t("Vetro is not responding")); });
         });
     }
@@ -498,7 +591,7 @@
             try { return JSON.parse(r.body); } catch (e) { return {}; }
         }, function () {
             // Without the bridge: the order still goes to Vetro, with no readable answer
-            return global.fetch(VETRO + path, { method: "POST", mode: "no-cors", headers: { "content-type": "text/plain" }, body: text })
+            return global.fetch(vetroUrl(path), { method: "POST", mode: "no-cors", headers: { "content-type": "text/plain" }, body: text })
                 .then(function () { return { sent: true }; });
         });
     }
@@ -507,7 +600,7 @@
     function vetroAlive() {
         if (PREVIEW) return Promise.resolve(false);
         if (Date.now() - aliveAt < 30000) return Promise.resolve(alive);
-        return vetroGet("/status").then(function (s) { return !!s && !(s.agent && s.agent.connected === false); },
+        return vetroGet("/status").then(function (s) { notePort(s); return !!s && !(s.agent && s.agent.connected === false); },
                                         function () { return false; })
             .then(function (ok) { alive = ok; aliveAt = Date.now(); return ok; });
     }
@@ -522,6 +615,38 @@
     }
     if (!PREVIEW && global.document) {
         document.addEventListener("visibilitychange", function () { if (!document.hidden) setTimeout(checkVetro, 3000); });
+    }
+
+    /* Settings › Support › About This Screen: how the launcher reaches Vetro. Through the bridge it reads the
+       answers; without it orders still go out (Bluetooth connects) but nothing can be read back, so the
+       picture settings say Unavailable. For reports (issue #21, Tizen 6.5). */
+    function vetroLink() {
+        if (PREVIEW) return Promise.resolve(APL.t("Preview"));
+        // 1. Does the bridge get the request and answer at all? The web bridge answers this one itself,
+        //    without Vetro (bridge/service.js); the .NET bridge says "not relayed", which is an answer too.
+        var t0 = Date.now(), info = null;
+        return bridgeRequest("GET", "/bridge-info", "", 10000).then(function (r) {
+            try { info = JSON.parse(r.body); } catch (e) {}
+            // 2. Then a command through Vetro
+            t0 = Date.now();
+            return bridgeRequest("POST", "/exec", JSON.stringify({ cmd: "true" }), 20000).then(function (x) {
+                var ok = false, why = "";
+                try { var j = JSON.parse(x.body); ok = j.ok !== false; why = String(j.error || j.stderr || "").slice(0, 80); } catch (e) {}
+                // Vetro answers but runs nothing (an S95C on Tizen 9, Reddit): most often its root agent is not
+                // connected, which Vetro says ("no root agent connected"). Shown as it is.
+                var port = (info && info.port) || vetroPortNum;
+                return (ok ? APL.t("Through the bridge") : APL.t("Bridge: Vetro refused")) + " (" + (Date.now() - t0) + " ms" +
+                       (info && info.reached ? ", " + info.reached : "") + (port !== 8099 ? ", " + APL.t("port {port}", { port: port }) : "") +
+                       (!ok && why ? ", " + why : "") + ")";
+            }, function () {
+                // The bridge answers but Vetro doesn't: the addresses it tried and how they failed
+                var tried = [];
+                if (info && info.errors) Object.keys(info.errors).forEach(function (h) { tried.push(h + " " + info.errors[h]); });
+                return APL.t("Bridge works, Vetro unreachable") + (tried.length ? ": " + tried.join(" · ") : "");
+            });
+        }, function (e) {
+            return APL.t("Bridge: {error}", { error: e && e.message === "timeout" ? APL.t("no answer at all") : ((e && e.message) || "?") });
+        });
     }
 
     /* Root command on the screen, through Vetro and the bridge. No backslashes in commands: Vetro doubles them. */
@@ -682,12 +807,23 @@
         soundMode:  { get: "GetSoundMode u 0", set: "SetSoundMode uu -- V 1" },
         autoVolume: { get: "GetAutoVolume u 0", set: "SetAutoVolume uu -- V 1" },
         feedback:   { get: "GetSoundFeedback i 0", set: "SetSoundFeedback ii -- 1 V" },
-        smartHub:   { vconf: "db/menu/smart_hub/ontvsetting/auto_start" }
+        /* The screen's home app (db/appfw/home_appid). At power-on the screen puts either the TV input or the
+           home app in front, and Autorun Smart Hub chooses the home app: with the launcher as home app, it is
+           on screen about a second after power-on instead of after the start-up service (~1 min). Autorun
+           also opened Samsung's home at every wake: APL Overlay turns it off while the screen sleeps and
+           on again once it is awake (overlay/Autorun.cs). Off: the screen's own home app again, as the
+           firmware records it in db/first_screen/type. */
+        homeApp:    { home: true }
     };
+    var HOME_KEY = "db/appfw/home_appid", AUTOSTART_KEY = "db/menu/smart_hub/ontvsetting/auto_start";
     var MOCK_NATIVE = {};
     function nativeGet(id) {
         var d = NATIVE[id];
         if (PREVIEW) return Promise.resolve(MOCK_NATIVE[id] || (d.min !== undefined ? Math.round((d.min + d.max) / 2) : 0));
+        if (d.home) {
+            // On only if both took: with Autorun off the screen still starts on the TV input
+            return homeAppRead().then(function (s) { return s.home === "APLauncher.Home" && s.autostart === 1 ? 1 : 0; });
+        }
         if (d.vconf) {
             return tvExec("vconftool get " + d.vconf + " 2>&1").then(function (r) {
                 var m = /value = (-?[0-9]+)/.exec(String(r.output || ""));
@@ -706,9 +842,60 @@
         var d = NATIVE[id];
         if (PREVIEW) { MOCK_NATIVE[id] = value; return Promise.resolve(value); }
         var write = d.vconf ? "vconftool set -f -t int " + d.vconf + " " + value + " 2>&1" : AVOC + d.set.replace("V", value) + " 2>&1";
+        // A write the screen never answers would only say so after the bridge's minute: an S90F showed nothing at all
+        if (d.home) return withTimeout(homeAppSet(value), 20000).then(function (r) { return homeAppCheck(value, r); });
         return tvExec(write).then(function () { return nativeGet(id); }).then(function (back) {
             if (back !== value) throw new Error(APL.t("The screen refused this setting for now"));
             return back;
+        });
+    }
+    function withTimeout(p, ms) {
+        return new Promise(function (resolve, reject) {
+            var t = setTimeout(function () {
+                reject(new Error(APL.t("The screen didn't answer within {s} s. Try again in a minute.", { s: Math.round(ms / 1000) })));
+            }, ms);
+            p.then(function (v) { clearTimeout(t); resolve(v); }, function (e) { clearTimeout(t); reject(e); });
+        });
+    }
+    /* Start on APL Launcher read back. When the screen doesn't keep it, the message says what it kept
+       (and what vconftool answered, when it said anything): "refused" alone told nobody why. */
+    function homeAppCheck(value, written) {
+        return homeAppRead().then(function (s) {
+            var back = s.home === "APLauncher.Home" && s.autostart === 1 ? 1 : 0;
+            if (back === value) return back;
+            var said = String((written && written.output) || "").replace(/\s+/g, " ").trim().slice(0, 90);
+            throw new Error(APL.t("The screen kept {app} as its home app, Autorun Smart Hub {state}.",
+                                  { app: s.home, state: s.autostart === 1 ? APL.t("on") : APL.t("off") }) + (said ? " " + said : ""));
+        });
+    }
+    function homeAppRead() {
+        return tvExec("vconftool get " + HOME_KEY + " 2>&1; vconftool get " + AUTOSTART_KEY + " 2>&1").then(function (r) {
+            var out = String(r.output || ""), h = /home_appid, value = (\S+)/.exec(out), a = /auto_start, value = (-?[0-9]+)/.exec(out);
+            if (!h || !a) throw new Error(APL.t("Unavailable"));
+            return { home: h[1], autostart: parseInt(a[1], 10) };
+        });
+    }
+    /* On: saves the screen's home app and Autorun as they are, then makes the launcher the home app and
+       turns Autorun on. Off: puts back exactly what was saved; without a saved value, the home app the
+       firmware records in db/first_screen/type, then Samsung's home, and Autorun off. */
+    var APP_ID_RE = /^[A-Za-z0-9._-]{1,120}$/;
+    function homeAppSet(value) {
+        return homeAppRead().then(function (cur) {
+            if (value === 1) {
+                if (cur.home !== "APLauncher.Home") setPref("homeAppSaved", { home: cur.home, autostart: cur.autostart });
+                return tvExec("vconftool set -f -t string " + HOME_KEY + " APLauncher.Home 2>&1; vconftool set -f -t int " + AUTOSTART_KEY + " 1 2>&1");
+            }
+            var saved = pref("homeAppSaved") || {};
+            var home = saved.home && saved.home !== "APLauncher.Home" && APP_ID_RE.test(saved.home) ? saved.home : null;
+            var autostart = saved.autostart === 1 ? 1 : 0;
+            var setHome = home ? "vconftool set -f -t string " + HOME_KEY + " " + home + " 2>&1"
+                : "h=$(vconftool get db/first_screen/type 2>/dev/null | awk '{print $4}'); " +
+                  "if [ -z \"$h\" ] || [ \"$h\" = APLauncher.Home ]; then h=com.samsung.tv.csfs; fi; " +
+                  "vconftool set -f -t string " + HOME_KEY + " \"$h\" 2>&1";
+            return tvExec(setHome + "; vconftool set -f -t int " + AUTOSTART_KEY + " " + autostart + " 2>&1").then(function (r) {
+                setPref("homeAppSaved", null);
+                return r;
+            });
         });
     }
     function nativeReset(method) { return PREVIEW ? Promise.resolve() : tvExec(AVOC + method + " 2>&1"); }
@@ -757,10 +944,16 @@
         if (!pref("uiSounds")) return;
         try {
             if (!actx) { var AC = global.AudioContext || global.webkitAudioContext; if (!AC) return; actx = new AC(); }
-            var t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
+            if (actx.state === "suspended" && actx.resume) actx.resume();
+            // A few milliseconds in and out: a sound that starts or stops at full level is a snap in the
+            // speakers ("like breaking plastic", Reddit, on an S93F), on top of the TV's own key sound
+            var t = actx.currentTime + 0.005, o = actx.createOscillator(), g = actx.createGain();
             o.type = "sine"; o.frequency.setValueAtTime(freq, t);
-            g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-            o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.linearRampToValueAtTime(vol, t + 0.006);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+            g.gain.linearRampToValueAtTime(0, t + dur + 0.01);
+            o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + dur + 0.03);
         } catch (e) {}
     }
     /* Interface sounds: the files launcher/sounds/navigate.wav, click.wav and
@@ -840,7 +1033,9 @@
         pref: pref, setPref: setPref, onPref: onPref, profiles: profiles,
         audio: audio, network: network, product: product, display: display, storage: storage, hdr: hdr,
         remoteKey: remoteKey, openSamsungSettings: openSamsungSettings, sleepNow: sleepNow,
-        switchSource: switchSource, vetroAlive: vetroAlive,
+        switchSource: switchSource, vetroAlive: vetroAlive, vetroLink: vetroLink,
+        vetroUrl: vetroUrl, vetroPort: function () { return vetroPortNum; },
+        noVetro: function () { return noVetro; },
         registerKeys: registerKeys, armSleepTimer: armSleepTimer, readSleepTimer: readSleepTimer,
         vetroGet: vetroGet, vetroPost: vetroPost, exec: tvExec, game: game, runningApps: runningApps,
         bridgeSend: bridgeSend, onBridgeEvent: onBridgeEvent,
@@ -848,6 +1043,7 @@
         bridgePing: function () { return bridgeRequest("GET", "/__ping", "").then(function (r) { return r.status; }); },
         bridgeState: function () { return bridgeRequest("GET", "/__bridge/state", "").then(function (r) { return JSON.parse(r.body); }); },
         native: { get: nativeGet, set: nativeSet, reset: nativeReset, info: function (id) { return NATIVE[id]; } },
+        isOled: function () { return OLED; },
         PICTURE_MODES: PICTURE_MODES, pictureModeName: pictureModeName, setPictureMode: setPictureMode,
         tvSettings: tvSettings, tvItem: tvItem, tvAdjust: tvAdjust, tvValue: tvValue,
         version: (global.APL_UPDATE && global.APL_UPDATE.running) || "1.0.0"

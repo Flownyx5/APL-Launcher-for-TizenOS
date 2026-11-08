@@ -12,20 +12,25 @@ namespace APL.Boot
     /// (launcher/bridge/service.js) was meant to open it, but a web service's on-boot is dropped when
     /// the package is a hybrid one: the screen registers it with Onboot 0. A .NET service's is kept.
     ///
-    /// Every few seconds during the first minutes, while Samsung's own screen is in front, this asks
-    /// the system to show the launcher (an app-control launch: no Vetro needed, it may not be up yet).
-    /// It stops once the launcher has stayed in front for a while, once another app is in front (the
-    /// screen's "Autorun last app" opened it: that is the user's choice), or after a time limit.
-    /// Started later than the boot window (by hand, a crash restart), it does nothing.
+    /// Every second and a half during the first minutes, while Samsung's own screen is in front (the TV
+    /// input, Samsung TV Plus, Samsung's home), this asks the system to show the launcher (an app-control
+    /// launch: no Vetro needed, it may not be up yet). It stops once the launcher has stayed in front for
+    /// half a minute (TV Plus can come up late), once another app is in front (the screen's "Autorun
+    /// last app" opened it: that is the user's choice), or after a time limit.
+    /// The launcher starts it as soon as it loads (launcher.js, startBootKeeper): with Start on APL
+    /// Launcher it loads about a second after power-on, in the background, Autorun Smart Hub being off
+    /// so that a wake goes back to the last app instead of Samsung's home. The on-boot start (~1 min)
+    /// stays as a fallback. Started later than the boot window (by hand, a crash restart), it does nothing.
     /// </summary>
     internal class Program : ServiceApplication
     {
         private const string Launcher = "APLauncher.Home";
         private const string FullscreenKey = "memory/appfw/current_fullscreen_appid";
         private const double BootWindowS = 300;   // older than this: not a start-up
-        private const int EveryMs = 3000;
+        private const int EveryMs = 1500;
         private const int LimitS = 240;           // give up after this long
-        private const int StableTicks = 3;        // the launcher counts as there after ~9 s in front
+        private const int StableTicks = 20;       // the launcher counts as there after 30 s in front
+        private const int OtherTicks = 3;         // another app 4.5 s in front: the user's choice
         private const int MaxLaunches = 30;
 
         [DllImport("libvconf.so.0")] private static extern IntPtr vconf_get_str(string key);
@@ -71,9 +76,13 @@ namespace APL.Boot
                     if (launches >= MaxLaunches) { Finish("too many launches"); return; }
                     launches++;
                     Note("opening the launcher (" + launches + ")");
-                    AppControl.SendLaunchRequest(new AppControl { Operation = AppControlOperations.Default, ApplicationId = Launcher });
+                    // apl_action boot: not a Home press for the launcher (two launches close together
+                    // would read as Home twice, the App Switcher)
+                    var request = new AppControl { Operation = AppControlOperations.Default, ApplicationId = Launcher };
+                    request.ExtraData.Add("apl_action", "boot");
+                    AppControl.SendLaunchRequest(request);
                 }
-                else if (++elsewhere >= StableTicks)
+                else if (++elsewhere >= OtherTicks)
                 {
                     Finish(fg + " stays in front: left as it is");
                 }
@@ -86,7 +95,8 @@ namespace APL.Boot
         {
             if (string.IsNullOrEmpty(app)) return true;
             return app == "org.tizen.tv-viewer" || app.Contains("csfs") || app.Contains("home.sidebar") ||
-                   app.Contains("home.media") || app.Contains("coba.newhome");
+                   app.Contains("home.media") || app.Contains("coba.newhome") ||
+                   app.Contains("tvplus");   // Samsung TV Plus: the TV input's channel on screens without a tuner (M8)
         }
 
         private void Finish(string why)

@@ -123,6 +123,9 @@ namespace APL.Setup
             { "Name", "Nom" },
             { "Remove", "Retirer" },
             { "Add a website", "Ajouter un site" },
+            { "Also install APL TV", "Installer aussi APL TV" },
+            { "An IPTV player in the same style, for your own M3U playlists and Xtream accounts. It comes with no channels. Uses the TMDB key above.",
+              "Un lecteur IPTV dans le même style, pour tes propres playlists M3U et comptes Xtream. Il ne contient aucune chaîne. Utilise la clé TMDB ci-dessus." },
             { "Optimize the screen after installing", "Optimiser l'écran après l'installation" },
             { "Removes what the screen doesn't need. Restore undoes it.", "Enlève ce dont l'écran n'a pas besoin. Restaurer annule tout." },
             { "About Optimize", "En savoir plus" },
@@ -329,6 +332,7 @@ namespace APL.Setup
 
             // ---------- About ----------
             { "An Apple TV–style home screen for Samsung Tizen screens.", "Un écran d'accueil façon Apple TV pour les écrans Samsung sous Tizen." },
+            { "Created by Knikt (Gero Corp.)", "Créé par Knikt (Gero Corp.)" },
             { "APL Launcher on GitHub", "APL Launcher sur GitHub" },
             { "What works (compatibility)", "Ce qui marche (compatibilité)" },
             { "MIT License", "Licence MIT" },

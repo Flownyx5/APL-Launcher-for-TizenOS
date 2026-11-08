@@ -27,6 +27,8 @@ Vetro's dashboard and API listen on `http://<screen-ip>:8099` (the installer rem
 . .\scripts\lib.ps1; Install-ViaVetro -Ip <screen-ip> -Wgt dist\APL-Launcher.wgt
 ```
 
+`03-build-launcher.ps1` packages the published release, or `dist\apl-launcher-full-v<version>.wgt` when that file exists, not your `launcher\` folder. To try local changes, build that file with `tools/make-overlay.sh` and `tools/make-package.sh --overlay` (Linux or macOS, as in CI) and copy it to `dist\`. Delete it afterwards: it wins over the release.
+
 APL Launcher Setup's **Install** page does the same, with the keys and websites it collects.
 
 ## Seeing and driving the screen

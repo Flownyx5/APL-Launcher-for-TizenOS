@@ -6,16 +6,18 @@
    a large background of the movie / series, with its title and rating.
 
    Sources:
-     TMDB             current movies and series per service, for France
+     Smart Hub        the app's own rows for Samsung's home (Plex's Continue Watching,
+                      Spotify's mixes…), first when there are some — Vetro
+     TMDB             current movies and series per service, in the screen's country
                       (Netflix, Prime Video, Disney+, CANAL+, TF1+, M6+…) — key
-     YouTube Data API trending videos in France, for TizenTube — key
-     Apple (RSS feed) Top albums in France for music apps — no key
+     YouTube Data API trending videos in the screen's country, for TizenTube — key
+     Apple (RSS feed) Top albums in the screen's country for music apps — no key
      Fanart.tv        textless HD backgrounds — key (optional)
      Cinemeta         IMDb ratings (Stremio's public service) — no key
      Steam            top sellers (Steam Link, Moonlight, GeForce NOW…) — no key
      Xbox Game Pass   Game Pass games, with their large pictures — no key
      TheSportsDB      next Ligue 1 / Champions League matches — no key
-     Dailymotion      trending videos in France — no key
+     Dailymotion      trending videos in the screen's country — no key
    Websites (keys.local.js): trending titles of the week or popular anime, depending on the site.
 
    Responses are kept 6 h on the screen to limit calls.
@@ -25,22 +27,113 @@
     "use strict";
 
     var APL = global.APL;
-    var KEYS = global.APL_KEYS || {};
+    /* Apps2Samsung writes the API keys into res/wgt/js/keys.local.js: this launcher's own keys file in the
+       full (hybrid) package. The launcher-only package (Tizen 6) carries a second copy at that path
+       (tools/make-package.sh), read here when js/keys.local.js has no key. Only the three keys, never run. */
+    (function altKeys() {
+        var K = global.APL_KEYS = global.APL_KEYS || {};
+        if (K.tmdb || K.youtube || K.fanart || !global.tizen || !global.XMLHttpRequest) return;
+        try {
+            var x = new global.XMLHttpRequest(), m, re = /\b(tmdb|youtube|fanart)\s*:\s*"([A-Za-z0-9_-]+)"/g;
+            x.open("GET", "res/wgt/js/keys.local.js", false);
+            x.send(null);
+            var text = String(x.responseText || "");
+            while ((m = re.exec(text))) { if (!K[m[1]]) K[m[1]] = m[2]; }
+        } catch (e) {}
+    })();
+    var KEYS = global.APL_KEYS;
     var TTL = 6 * 3600 * 1000;
-    var CACHE_VERSION = 3;              // 3: movies and series carry their title and their rating
+    var CACHE_VERSION = 5;              // 3: movies and series carry their title and their rating; 4: Smart Hub items their deep link; 5: "tv" / "movie", translated when shown
     var MIN_VOTES = 20;                 // below that, a rating doesn't mean anything yet
-    var REGION = "FR";
 
-    /* TMDB (JustWatch) "provider" ids of the services, for France. */
+    /* The screen's country, for trending videos, charts, prices and what each service streams there.
+       France for every screen before 1.0.14 (issue #21, from India). Samsung's own country for its store
+       (db/comss/countrycode, read through Vetro) once known, and kept; until then the screen's time zone,
+       then the language's country (fr-FR), else the United States. Without the bridge (The Frame 2022 on
+       Tizen 6.5, #21) the country is never read, and the language says en-US on screens all over the world:
+       a screen in India got American results, where JioHotstar and Sony LIV have none. */
+    function savedRegion() {
+        try { var r = global.localStorage.getItem("apl.region") || ""; return /^[A-Z]{2}$/.test(r) ? r : ""; } catch (e) { return ""; }
+    }
+    /* The screen sets its time zone from its country: the common ones, by country. */
+    var ZONES = {
+        IN: "Asia/Kolkata Asia/Calcutta", PK: "Asia/Karachi", BD: "Asia/Dhaka", LK: "Asia/Colombo", NP: "Asia/Kathmandu",
+        AE: "Asia/Dubai", SA: "Asia/Riyadh", QA: "Asia/Qatar", KW: "Asia/Kuwait", IL: "Asia/Jerusalem Asia/Tel_Aviv",
+        SG: "Asia/Singapore", MY: "Asia/Kuala_Lumpur", ID: "Asia/Jakarta", PH: "Asia/Manila", TH: "Asia/Bangkok",
+        VN: "Asia/Ho_Chi_Minh Asia/Saigon", HK: "Asia/Hong_Kong", TW: "Asia/Taipei", JP: "Asia/Tokyo", KR: "Asia/Seoul",
+        AU: "Australia/Sydney Australia/Melbourne Australia/Brisbane Australia/Perth Australia/Adelaide Australia/Hobart Australia/Darwin",
+        NZ: "Pacific/Auckland", ZA: "Africa/Johannesburg", EG: "Africa/Cairo", NG: "Africa/Lagos", KE: "Africa/Nairobi", MA: "Africa/Casablanca",
+        GB: "Europe/London", IE: "Europe/Dublin", FR: "Europe/Paris", DE: "Europe/Berlin", ES: "Europe/Madrid Atlantic/Canary",
+        IT: "Europe/Rome", NL: "Europe/Amsterdam", BE: "Europe/Brussels", LU: "Europe/Luxembourg", CH: "Europe/Zurich",
+        AT: "Europe/Vienna", PT: "Europe/Lisbon", PL: "Europe/Warsaw", CZ: "Europe/Prague", SE: "Europe/Stockholm",
+        NO: "Europe/Oslo", DK: "Europe/Copenhagen", FI: "Europe/Helsinki", GR: "Europe/Athens", RO: "Europe/Bucharest",
+        HU: "Europe/Budapest", TR: "Europe/Istanbul", UA: "Europe/Kiev Europe/Kyiv", RU: "Europe/Moscow",
+        US: "America/New_York America/Chicago America/Denver America/Los_Angeles America/Phoenix America/Anchorage America/Detroit Pacific/Honolulu",
+        CA: "America/Toronto America/Vancouver America/Edmonton America/Winnipeg America/Halifax America/Regina America/St_Johns",
+        MX: "America/Mexico_City America/Monterrey America/Tijuana", BR: "America/Sao_Paulo", AR: "America/Argentina/Buenos_Aires America/Buenos_Aires",
+        CL: "America/Santiago", CO: "America/Bogota", PE: "America/Lima"
+    };
+    function zoneRegion() {
+        var zone = "";
+        try { zone = global.tizen && global.tizen.time ? global.tizen.time.getLocalTimezone() : ""; } catch (e) {}
+        try { if (!zone && global.Intl) zone = global.Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) {}
+        if (!zone) return "";
+        for (var cc in ZONES) {
+            if (ZONES.hasOwnProperty(cc) && (" " + ZONES[cc] + " ").indexOf(" " + zone + " ") !== -1) return cc;
+        }
+        return "";
+    }
+    var REGION = savedRegion() || zoneRegion() || langRegion() || "US";      // after ZONES, which zoneRegion reads
+    function langRegion() {
+        var m = /[-_]([A-Za-z]{2})$/.exec(String(global.navigator.language || ""));
+        return m ? m[1].toUpperCase() : "";
+    }
+    function readRegion(tries) {
+        if (!APL.sys || APL.sys.PREVIEW) return;
+        function later() { if (tries > 0) setTimeout(function () { readRegion(tries - 1); }, 30000); }
+        APL.sys.exec("vconftool get db/comss/countrycode 2>/dev/null").then(function (r) {
+            var m = /value = ([A-Za-z]{2})\b/.exec(String((r && r.output) || ""));
+            if (!m) { if (!r || r.ok === false) later(); return; }       // Vetro not up yet; an empty value: kept as is
+            var cc = m[1].toUpperCase();
+            if (cc === REGION && savedRegion()) return;
+            try { global.localStorage.setItem("apl.region", cc); } catch (e) {}
+            REGION = cc;
+            cacheFor(cc);
+        }).catch(later);
+    }
+    /* What is kept (6 h) was fetched for one country: another one empties it. Before 1.0.14 that was France
+       on every screen, whose trending videos then stayed on a screen in India for hours (#21). */
+    function cacheFor(cc) {
+        var was = "";
+        try { was = global.localStorage.getItem("apl.liveRegion") || ""; } catch (e) {}
+        if (was === cc) return;
+        clearCache();
+        try { global.localStorage.setItem("apl.liveRegion", cc); } catch (e) {}
+    }
+    function clearCache() {
+        try {
+            var del = [], i;
+            for (i = 0; i < global.localStorage.length; i++) {
+                var k = global.localStorage.key(i);
+                if (k && k.indexOf("apl.live.") === 0) del.push(k);
+            }
+            del.forEach(function (k) { global.localStorage.removeItem(k); });
+        } catch (e) {}
+    }
+    cacheFor(REGION);
+    setTimeout(function () { readRegion(6); }, 20000);
+
+    /* TMDB (JustWatch) "provider" ids of the services (the same in every country). */
     var TMDB_PROVIDERS = {
-        netflix: 8, primevideo: 119, disneyplus: 337, appletv: 350,
-        paramountplus: 531, crunchyroll: 283, rakutentv: 35, plutotv: 300, canalplus: 381
+        netflix: 8, primevideo: "9|119", disneyplus: 337, appletv: 350,
+        paramountplus: 531, crunchyroll: 283, rakutentv: 35, plutotv: 300, canalplus: 381,
+        jiohotstar: 2336, sonyliv: 237
     };
 
-    function cacheGet(k, anyAge) {
+    function cacheGet(k, anyAge, ttl) {
         try {
             var c = JSON.parse(global.localStorage.getItem("apl.live." + k) || "null");
-            if (c && c.v === CACHE_VERSION && (anyAge || Date.now() - c.t < TTL) && c.items && c.items.length) return c.items;
+            if (c && c.v === CACHE_VERSION && (anyAge || Date.now() - c.t < (ttl || TTL)) && c.items && c.items.length) return c.items;
         } catch (e) {}
         return null;
     }
@@ -97,7 +190,10 @@
     /* "★ 7.8 IMDb" (with a decimal comma in French) */
     function noteOf(item) { return item.rating ? "★ " + item.rating.toFixed(1).replace(".", APL.lang === "fr" ? "," : ".") + " " + (item.ratingFrom || "TMDB") : ""; }
     /* "★ 7.8 IMDb · 2025 · TV Show" */
-    function metaOf(item) { return [noteOf(item), item.year, item.type].filter(Boolean).join(" · "); }
+    function metaOf(item) {
+        var type = item.type === "tv" ? APL.t("TV Show") : item.type === "movie" ? APL.t("content|Movie") : item.type;
+        return [noteOf(item), item.year, type].filter(Boolean).join(" · ");
+    }
 
     /* Background of each result (Fanart.tv if it has one, else TMDB), its title and its rating. */
     function decorate(list) {
@@ -112,7 +208,7 @@
                     rating: both[1].rating,
                     ratingFrom: both[1].ratingFrom,
                     year: String(r.release_date || r.first_air_date || "").substr(0, 4),
-                    type: r._kind === "tv" ? APL.t("TV Show") : APL.t("content|Movie")
+                    type: r._kind === "tv" ? "tv" : "movie"                // translated when shown (metaOf): kept 6 h, the language may change
                 };
             });
         }));
@@ -125,10 +221,10 @@
     }
     function kind(k) { return function (r) { r._kind = r._kind || k; return r; }; }
 
-    /* Popular movies and series on a service (Netflix, Prime Video…) in France. */
+    /* Popular movies and series on a service (Netflix, Prime Video…) in the screen's country. */
     function tmdb(providerId) {
         var common = "api_key=" + KEYS.tmdb + "&language=" + APL.locale + "&watch_region=" + REGION +
-                     "&with_watch_providers=" + providerId + "&sort_by=popularity.desc";
+                     "&with_watch_providers=" + encodeURIComponent(providerId) + "&sort_by=popularity.desc";
         return Promise.all([
             getJson(TMDB + "/discover/tv?" + common).catch(function () { return { results: [] }; }),
             getJson(TMDB + "/discover/movie?" + common).catch(function () { return { results: [] }; })
@@ -156,7 +252,7 @@
         });
     }
 
-    /* Music: Top albums in France, live (Apple's official feed, no key). */
+    /* Music: Top albums in the screen's country, live (Apple's official feed, no key). */
     var MUSIC_KEYS = { applemusic: 1, spotify: 1, deezer: 1, amazonmusic: 1, youtubemusic: 1, tidal: 1, qobuz: 1 };
     function appleCharts() {
         var path = "/api/v2/" + REGION.toLowerCase() + "/music/most-played/12/albums.json";
@@ -171,13 +267,13 @@
                         bgSmall: art.replace(/\/\d+x\d+[a-z]*\.(jpg|png)$/i, "/300x300bb.jpg"),
                         logo: null,
                         title: a.name || "",
-                        sub: (a.artistName ? a.artistName + " · " : "") + APL.t("Top albums in France")
+                        sub: (a.artistName ? a.artistName + " · " : "") + APL.t("Top albums")
                     };
                 }).filter(Boolean);
             });
     }
 
-    /* YouTube: trending videos in France (cat = category, e.g. "10" for music). */
+    /* YouTube: trending videos in the screen's country (cat = category, e.g. "10" for music). */
     function youtube(cat) {
         var url = "https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=10&regionCode=" +
                   REGION + (cat ? "&videoCategoryId=" + cat : "") + "&key=" + KEYS.youtube;
@@ -190,7 +286,7 @@
         });
     }
 
-    /* Games: Steam top sellers in France (no key). Background = a screenshot of the game at
+    /* Games: Steam top sellers in the screen's country (no key). Background = a screenshot of the game at
        1920×1080, title = the game's official logo (else its name). */
     var STEAM_CDN = "https://cdn.akamai.steamstatic.com/steam/apps/";
     var STEAM_LANG = APL.lang === "fr" ? "french" : "english";       // language of the genres
@@ -279,10 +375,10 @@
         });
     }
 
-    /* Dailymotion: trending videos in France (no key). */
+    /* Dailymotion: trending videos in the screen's country (no key). */
     function dailymotion() {
         return getJson("https://api.dailymotion.com/videos?fields=title,thumbnail_1080_url,thumbnail_240_url,owner.screenname" +
-                       "&flags=no_live&sort=trending&country=fr&localization=fr_FR&limit=10").then(function (j) {
+                       "&flags=no_live&sort=trending&country=" + REGION.toLowerCase() + "&localization=" + APL.locale.replace("-", "_") + "&limit=10").then(function (j) {
             return (j.list || []).map(function (v) {
                 return v.thumbnail_1080_url ? { bg: v.thumbnail_1080_url, bgSmall: v.thumbnail_240_url || v.thumbnail_1080_url,
                                                 logo: null, title: v.title || "", sub: v["owner.screenname"] || "Dailymotion" } : null;
@@ -290,9 +386,110 @@
         });
     }
 
+    /* Smart Hub Preview: the rows an app publishes for Samsung's home (webapis.preview.setPreviewData),
+       e.g. Plex's Continue Watching or Spotify's mixes. The user's own content, kept by Samsung's content
+       service in its private folder: read as root through Vetro. The image URLs can carry the app's
+       token (Plex): they stay on the screen and are never logged. */
+    var HUB_DB = "/opt/usr/home/owner/apps_rw/com.samsung.tv.contentservicemanager/data/.preview.db";
+    var HUB_TTL = 10 * 60 * 1000;
+    var HUB_JOIN = " from tiles t join sections s on s._id = t.section_id join accelerators a on a._id = s.accelerator_id";
+    var hubPackages = null, hubAt = 0;
+    function hubPackage(app) { var m = /^([A-Za-z0-9]{10})[.]/.exec(app.id || ""); return m ? m[1] : null; }
+    function hubSql(sql) {
+        // Vetro doubles backslashes: none in these commands. Its answer is cut after a few KB.
+        return APL.sys.exec("sqlite3 -readonly -json " + HUB_DB + " \"" + sql + "\" 2>/dev/null").then(function (r) {
+            // Vetro not up yet (right after a full start): the bridge answers { ok: false } with no exit_code
+            // rather than failing. That's not "no rows": it fails, so the list is read again in 15 s. A command
+            // that ran and failed (no sqlite3, no preview database) has an exit_code: no rows, no retry loop.
+            if (!r || (r.ok === false && r.exit_code === undefined)) throw new Error("Vetro not ready");
+            var out = String(r.output || "").trim();
+            return out ? JSON.parse(out) : [];
+        });
+    }
+    /* Which apps have tiles: read once, then every 10 minutes. */
+    var hubRetry = null;
+    function refreshHub() {
+        if (APL.sys.PREVIEW || Date.now() - hubAt < HUB_TTL) return;
+        hubAt = Date.now();
+        hubSql("select distinct a.app_pkg_name pkg" + HUB_JOIN + " where t.image_url like 'http%'").then(function (rows) {
+            var before = JSON.stringify(hubPackages);
+            hubPackages = {};
+            rows.forEach(function (r) { hubPackages[r.pkg] = true; });
+            // The app in focus may already show something else: it gets its own rows now
+            if (JSON.stringify(hubPackages) !== before && APL.onLiveSources) APL.onLiveSources();
+        }, function () {
+            // After a full start-up Vetro answers late: again in 15 s, without waiting for a focus change
+            hubAt = 0;
+            if (!hubRetry) hubRetry = setTimeout(function () { hubRetry = null; refreshHub(); }, 15000);
+        });
+    }
+    /* The tiles' pictures are small: a larger one when the service has it. */
+    function hubArt(url, w, h) {
+        // Spotify album covers: the size is in the image id (b273 = 640 px, 82c1 = 2000 px)
+        if (/^https:[/][/]i[.]scdn[.]co[/]image[/]ab67616d0000(b273|1e02)/.test(url)) return w > 1000 ? url.replace(/ab67616d0000(b273|1e02)/, "ab67616d000082c1") : url;
+        // Plex: 240×360 posters; the same transcode address gives the 16:9 artwork
+        if (!/[/]photo[/]:[/]transcode[?]/.test(url) || !/%2Fthumb%2F/.test(url)) return url;
+        return url.replace(/width=[0-9]+/, "width=" + w).replace(/height=[0-9]+/, "height=" + h)
+                  .replace(/%2Fthumb%2F[0-9]+/, "%2Fart");
+    }
+    function smartHub(pkg) {
+        return hubSql("select s.title section, t.title, t.subtitle sub, t.image_url url, coalesce(t.action_play_url, t.action_click_url) link" + HUB_JOIN +
+                      " where a.app_pkg_name = '" + pkg + "' and t.image_url like 'http%'" +
+                      " order by s.position, s._id, t.position, t._id limit 8").then(function (rows) {
+            return rows.map(function (r) {
+                return { bg: hubArt(r.url, 1920, 1080), bgSmall: hubArt(r.url, 480, 270), logo: null, link: r.link || null,
+                         title: r.title || "", sub: r.section || "",
+                         // Under the title (metaOf): an episode or artists, not a playlist's description
+                         type: [r.sub && r.sub.length <= 48 ? r.sub : "", r.section].filter(Boolean).join(" · ") };
+            });
+        });
+    }
+
     /* Which source for this app? (null = no dynamic Top Shelf) */
+    /* Settings › Appearance › Top Shelf, in this order: the app's own rows (What You're Watching, hubShelf), what
+       is popular (liveShelf), then the app's artwork or the style chosen in Otherwise (launcher.js, genart.js). */
     function sourceFor(app) {
-        if (!APL.sys.pref("liveShelf")) return null;
+        var pub = APL.sys.pref("liveShelf") ? publicSource(app) : null, pkg = hubPackage(app);
+        if (!APL.sys.pref("hubShelf")) return pub;
+        refreshHub();
+        if (!pkg || !hubPackages || !hubPackages[pkg]) return pub;
+        // The app's own rows first; the public source when it has none any more
+        return { id: "hub-" + pkg, ttl: HUB_TTL, load: function () {
+            return smartHub(pkg).catch(function () { return null; }).then(function (mine) {
+                return mine && mine.length ? mine : pub ? pub.load() : null;
+            });
+        } };
+    }
+    /* The online demo (PC preview without keys, GitHub Pages): Blender Studio's open movies (CC BY), with
+       their TMDB pictures and ratings, stand in for what a movie or video app would show on a screen. */
+    var DEMO_FILMS = [
+        ["Sintel", 2010, 7.3, "/msqeiEyIRpPAtrCeRGFNZQ9tkJL.jpg"],
+        ["Agent 327: Operation Barbershop", 2017, 6.9, "/aupI9kV5CawUp02XWnI2l7Ym9SH.jpg"],
+        ["Big Buck Bunny", 2008, 6.5, "/xtdybjRRZ15mCrPOvEld305myys.jpg"],
+        ["Charge", 2022, 7.1, "/hwvuivrtKFA4tPkW81txs7oKJOx.jpg"],
+        ["Cosmos Laundromat", 2015, 6.3, "/f2wABsgj2lIR2dkDEfBZX8p4Iyk.jpg"],
+        ["Sprite Fright", 2021, 7.7, "/aCMT1okuiKFnyKHdCOez66rJKyT.jpg"],
+        ["Tears of Steel", 2012, 5.7, "/fOy6SL5Zs2PFcNXwqEPIDPrLB1q.jpg"],
+        ["Caminandes: Llamigos", 2016, 6.6, "/tIX2BIhkhoFq1iwtHYzTSbHbe82.jpg"]
+    ];
+    function demoSource(app) {
+        var start = 0, id = String(app.id || ""), i;
+        for (i = 0; i < id.length; i++) start = (start + id.charCodeAt(i)) % DEMO_FILMS.length;   // a different film first per app
+        return { id: "demo-" + start, load: function () {
+            return Promise.resolve(DEMO_FILMS.slice(start).concat(DEMO_FILMS.slice(0, start)).map(function (f) {
+                return { bg: IMG + "w1280" + f[3], bgSmall: IMG + "w300" + f[3], card: IMG + "w780" + f[3], title: f[0],
+                         rating: f[2], ratingFrom: "TMDB", year: String(f[1]), type: "movie" };
+            }));
+        } };
+    }
+    function publicSource(app) {
+        /* The demo stands in for a streaming service's own Top Shelf - Netflix,
+           Prime Video, Disney+ - because that is what those apps actually carry.
+           It used to cover live: "youtube", "trending" and "anime" as well, which
+           is why TizenTube showed a Blender Studio film in the preview: a film
+           that app does not have. Those apps keep their artwork until their own
+           source (a YouTube key, a website) answers. */
+        if (APL.sys.PREVIEW && !KEYS.tmdb && (TMDB_PROVIDERS[app.key] || app.tmdbProvider)) return demoSource(app);
         if (app.live === "youtube") return KEYS.youtube ? { id: "youtube", load: function () { return youtube(); } } : null;
         if (app.live === "youtube-music") return KEYS.youtube ? { id: "youtube-10", load: function () { return youtube("10"); } }
                                                               : { id: "music-" + REGION, load: appleCharts };
@@ -313,7 +510,7 @@
     function itemsFor(app) {
         var src = sourceFor(app);
         if (!src) return Promise.resolve(null);
-        var cached = cacheGet(src.id);
+        var cached = cacheGet(src.id, false, src.ttl);
         if (cached) return Promise.resolve(cached);
         if (!inflight[src.id]) {
             inflight[src.id] = src.load().then(function (items) {
@@ -386,6 +583,9 @@
         }).catch(function () { return null; });
     }
 
+    // Once Vetro is up (system.js checks it at 4 s): the first app in focus already has its own rows
+    if (!APL.sys.PREVIEW) setTimeout(refreshHub, 6000);
+
     APL.live = {
         searchArt: searchArt,
         findImdb: findImdb,
@@ -394,6 +594,7 @@
         noteOf: noteOf,
         metaOf: metaOf,
         hasSource: function (app) { return !!sourceFor(app); },
-        keys: function () { return { tmdb: !!KEYS.tmdb, youtube: !!KEYS.youtube, fanart: !!KEYS.fanart }; }
+        keys: function () { return { tmdb: !!KEYS.tmdb, youtube: !!KEYS.youtube, fanart: !!KEYS.fanart }; },
+        region: function () { return REGION; }                           // the screen's country (autoart.js too)
     };
 })(window);

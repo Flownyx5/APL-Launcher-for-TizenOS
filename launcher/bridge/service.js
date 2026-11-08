@@ -1,7 +1,7 @@
 /* ============================================================
    bridge/service.js — private bridge between the launcher and Vetro.
 
-   Vetro (http://127.0.0.1:8099) does not let the screen's apps read
+   Vetro (http://127.0.0.1:8099, or the port it was built with) does not let the screen's apps read
    its answers (CORS). This service (same package as the launcher, started
    by it when needed and when the screen starts) makes the request on its behalf
    and sends the answer back. At start-up, it also opens the launcher.
@@ -34,7 +34,7 @@ var APP_ID = "APLauncher.Home", REPLY_PORT = "APL_BRIDGE_REPLY";
 /* Tizen 9 refuses 127.0.0.1 to services (EHOSTUNREACH), but not the same local address written in IPv6.
    Some screens (The Frame 2025) silently drop both: the connection hangs ~2 min, then ETIMEDOUT.
    The screen's own LAN address works there (Vetro listens on every interface). */
-var HOSTS = ["::ffff:127.0.0.1", "127.0.0.1"].concat(lanAddresses()), VETRO_PORT = 8099, hostIndex = 0;
+var HOSTS = ["::ffff:127.0.0.1", "127.0.0.1"].concat(lanAddresses()), hostIndex = 0;
 /* req.setTimeout never fires on these screens: own timers, one to connect, one for the answer. */
 var CONNECT_MS = 5000;
 // remap: the launcher repairs the Home rule without APL Overlay (overlay.js); quick: Alexa's microphone (services.js)
@@ -46,6 +46,10 @@ var BOOT_WINDOW_S = 240, LAUNCH_TRIES = 5;
    later it freezes the apps, and the timer then misses its ticks (the fallback signal). */
 var SLEEP_CHECKS = 4, POLL_MS = 3000, TICK_MS = 5000, ASLEEP_MS = 20000, HIDDEN_GRACE_MS = 45000;
 var WAKE_WATCH_MS = 90000, SETTLE_MS = 15000;
+/* Right after a wake the first readings are not reliable yet (no app in front, or a short-lived one), and
+   Vetro's agent drops ~1.5 s later for ~15 s: read back to back for a while, and only take another app
+   for the user's choice once it has stayed in front. */
+var WAKE_FAST_MS = 6000, OTHER_APP_STAYS_MS = 4000;
 /* The Frame: Art Mode hides the launcher but the screen stays on (memory/pm/state 1). Leaving it with the
    power key shows the TV input: watched while Art Mode is in front. */
 var ART_APP = /^org\.tizen\.art-app$/, ART_POLL_MS = 1500;
@@ -57,6 +61,182 @@ var lastReport = "";                    // the launcher's last diagnostic, reada
 var startedAt = upSeconds();            // seconds since the screen started, when this service started
 var vetroWake = { busy: false, at: 0, how: "", uptime: 0 };   // last time Vetro had to be woken up (see wakeVetro)
 var launcherFront = false, hiddenAt = 0, lastTick = Date.now(), ticking = null, sleeping = false, waking = false, inArt = false;
+
+/* The bridge's own log, in the package's data folder (bridge.log, like the .NET bridge's). Screens can have
+   app logs turned off (dlogutil: enable_apps 0), and on The Frame 2022 (Tizen 6.5, #21) the launcher never
+   got an answer with nothing to say why. Read it through Vetro: cat <that folder>/bridge.log.
+   No request bodies, only paths: an /exec command can carry anything. */
+var LOG_FILES = [(process.env.HOME || "/home/owner") + "/apps_rw/APLauncher/data/bridge.log",
+                 "/opt/usr/home/owner/apps_rw/APLauncher/data/bridge.log", "/tmp/apl-bridge-web.log"];
+var LOG_MAX = 32768, logged = {}, requestsSeen = 0;
+function note(msg) {
+    var line = new Date().toISOString().slice(11, 23) + " " + msg + "\n";
+    for (var i = 0; i < LOG_FILES.length; i++) {
+        try {
+            try { if (fs.statSync(LOG_FILES[i]).size > LOG_MAX) fs.unlinkSync(LOG_FILES[i]); } catch (e) {}
+            fs.appendFileSync(LOG_FILES[i], line);
+            return;
+        } catch (e) {}
+    }
+}
+/* The same failure over and over: written the first 3 times only. */
+function noteOnce(key, msg) {
+    logged[key] = (logged[key] || 0) + 1;
+    if (logged[key] <= 3) note(msg + (logged[key] === 3 ? " (not written again)" : ""));
+}
+
+/* ---------- Vetro's port ----------
+   8099, unless Vetro was built with another one (VETRO_PORT=… node build.cjs), which some people do because
+   another app holds 8099 (tizen-youtube; Reddit, 1.0.22): then nothing answers on 8099, or another app does.
+   Checked once per run with /status. When the port is not Vetro's, 8099 is tried, then every port open on
+   the screen at once, and the one that answers like Vetro is kept in the data folder (vetro-port), where the
+   .NET bridge and APL Overlay of the hybrid package read it too (overlay/VetroPort.cs). */
+var DEFAULT_PORT = 8099, NOT_VETRO = [8001, 8002];          // 8001/8002: the screen's own remote API
+var PORT_FILES = [(process.env.HOME || "/home/owner") + "/apps_rw/APLauncher/data/vetro-port",
+                  "/opt/usr/home/owner/apps_rw/APLauncher/data/vetro-port"];
+/* Tried when the open ports cannot be read. */
+var USUAL_PORTS = [8098, 8100, 8097, 9000, 9099, 8090, 8088, 8080, 8888, 9090, 8199, 18099];
+var PROBE_CONNECT_MS = 1500, PROBE_ANSWER_MS = 3000, PORT_RETRY_MS = 30000, MAX_PROBES = 64;
+var savedPort = rememberedPort() || DEFAULT_PORT, vetroPort = savedPort;
+var portHow = vetroPort === DEFAULT_PORT ? "default" : "remembered", portProblem = "";
+var portChecked = false, portWaiting = null, nextPortCheck = 0;
+
+function validPort(p) { return p >= 1024 && p <= 65535 && NOT_VETRO.indexOf(p) < 0; }
+function rememberedPort() {
+    for (var i = 0; i < PORT_FILES.length; i++) {
+        try { var p = parseInt(fs.readFileSync(PORT_FILES[i], "utf8"), 10); if (validPort(p)) return p; } catch (e) {}
+    }
+    return 0;
+}
+/* The usual port leaves no file behind. */
+function rememberPort(p) {
+    if (p === savedPort) return;
+    savedPort = p;
+    for (var i = 0; i < PORT_FILES.length; i++) {
+        try {
+            if (p === DEFAULT_PORT) { try { fs.unlinkSync(PORT_FILES[i]); } catch (e) {} continue; }
+            fs.writeFileSync(PORT_FILES[i], String(p));
+            return;
+        } catch (e) {}
+    }
+}
+
+/* Vetro's /status: its build ("app", with its version) and its root agent ("agent"). */
+function isVetro(text) {
+    try {
+        var j = JSON.parse(text);
+        return !!j && typeof j === "object" &&
+               ((!!j.app && typeof j.app === "object" && !!j.app.version) || (!!j.agent && typeof j.agent === "object"));
+    } catch (e) { return false; }
+}
+
+/* GET /status on one address and port: done("vetro"), done("other") when something else answers,
+   done("refused") when nothing listens there, done("blocked") when the address itself is not reachable. */
+function probe(host, port, done) {
+    var finished = false, timer = null, req = null;
+    function finish(kind) {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        try { req.abort(); } catch (e) {}
+        done(kind);
+    }
+    try {
+        req = http.request({ host: host, port: port, path: "/status", method: "GET" }, function (res) {
+            var chunks = [], size = 0;
+            res.on("data", function (c) { size += c.length; if (size > 262144) finish("other"); else chunks.push(c); });
+            res.on("end", function () { finish(isVetro(Buffer.concat(chunks).toString("utf8")) ? "vetro" : "other"); });
+        });
+    } catch (e) { done("blocked"); return; }
+    req.on("error", function (e) { finish(e && e.code === "ECONNREFUSED" ? "refused" : "blocked"); });
+    timer = setTimeout(function () { finish("blocked"); }, PROBE_CONNECT_MS);
+    req.on("socket", function (sock) {
+        function connected() { clearTimeout(timer); timer = setTimeout(function () { finish("other"); }, PROBE_ANSWER_MS); }
+        if (sock.connecting) sock.once("connect", connected); else connected();
+    });
+    req.end();
+}
+
+/* The ports open on the screen (LISTEN in /proc/net/tcp and tcp6), smallest first. */
+function listeningPorts() {
+    var ports = [];
+    ["/proc/net/tcp", "/proc/net/tcp6"].forEach(function (file) {
+        var lines = [];
+        try { lines = fs.readFileSync(file, "utf8").split("\n").slice(1); } catch (e) {}
+        lines.forEach(function (line) {
+            var f = line.trim().split(/\s+/);
+            if (f.length < 4 || f[3] !== "0A") return;
+            var p = parseInt(f[1].split(":").pop(), 16);
+            if (validPort(p) && ports.indexOf(p) < 0) ports.push(p);
+        });
+    });
+    return ports.sort(function (a, b) { return a - b; });
+}
+
+/* Probes ports at once on one address: done(the ports that answered like Vetro, how many were tried, where they came from). */
+function probeAll(host, exclude, done) {
+    var ports = listeningPorts(), from = "open ports";
+    if (!ports.length) { ports = USUAL_PORTS; from = "usual ports"; }
+    ports = ports.filter(function (p) { return exclude.indexOf(p) < 0; }).slice(0, MAX_PROBES);
+    var left = ports.length, vetros = [];
+    if (!left) { done(vetros, 0, from); return; }
+    ports.forEach(function (p) {
+        probe(host, p, function (kind) {
+            if (kind === "vetro") vetros.push(p);
+            if (--left === 0) done(vetros.sort(function (a, b) { return a - b; }), ports.length, from);
+        });
+    });
+}
+
+/* Is vetroPort Vetro's? If not: 8099, then the open ports. done() once decided; vetroPort only changes for a port
+   that answered like Vetro. */
+function checkPort(done) {
+    var t0 = Date.now(), tried = [vetroPort];
+    function found(p, how) {
+        if (p !== vetroPort || how.indexOf("found") === 0) note("Vetro on port " + p + " (" + how + ", " + (Date.now() - t0) + " ms)");
+        vetroPort = p; portHow = how; portProblem = ""; portChecked = true;
+        rememberPort(p);
+        done();
+    }
+    function gaveUp(why) {
+        portProblem = why;
+        noteOnce("port", "Vetro's port: " + why);
+        nextPortCheck = Date.now() + PORT_RETRY_MS;
+        done();
+    }
+    function scan(host, why) {
+        probeAll(host, tried, function (vetros, count, from) {
+            if (vetros.length) found(vetros[0], "found among " + count + " " + from);
+            else gaveUp(why + ", not among " + count + " " + from);
+        });
+    }
+    // The first address that is not blocked (Tizen 9 refuses 127.0.0.1 to services, The Frame 2025 both loopback forms)
+    (function onHost(i) {
+        if (i >= HOSTS.length) { gaveUp("no address reached"); return; }
+        var host = HOSTS[(hostIndex + i) % HOSTS.length];
+        probe(host, vetroPort, function (kind) {
+            if (kind === "blocked") { onHost(i + 1); return; }
+            if (kind === "vetro") { found(vetroPort, portHow); return; }
+            var why = (kind === "refused" ? "nothing on " : "another app on ") + vetroPort;
+            if (vetroPort === DEFAULT_PORT) { scan(host, why); return; }
+            tried.push(DEFAULT_PORT);
+            probe(host, DEFAULT_PORT, function (k) { if (k === "vetro") found(DEFAULT_PORT, "default"); else scan(host, why); });
+        });
+    })(0);
+}
+
+/* Runs fn once Vetro's port is known: checked once per run, and again after Vetro could not be reached
+   (at most every 30 s while it is not found). */
+function withPort(fn) {
+    if (portChecked || Date.now() < nextPortCheck) { fn(); return; }
+    if (portWaiting) { portWaiting.push(fn); return; }
+    portWaiting = [fn];
+    checkPort(function () {
+        var waiting = portWaiting;
+        portWaiting = null;
+        waiting.forEach(function (f) { f(); });
+    });
+}
 
 function stopLater() {
     clearTimeout(idle);
@@ -72,21 +252,43 @@ function field(data, key) {
     return "";
 }
 
-function answer(id, status, body) {
-    var back;
-    try { back = tizen.messageport.requestTrustedRemoteMessagePort(APP_ID, REPLY_PORT); } catch (e) { return; }
+/* The answer goes back through the launcher's trusted port (Tizen 9 refuses a port attached to the request).
+   If that fails, through the port the launcher attached to its request (older screens), then through its
+   plain port (APL_BRIDGE_REPLY_PLAIN, only opened on screens before Tizen 7). The way that worked is tried
+   first next time, and every change of way is written in the log. */
+var PLAIN_REPLY_PORT = "APL_BRIDGE_REPLY_PLAIN", route = "";
+function replyRoutes(attached) {
+    var all = [
+        ["trusted", function () { return tizen.messageport.requestTrustedRemoteMessagePort(APP_ID, REPLY_PORT); }],
+        ["attached", function () { if (!attached) throw new Error("no port attached"); return attached; }],
+        ["plain", function () { return tizen.messageport.requestRemoteMessagePort(APP_ID, PLAIN_REPLY_PORT); }]
+    ];
+    return all.filter(function (r) { return r[0] === route; }).concat(all.filter(function (r) { return r[0] !== route; }));
+}
+function answer(id, status, body, attached) {
     body = String(body || "");
-    var parts = Math.max(1, Math.ceil(body.length / CHUNK));
-    for (var i = 0; i < parts; i++) {
+    var parts = Math.max(1, Math.ceil(body.length / CHUNK)), routes = replyRoutes(attached), errors = [];
+    for (var r = 0; r < routes.length; r++) {
         try {
-            back.sendMessage([{ key: "id", value: id }, { key: "status", value: String(status) },
-                              { key: "part", value: String(i) }, { key: "parts", value: String(parts) },
-                              { key: "body", value: body.substr(i * CHUNK, CHUNK) }]);
-        } catch (e) {}
+            var back = routes[r][1]();
+            for (var i = 0; i < parts; i++) {
+                back.sendMessage([{ key: "id", value: id }, { key: "status", value: String(status) },
+                                  { key: "part", value: String(i) }, { key: "parts", value: String(parts) },
+                                  { key: "body", value: body.substr(i * CHUNK, CHUNK) }]);
+            }
+            if (route !== routes[r][0]) {
+                note("answers go through the " + routes[r][0] + " port" + (errors.length ? " (" + errors.join("; ") + ")" : ""));
+                route = routes[r][0];
+            }
+            return;
+        } catch (e) {
+            errors.push(routes[r][0] + ": " + ((e && (e.name + " " + e.message)) || e));
+        }
     }
+    noteOnce("answer", "could not answer request " + id + ": " + errors.join("; "));
 }
 
-function onMessage(data) {
+function onMessage(data, attached) {
     var rc = field(data, "remote");
     if (rc) { remoteConfig(rc); return; }
     var report = field(data, "report");
@@ -107,14 +309,31 @@ function onMessage(data) {
     if (path === "/__bridge/state") {               // Diagnostic: how this service and Vetro started
         answer(id, 200, JSON.stringify({ startedAt: startedAt, uptime: upSeconds(), vetroWake: vetroWake,
                                          idle: { minutes: idleApps.minutes, closed: idleApps.closed.slice(-6), checks: idleApps.checks },
-                                         homeGuard: { on: homeGuard.on, back: homeGuard.back, last: homeGuard.last } }));
+                                         homeGuard: { on: homeGuard.on, back: homeGuard.back, last: homeGuard.last } }), attached);
+        return;
+    }
+    if (++requestsSeen <= 20) note("request " + id + ": " + method + " " + path.split("?")[0] + (attached ? " (port attached)" : ""));
+    // Settings › Support › Link to Vetro: answered here, without Vetro, so the launcher can tell a bridge that
+    // gets nothing (or cannot answer) from one that cannot reach Vetro, and which addresses failed how (#21)
+    if (/^\/bridge-info(\?|$)/.test(path)) {
+        var info = { bridge: "web", hosts: HOSTS, using: HOSTS[hostIndex], reached: reached, errors: hostErrors, route: route,
+                     port: vetroPort, portHow: portChecked ? portHow : "not checked yet", portProblem: portProblem };
+        // ?scan=1: every open port tried as Vetro would be, to check the search on a screen (nothing is changed)
+        if (!/[?&]scan=1/.test(path)) { answer(id, 200, JSON.stringify(info), attached); return; }
+        var t0 = Date.now();
+        probeAll(reached || HOSTS[hostIndex], [], function (vetros, count, from) {
+            info.scan = { vetro: vetros, tried: count, from: from, ms: Date.now() - t0 };
+            answer(id, 200, JSON.stringify(info), attached);
+        });
         return;
     }
     if (!ALLOWED.test(path) || (method !== "GET" && method !== "POST")) {
-        answer(id, 404, '{"error":"not relayed"}');
+        answer(id, 404, '{"error":"not relayed"}', attached);
         return;
     }
-    vetro(method, path, Buffer.from(body || "", "utf8"), 150000, function (status, text) { answer(id, status, text); });
+    withPort(function () {
+        vetro(method, path, Buffer.from(body || "", "utf8"), 150000, function (status, text) { answer(id, status, text, attached); });
+    });
 }
 
 /* The screen's IPv4 addresses on the network, tried after the two loopback forms. */
@@ -129,6 +348,9 @@ function lanAddresses() {
     return out;
 }
 
+/* For /bridge-info: the address Vetro last answered on, and the last error on each address tried. */
+var reached = "", hostErrors = {};
+
 /* A request to Vetro; done(status, text) is called once. */
 function vetro(method, path, buf, timeoutMs, done, retries) {
     if (retries === undefined) retries = HOSTS.length - 1;
@@ -137,10 +359,13 @@ function vetro(method, path, buf, timeoutMs, done, retries) {
         if (finished) return;
         finished = true;
         clearTimeout(timer);
+        if (status > 0 && status < 500) reached = host;
         done(status, text);
     }
     function fail(e) {
         if (finished) return;
+        hostErrors[host] = (e.code || "") + " " + String(e.message || "").slice(0, 60);
+        noteOnce("vetro " + host, "Vetro at " + host + ": " + hostErrors[host]);
         // The request did not go out (refused, or no answer to connect): try the next address
         if (retries > 0 && /EHOSTUNREACH|EACCES|ECONNREFUSED|ENETUNREACH|EINVAL|ETIMEDOUT|EAFNOSUPPORT|EADDRNOTAVAIL/.test(e.code)) {
             finished = true;
@@ -149,10 +374,11 @@ function vetro(method, path, buf, timeoutMs, done, retries) {
             vetro(method, path, buf, timeoutMs, done, retries - 1);
             return;
         }
-        finish(502, JSON.stringify({ ok: false, error: "Vetro unreachable: " + e.message }));
+        portChecked = false;            // Vetro may have moved to another port: looked for again before the next request
+        finish(502, JSON.stringify({ ok: false, error: "Vetro unreachable on port " + vetroPort + ": " + e.message }));
     }
     var req = http.request({
-        host: host, port: VETRO_PORT, path: path, method: method,
+        host: host, port: vetroPort, path: path, method: method,
         headers: { "Content-Type": "application/json", "Content-Length": buf.length }
     }, function (res) {
         var chunks = [];
@@ -170,6 +396,7 @@ function vetro(method, path, buf, timeoutMs, done, retries) {
         function connected() {
             clearTimeout(timer);
             timer = setTimeout(function () {
+                hostErrors[host] = "connected, no answer in " + Math.round(timeoutMs / 1000) + " s";
                 finish(504, JSON.stringify({ ok: false, error: "Vetro did not answer in time" }));
                 try { req.abort(); } catch (x) {}
             }, timeoutMs);
@@ -186,10 +413,12 @@ function vetro(method, path, buf, timeoutMs, done, retries) {
    agent at wake-up: it answers again after about 15 s. */
 function shell(command, done) {
     var buf = Buffer.from(JSON.stringify({ cmd: command }), "utf8");
-    vetro("POST", "/exec", buf, 20000, function (status, text) {
-        var out = "";
-        try { out = String(JSON.parse(text).output || ""); } catch (e) {}
-        done(out);
+    withPort(function () {
+        vetro("POST", "/exec", buf, 20000, function (status, text) {
+            var out = "";
+            try { out = String(JSON.parse(text).output || ""); } catch (e) {}
+            done(out);
+        });
     });
 }
 function vconfValue(out, key) { return (new RegExp(key + ", value = (\\S+)").exec(out) || [])[1]; }
@@ -202,7 +431,7 @@ function readState(done) {
     });
 }
 /* The screen shows the TV input (antenna, no device) or Samsung's home: the launcher should come back. */
-function onTvInput(st) { return !!st.app && ((/tv-viewer/.test(st.app) && st.source === 0) || /csfs|home\.sidebar/.test(st.app)); }
+function onTvInput(st) { return !!st.app && ((/tv-viewer/.test(st.app) && st.source === 0) || /csfs|home\.sidebar|coba\.newhome|home\.media/.test(st.app)); }
 
 /* The launcher was just hidden: by another app, by Art Mode, or by the screen going to sleep? */
 function checkSleep(tries) {
@@ -245,7 +474,7 @@ function tick() {
 function wokeUp(wasFront, first) {
     if (waking || !wasFront) return;
     waking = true;
-    var until = Date.now() + WAKE_WATCH_MS, launcherSince = 0;
+    var woke = Date.now(), until = woke + WAKE_WATCH_MS, launcherSince = 0, other = null, otherSince = 0;
     function done() { waking = false; stopLater(); }
     function decided(st) {               // true when nothing more is needed
         if (!st || !st.app) return false;
@@ -253,7 +482,14 @@ function wokeUp(wasFront, first) {
             try { tizen.application.launch(APP_ID, function () {}, function () {}); } catch (e) {}
             return true;
         }
-        if (st.app !== APP_ID) return true;
+        // Art Mode in front at wake: leaving it later is watched like any other Art Mode
+        if (ART_APP.test(st.app)) { inArt = true; watchArt(); return true; }
+        if (st.app !== APP_ID) {
+            // Another app: the user's choice only if it stays (wake-up screens come and go)
+            if (st.app !== other) { other = st.app; otherSince = Date.now(); return false; }
+            return Date.now() - otherSince >= OTHER_APP_STAYS_MS;
+        }
+        other = null;
         if (!launcherSince) launcherSince = Date.now();
         return Date.now() - launcherSince > SETTLE_MS;                          // the screen came back on it
     }
@@ -261,7 +497,7 @@ function wokeUp(wasFront, first) {
     (function look() {
         readState(function (st) {
             if (decided(st) || Date.now() > until) { done(); return; }
-            setTimeout(look, POLL_MS);
+            setTimeout(look, Date.now() - woke > WAKE_FAST_MS ? POLL_MS : 100);   // back to back at first
         });
     })();
 }
@@ -383,7 +619,9 @@ function idleCheck() {
 var VETRO_APP = "vetrotvapp.app", VETRO_SVC = "vetrotvapp.svc", VETRO_READY_S = 130;
 function upSeconds() { try { return parseFloat(fs.readFileSync("/proc/uptime", "utf8")) || 0; } catch (e) { return 0; } }
 function vetroAnswers(done) {
-    vetro("GET", "/status", Buffer.from("", "utf8"), 4000, function (status) { done(status === 200); });
+    withPort(function () {
+        vetro("GET", "/status", Buffer.from("", "utf8"), 4000, function (status) { done(status === 200); });
+    });
 }
 function waitVetro(ms, done) {
     var until = Date.now() + ms;
@@ -443,8 +681,17 @@ function start() {
     stopLater();
     if (!ticking) ticking = setInterval(tick, TICK_MS);
     if (port) return;
-    port = tizen.messageport.requestTrustedLocalMessagePort(PORT_NAME);
-    port.addMessagePortListener(onMessage);
+    try {
+        port = tizen.messageport.requestTrustedLocalMessagePort(PORT_NAME);
+        port.addMessagePortListener(onMessage);
+    } catch (e) {
+        port = null;
+        noteOnce("port", "could not open port " + PORT_NAME + ": " + ((e && (e.name + " " + e.message)) || e));
+        throw e;
+    }
+    var up = "?";
+    try { up = Math.round(parseFloat(fs.readFileSync("/proc/uptime", "utf8"))); } catch (e) {}
+    note("started (Node " + process.version + ", screen up for " + up + " s), port " + PORT_NAME + " open");
 }
 
 /* Full start-up (power cut, restart): the screen comes back on its last input and,
@@ -572,11 +819,10 @@ function startRemote() {
 /* An event for the launcher (text typed on the phone): the launcher comes to the front first. */
 function toLauncher(event, body) {
     function post() {
-        try {
-            tizen.messageport.requestTrustedRemoteMessagePort(APP_ID, REPLY_PORT)
-                .sendMessage([{ key: "id", value: "event" }, { key: "event", value: event }, { key: "body", value: body }]);
-            return true;
-        } catch (e) { return false; }
+        var msg = [{ key: "id", value: "event" }, { key: "event", value: event }, { key: "body", value: body }];
+        try { tizen.messageport.requestTrustedRemoteMessagePort(APP_ID, REPLY_PORT).sendMessage(msg); return true; } catch (e) {}
+        // The plain port the launcher also listens on, on screens where the trusted one fails (Tizen 6.5)
+        try { tizen.messageport.requestRemoteMessagePort(APP_ID, PLAIN_REPLY_PORT).sendMessage(msg); return true; } catch (e) { return false; }
     }
     if (launcherFront && post()) return;
     try { tizen.application.launch(APP_ID, function () {}, function () {}); } catch (e) {}

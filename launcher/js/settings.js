@@ -48,6 +48,11 @@
     /* ---------- values shown on the right ---------- */
     function onOff(v) { return v ? APL.t("On") : APL.t("Off"); }
 
+    /* Without Vetro on the screen (sys.noVetro), the screen's own settings and what closes apps can't work:
+       their rows say so instead of "Unavailable" a minute later, or a switch that does nothing. */
+    var VETRO_TYPES = { tv: true, tvmode: true, game: true, native: true, service: true };
+    function needsVetro(item) { return !!item && sys.noVetro() && (VETRO_TYPES[item.type] || item.vetro === true); }
+
     function valueHtml(item) {
         switch (item.type) {
             case "info": return item.get();
@@ -91,7 +96,11 @@
             // Two values: OK switches straight from one to the other
             if (item.options.length === 2) {
                 var next = item.options[0][0] === n ? item.options[1] : item.options[0];
-                sys.native.set(item.id, next[0]).then(function () { refreshRow(row); }, function (e) { APL.toast(e.message); });
+                // The other screen settings of the menu too: one switch can change another (Start on APL Launcher, Autorun)
+                var slot = row.querySelector(".srow__value");
+                if (slot) slot.textContent = "…";                         // the screen is being asked: shown at once
+                sys.native.set(item.id, next[0]).then(function () { refreshNativeRows(row); },
+                                                      function (e) { APL.toast(e.message); refreshNativeRows(row); });
                 return;
             }
             var at = 0;
@@ -134,6 +143,7 @@
     }
 
     function accessory(item) {
+        if (needsVetro(item)) return "";
         if (item.type === "menu" || item.type === "choice" || item.type === "tvmode" || (item.type === "native" && item.options && item.options.length > 2)) return APL.icon("chevron", 26, 2.4);
         if (item.type === "nativeoption" && item.selected) return APL.icon("check", 28, 2.6);
         if (item.type === "samsung") return APL.icon("external", 24, 2);
@@ -150,6 +160,7 @@
 
     function fillValue(row) {
         var item = row._item;
+        if (needsVetro(item)) { row.querySelector(".srow__value").textContent = APL.t("Needs Vetro"); return; }
         if (item.type === "tv") {
             var slot0 = row.querySelector(".srow__value");
             slot0.textContent = "…";
@@ -239,9 +250,14 @@
     }
 
     function refreshRow(row) { fillValue(row); row.querySelector(".srow__acc").innerHTML = accessory(row._item); }
+    function refreshNativeRows(row) {
+        var rows = row.parentNode ? row.parentNode.children : [row];
+        for (var i = 0; i < rows.length; i++) if (rows[i]._item && rows[i]._item.type === "native") refreshRow(rows[i]);
+    }
 
     function onSelect(i, row) {
         var item = row._item, L = cur();
+        if (needsVetro(item)) { APL.toast(APL.t("This needs Vetro, which isn't on this screen.")); return; }
         switch (item.type) {
             case "menu":
                 L.index = i;
@@ -339,6 +355,9 @@
 
     function onKey(code) {
         var row = nav.current();
+        // A slider of the screen's settings without Vetro: ◀ ▶ do nothing (no request that can't be answered)
+        if (row && (row._item.type === "native" || row._item.type === "tv") && needsVetro(row._item) &&
+            (code === APL.KEY.LEFT || code === APL.KEY.RIGHT)) return true;
         if (row && row._item.type === "native" && !row._item.options && (code === APL.KEY.LEFT || code === APL.KEY.RIGHT)) {
             nativeSlide(row._item, row, code === APL.KEY.RIGHT ? 1 : -1);
             return true;

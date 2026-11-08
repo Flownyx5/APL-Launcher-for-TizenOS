@@ -17,4 +17,9 @@
     <TizenCreateTpkOnBuild>false</TizenCreateTpkOnBuild>
   </PropertyGroup>
 
+  <!-- Vetro's port, found as the Overlay finds it. -->
+  <ItemGroup>
+    <Compile Include="..\VetroPort.cs" Link="VetroPort.cs" />
+  </ItemGroup>
+
 </Project>

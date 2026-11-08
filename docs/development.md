@@ -29,7 +29,7 @@ docs/                Documentation and screenshots
 | `apps.js` | Installed apps, filtering, catalog lookup, launching, web shortcuts |
 | `catalog.js` / `devices.js` | Generated artwork catalogs |
 | `autoart.js` | Automatic artwork (App Store, TMDB providers) |
-| `genart.js` | Tile and background drawn on the screen for apps with no artwork |
+| `genart.js` | Tile and background drawn on the screen for apps with no artwork (or sheets of light, as an option) |
 | `liveshelf.js` | Live Top Shelf (TMDB, YouTube, Apple Music, Fanart.tv) |
 | `navigation.js` | Focus engine (geometric neighbours), screen stack, long press |
 | `launcher.js` | Home screen: dock, grid, Top Shelf, edit mode, app menu actions |
@@ -58,7 +58,7 @@ A small .NET app for Tizen's native toolkit, kept hidden in memory:
 - **Stuck keys:** releases a key the screen still believes is down after Vetro's input helper restarts (`KeyGuard.cs`).
 - **Idle apps:** closes an app left in the background for 10 minutes (`IdleApps.cs`): the launcher's apps, those seen in front and Samsung's that open by themselves (after 1 minute when they were never in front: they reopen at every wake-up and hold about 250 MB), never the one in front, Samsung's home, the TV inputs or AirPlay. The launcher sends the delay (`apl_idle`, 0 to turn it off) and its app list (`apl_apps`).
 
-`scripts/05-build-overlay.ps1` builds it with the C# compiler from Visual Studio Build Tools and .NET 6, using the Tizen libraries copied from the screen. The **Install** page of APL Launcher Setup runs it. It is not updated automatically like the launcher. Without it, the launcher takes the Home key back, gives the other keys back to Samsung and says so in an alert, and everything else works.
+`tools/make-overlay.sh` builds it in CI with the Tizen .NET workload, and `tools/make-package.sh --overlay` adds it to the launcher's `.wgt`: the full package, `apl-launcher-full-vX.Y.Z.wgt` (hybrid; manifest in `overlay/hybrid/`). APL Launcher Setup installs that package: `scripts/03-build-launcher.ps1` downloads it from the release, adds the personal files and signs it, `scripts/05-build-overlay.ps1` hands the buttons to the overlay and removes the old separate `apl.launcher.overlay` package. The automatic update only replaces the launcher's web part: APL Overlay, the bridge and the start-up service change with a new install of the package.
 
 ### Talking to Vetro and the screen
 
@@ -88,6 +88,8 @@ A small .NET app for Tizen's native toolkit, kept hidden in memory:
 .\scripts\03-build-launcher.ps1 -ProfileName <tizen-security-profile>
 .\scripts\04-install-launcher.ps1 -TvIp <ip>
 ```
+
+`03-build-launcher.ps1` packages the published release, or `dist\apl-launcher-full-v<version>.wgt` when that file exists, not your `launcher\` folder. To try local changes, build that file with `tools/make-overlay.sh` and `tools/make-package.sh --overlay` (Linux or macOS, as in CI) and copy it to `dist\`. Delete it afterwards: it wins over the release.
 
 ## Releasing (automatic updates)
 

@@ -26,7 +26,11 @@
         return null;
     }
 
-    var LABEL = { HDMI: "HDMI", PC: "PC", DVI: "DVI", DP: "USB-C", USBC: "USB-C", AV: "AV", COMP: APL.t("Component"), SCART: APL.t("SCART") };
+    var LABEL = { TV: APL.t("Live TV"), HDMI: "HDMI", PC: "PC", DVI: "DVI", DP: "USB-C", USBC: "USB-C", AV: "AV", COMP: APL.t("Component"), SCART: APL.t("SCART") };
+    /* Live TV: the screen's own tuner (antenna, cable, satellite), Samsung's input 0 (HDMI 1 to 4 are 13 to 16;
+       Vetro's dock switches to it the same way, tried on a Q80A). TVs have one, the Smart Monitors don't.
+       Asked on Reddit: pinned like any input (hold OK › Add to Home Screen), it is a Live TV tile. */
+    var TV_INPUT = { type: "TV", number: 1 };
 
     function el(tag, cls, html) {
         var e = document.createElement(tag);
@@ -44,7 +48,7 @@
     function isMonitor() { return /^LS\d\d[A-Z]M[789]/i.test(String(sys.product().model || "")); }
     function guessPorts() {
         return isMonitor() ? [{ type: "HDMI", number: 1 }, { type: "USBC", number: 1 }]
-                           : [1, 2, 3, 4].map(function (n) { return { type: "HDMI", number: n }; });
+                           : [TV_INPUT].concat([1, 2, 3, 4].map(function (n) { return { type: "HDMI", number: n }; }));
     }
     function readPorts() {
         if (sys.PREVIEW) return Promise.resolve(null);
@@ -63,6 +67,7 @@
             }
             if (!ports.length) return null;
             if (isMonitor()) ports.push({ type: "USBC", number: 1 });
+            else ports.unshift(TV_INPUT);
             return ports;
         }, function () { return null; });
     }
@@ -89,16 +94,16 @@
         var hdmiCount = list.filter(function (s) { return s.type === "HDMI"; }).length;
         var chosen = sys.pref("sourceDevices") || {};
         return list.map(function (s) {
-            var hdmi = s.type === "HDMI", id = s.type + s.number;
+            var hdmi = s.type === "HDMI", tv = s.type === "TV", id = s.type + s.number;
             var port = LABEL[s.type] + (hdmi && hdmiCount > 1 ? " " + s.number : "");
-            var dev = chosen[id] === "none" ? null : (deviceByKey(chosen[id]) || guess(s.label));
+            var dev = tv || chosen[id] === "none" ? null : (deviceByKey(chosen[id]) || guess(s.label));
             return {
-                id: id, port: port, device: dev,
+                id: id, type: s.type, port: port, device: dev,
                 name: dev ? APL.t(dev.name) : port,
-                sub: dev ? port : hdmi ? APL.t("Hold OK to choose the device") : s.type === "USBC" || s.type === "DP" ? APL.t("Laptop, Mac, tablet") : "",
-                icon: hdmi ? "hdmi" : s.type === "USBC" || s.type === "DP" ? "usbc" : "source",
-                // Samsung number: HDMI 1 to 4 = 13 to 16; on the Smart Monitor M8, USB-C is no. 14 ("HDMI 2")
-                sourceType: hdmi ? 12 + (s.number || 1) : s.type === "USBC" || s.type === "DP" ? 14 : -1
+                sub: dev ? port : tv ? APL.t("Antenna, cable or satellite") : hdmi ? APL.t("Hold OK to choose the device") : s.type === "USBC" || s.type === "DP" ? APL.t("Laptop, Mac, tablet") : "",
+                icon: tv ? "tv" : hdmi ? "hdmi" : s.type === "USBC" || s.type === "DP" ? "usbc" : "source",
+                // Samsung number: TV 0, HDMI 1 to 4 = 13 to 16; on the Smart Monitor M8, USB-C is no. 14 ("HDMI 2")
+                sourceType: tv ? 0 : hdmi ? 12 + (s.number || 1) : s.type === "USBC" || s.type === "DP" ? 14 : -1
             };
         });
     }
@@ -115,7 +120,7 @@
         if (sys.PREVIEW) { APL.toast(APL.t("Preview: on your TV, the screen would switch to {name}", { name: c.name })); return; }
         if (c.sourceType < 0) { APL.toast(APL.t("This input isn't supported on this screen")); return; }
         APL.toast(APL.t("Switching to {name}…", { name: c.name }), true);
-        sys.switchSource(c.sourceType, c.port).catch(function (e) { APL.toast(e.message); });
+        sys.switchSource(c.sourceType, c.type === "TV" ? "TV" : c.port).catch(function (e) { APL.toast(e.message); });
     }
 
     function cardHtml(c) {
@@ -173,13 +178,17 @@
     function pinned() { return sys.pref(PIN_KEY) || []; }
     function pick(c) {
         picking = c;
-        titleEl.textContent = APL.t("What's connected to {port}?", { port: c.port });
+        titleEl.textContent = c.type === "TV" ? c.name : APL.t("What's connected to {port}?", { port: c.port });
         hintEl.textContent = APL.t("OK to choose · Back to cancel");
         var onHome = pinned().indexOf(c.id) !== -1;
-        cards = DEVICES.map(function (d) { return { device: d, name: APL.t(d.name), sub: "", key: d.key }; })
-            .concat([{ device: null, icon: c.icon, name: APL.t("Nothing Specific"), sub: APL.t("Show “{port}”", { port: c.port }), key: "none" },
-                     { device: null, icon: onHome ? "minus" : "plus", name: onHome ? APL.t("Remove from Home Screen") : APL.t("Add to Home Screen"),
-                       sub: c.name, key: "pin" }]);
+        // Add to Home Screen first: at the end, after the 14 devices, it was below the bottom of the screen
+        cards = [{ device: null, icon: onHome ? "minus" : "plus", name: onHome ? APL.t("Remove from Home Screen") : APL.t("Add to Home Screen"),
+                   sub: c.name, key: "pin" }];
+        // Live TV has no device to choose: only its place on the Home Screen
+        if (c.type !== "TV") {
+            cards = cards.concat([{ device: null, icon: c.icon, name: APL.t("Nothing Specific"), sub: APL.t("Show “{port}”", { port: c.port }), key: "none" }])
+                .concat(DEVICES.map(function (d) { return { device: d, name: APL.t(d.name), sub: "", key: d.key }; }));
+        }
         var cur = (sys.pref("sourceDevices") || {})[c.id], at = 0;
         cards.forEach(function (x, i) { if (x.key === cur) at = i; });
         fill(cards, at);
@@ -220,6 +229,7 @@
         picking = null;
         render(0);
         root.classList.add("is-open");
+        document.body.classList.add("has-sources");      // the Home Screen steps back (launcher.css)
         APL.pushNav(nav);
         isOpen = true;
         refreshPorts().then(function (changed) {
@@ -249,6 +259,7 @@
         if (!isOpen) return;
         picking = null;
         root.classList.remove("is-open");
+        document.body.classList.remove("has-sources");
         APL.popNav(nav);
         isOpen = false;
     }

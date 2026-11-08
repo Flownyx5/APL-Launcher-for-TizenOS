@@ -82,6 +82,13 @@ for k in tmdb youtube fanart; do
     grep -q "^    $k: \"\",\$" "$WORK/ui/js/keys.local.js" \
         || { echo "keys.example.js has no '$k: \"\",' line, update packaging/apps2samsung" >&2; exit 1; }
 done
+# The launcher-only package is offered by Apps2Samsung too (Tizen 6), with the same user_settings:
+# one path for both packages, res/wgt/js/keys.local.js. Here that path is a second copy, read by
+# js/liveshelf.js when js/keys.local.js has no key.
+if [ -z "$TPK" ]; then
+    mkdir -p "$WORK/ui/res/wgt/js"
+    cp "$WORK/ui/js/keys.local.js" "$WORK/ui/res/wgt/js/keys.local.js"
+fi
 
 # Runs a CLI command; on failure prints the Tizen CLI logs.
 run_cli() {
@@ -121,7 +128,7 @@ if [ -n "$TPK" ]; then
            bin/APLOverlay.dll bin/APLBoot.dll bin/Bridge.dll shared/res/APLOverlay.png res/icons/alexa-orb.svg res/icons/check.svg"
 else
     FILES="config.xml index.html bridge/service.js js/boot.js js/build.js js/keys.local.js css/launcher.css icon.png
-           author-signature.xml signature1.xml"
+           res/wgt/js/keys.local.js author-signature.xml signature1.xml"
 fi
 for f in $FILES; do
     grep -q " $f\$" <<<"$LIST" || { echo "$f is missing from $NAME" >&2; exit 1; }

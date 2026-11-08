@@ -64,6 +64,7 @@
             var data = [new T.ApplicationControlData("apl_action", ["stay"]),
                         new T.ApplicationControlData("apl_theme", [light ? "light" : "dark"]),
                         new T.ApplicationControlData("apl_return", [sys.pref("homeReturn") ? "1" : "0"]),
+                        new T.ApplicationControlData("apl_pause", [sys.pref("pauseKey") === "playpause" ? "playpause" : "controlcenter"]),
                         new T.ApplicationControlData("apl_alexa_on", [sys.pref("alexaBridge") ? "1" : "0"]),
                         new T.ApplicationControlData("apl_alexa", [alexaList()]),
                         new T.ApplicationControlData("apl_idle", [sys.pref("idleClose") ? String(IDLE_MINUTES) : "0"]),
@@ -123,6 +124,79 @@
         APL.alert({ title: APL.t("APL Overlay is not installed"), message: message, buttons: [{ label: APL.t("OK") }] });
     }
 
+    /* Settings › Remote and Devices › Set Up the Remote Buttons: the Vetro rules APL Launcher Setup makes,
+       from the screen itself. Installed from a phone with Apps2Samsung, there is no Setup, and Vetro's own
+       Remapper does not list APL Overlay (an app without an icon). Home and ⏯ go to the overlay (Home to the
+       launcher without it); Samsung TV Plus and Prime Video too, as Setup does, when AquaPlay and TizenBrew
+       are installed and no rule uses those buttons yet. Other rules stay as they are. Then: is Vetro
+       intercepting the remote at all? That switch needs the remote to be picked, so it stays in Vetro. */
+    var EXTRA_KEYS = [["560", "AquaPlay02.AquaPlay"], ["221", "xvvl3S1bvH.TizenBrewStandalone"]];
+    var REMAP_FILE = "/opt/usr/home/owner/share/vetro-remap.json";     // where Vetro keeps its rules and the remote it intercepts
+    function setUpButtons() {
+        if (sys.PREVIEW) return Promise.resolve({ preview: true });
+        var target = installed ? OVERLAY : LAUNCHER;
+        return Promise.all([sys.vetroGet("/remap"), APL.isInstalled(EXTRA_KEYS[0][1]), APL.isInstalled(EXTRA_KEYS[1][1])]).then(function (got) {
+            var rules = (got[0] && got[0].rules) || [], changed = [], ids = {};
+            rules.forEach(function (r) { ids[r.id] = true; });
+            function ruleFor(code) {
+                for (var i = 0; i < rules.length; i++) {
+                    var t = rules[i].trigger;
+                    if (t && t.type === "physical" && String(t.value) === code) return rules[i];
+                }
+                return null;
+            }
+            function point(code, always) {
+                var rule = ruleFor(code), launch = [{ type: "launch", appId: target }];
+                if (rule) {
+                    var a = rule.actions || [];
+                    if (!always || (rule.enabled !== false && a.length === 1 && a[0].type === "launch" && a[0].appId === target)) return;
+                    rule.enabled = true;
+                    rule.actions = launch;
+                } else {
+                    var id = "physical_" + code;
+                    if (ids[id]) id += "_apl";
+                    rules.push({ id: id, enabled: true, trigger: { type: "physical", value: code }, actions: launch });
+                }
+                changed.push(code);
+            }
+            point("63", true);
+            if (installed) {
+                point("244", true);
+                if (got[1]) point(EXTRA_KEYS[0][0], false);
+                if (got[2]) point(EXTRA_KEYS[1][0], false);
+            }
+            var saved = changed.length ? sys.vetroPost("/remap", { rules: rules }).then(function (r) {
+                if (!r || r.sent || !r.ok) throw new Error(APL.t("Vetro did not save the buttons"));
+            }) : Promise.resolve();
+            return saved.then(function () {
+                return sys.exec("cat " + REMAP_FILE).then(function (r) {
+                    var store = {};
+                    try { store = JSON.parse(r.output || "{}"); } catch (e) {}
+                    return !!(store.input && store.input.enabled === true && store.input.device);
+                }, function () { return null; });
+            }).then(function (intercepting) {
+                return { changed: changed, target: target, intercepting: intercepting };
+            });
+        });
+    }
+    function setUpButtonsNow() {
+        APL.toast(APL.t("Setting up the buttons in Vetro…"), true);
+        setUpButtons().then(function (r) {
+            if (r.preview) { APL.toast(APL.t("Preview: the buttons are set on the screen"), true); return; }
+            var done = r.target === LAUNCHER ? APL.t("Home opens APL Launcher.")
+                : APL.t("Home and ⏯ open APL Overlay: hold Home for the Control Center, press it twice for the open apps.");
+            var lines = [r.changed.length ? done : APL.t("The buttons were already set up.") + " " + done];
+            if (r.intercepting === false) {
+                var ip = (sys.network().ip || "").replace(/^—$/, "");
+                lines.push(APL.t("One step left, in Vetro: on a phone or a computer, open {url}, then Remapper. Choose your remote (Smart Control when it is paired over Bluetooth, rc device by infrared) and turn on Remote interception.",
+                    { url: "http://" + (ip || APL.t("the screen's address")) + ":" + sys.vetroPort() }));
+            }
+            APL.alert({ title: APL.t("Remote Buttons"), message: lines.join("\n\n"), buttons: [{ label: APL.t("OK") }] });
+        }, function (e) {
+            APL.alert({ title: APL.t("Remote Buttons"), message: (e && e.message) || APL.t("Vetro is not responding"), buttons: [{ label: APL.t("OK") }] });
+        });
+    }
+
     function start() {
         if (sys.PREVIEW) return;
         Promise.all(OVERLAY_IDS.map(function (id) { return APL.isInstalled(id); })).then(function (found) {
@@ -137,6 +211,7 @@
     sys.onPref("homeReturn", send);
     sys.onPref("alexaBridge", send);
     sys.onPref("idleClose", send);
+    sys.onPref("pauseKey", send);
 
     // The Home Screen's list changes (an app installed, hidden…): the bridge gets it again, every 10 minutes at most
     setInterval(function () { if (!installed && !document.hidden) sendBridgeIdle(); }, 10 * 60000);
@@ -150,6 +225,7 @@
         },
         refresh: send,
         openSamsungHome: openSamsungHome,
+        setUpButtons: setUpButtonsNow,
         isInstalled: function () { return installed; }
     };
 })(window);

@@ -22,7 +22,7 @@ Write-Host "  ==============================================" -ForegroundColor Y
 $savedIp = Get-SavedTvIp
 if (-not $TvIp -and -not $Unattended) { $TvIp = Read-Host ((Tr "  Screen IP address" "  Adresse IP de l'écran") + $(if ($savedIp) { " [$savedIp]" } else { "" })) }
 if ([string]::IsNullOrWhiteSpace($TvIp)) { $TvIp = $savedIp }
-$vetro = "http://$TvIp`:8099"
+$vetro = "http://$TvIp`:$(Get-VetroPort)"
 
 # ---------- 1. Vetro: Home button given back to Samsung ----------
 Write-Host ""
@@ -32,7 +32,7 @@ $homeFailed = $false
 try {
     $cur = Invoke-RestMethod -Uri "$vetro/remap" -TimeoutSec 15
     $keep = @($cur.rules | Where-Object {
-        -not ($_.actions | Where-Object { $_.type -eq 'launch' -and ($_.appId -eq 'APLauncher.Home' -or $_.appId -eq 'apl.launcher.overlay') })
+        -not ($_.actions | Where-Object { $_.type -eq 'launch' -and ($_.appId -eq 'APLauncher.Home' -or $_.appId -eq 'APLauncher.Overlay' -or $_.appId -eq 'apl.launcher.overlay') })
     })
     $removed = @($cur.rules).Count - $keep.Count
     $body = @{ rules = $keep } | ConvertTo-Json -Depth 8
@@ -44,6 +44,14 @@ try {
     $homeFailed = $true
     Write-Host (Tr "        Vetro unreachable ($($_.Exception.Message))." "        Vetro injoignable ($($_.Exception.Message)).") -ForegroundColor DarkYellow
     Write-Host (Tr "        If Home doesn't work, open $vetro in the browser > Remapper > delete the Home rule." "        Si Home ne marche pas, ouvre $vetro dans le navigateur > Remapper > supprime la règle Home.")
+}
+# The screen's home app (Start on APL Launcher): its own again, before the launcher may be uninstalled below,
+# so the screen never starts on an app that is gone
+try {
+    $homeBack = Reset-ScreenHomeApp $vetro
+    if ($homeBack) { Write-Host (Tr "        The screen starts on its own home app again ($homeBack)." "        L'écran redémarre sur son propre accueil ($homeBack).") -ForegroundColor Green }
+} catch {
+    Write-Host ((Tr "        The screen's home app could not be set back: " "        L'accueil de l'écran n'a pas pu être remis : ") + $_.Exception.Message) -ForegroundColor DarkYellow
 }
 
 # ---------- 2. uninstall (optional) ----------

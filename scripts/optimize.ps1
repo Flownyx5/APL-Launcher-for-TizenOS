@@ -45,7 +45,7 @@ Write-Host "  ==============================================" -ForegroundColor W
 $savedIp = Get-SavedTvIp
 if (-not $TvIp -and -not $Quiet) { $TvIp = Read-Host ((Tr "  Screen IP address" "  Adresse IP de l'écran") + $(if ($savedIp) { " [$savedIp]" } else { "" })) }
 if ([string]::IsNullOrWhiteSpace($TvIp)) { $TvIp = $savedIp }
-$base = "http://$TvIp`:8099"
+$base = "http://$TvIp`:$(Get-VetroPort)"
 
 if (-not (Test-Vetro $TvIp)) {
     Fail (Tr "Vetro is not responding. On the screen: open Vetro once (Apps), wait 1 minute, and check that 'Host PC IP' is 127.0.0.1." "Vetro ne répond pas. Sur l'écran : ouvre Vetro une fois (Applis), attends 1 minute, et vérifie que « Host PC IP » vaut 127.0.0.1.")
@@ -228,10 +228,15 @@ $r = Post '/dns' @{ action = 'apply'; enabled = $true; domains = $domains }
 if ($r -and -not $r.error) { Write-Host (Tr "    ok  ad filter on ($($domains.Count) addresses)" "    ok  filtre anti-pub actif ($($domains.Count) adresses)") -ForegroundColor Green } else { $failed += (Tr "ad filter" "filtre anti-pub") }
 $r = Post '/leftovers' @{ action = 'clear' }
 if ($r -and -not $r.error) { Write-Host (Tr "    ok  installation leftovers cleaned up" "    ok  restes d'installation nettoyés") -ForegroundColor Green }
-try {
-    Invoke-VetroExec $base "vconftool set -f -t int db/menu/smart_hub/ontvsetting/auto_start 0" | Out-Null
-    Write-Host (Tr "    ok  Smart Hub no longer opens at power-on" "    ok  Smart Hub ne s'ouvre plus à l'allumage") -ForegroundColor Green
-} catch { $failed += (Tr "Smart Hub at startup setting" "réglage Smart Hub au démarrage") }
+if ((Get-VconfValue $base 'db/appfw/home_appid') -like 'APLauncher*') {
+    # Start on APL Launcher: Autorun Smart Hub opens the screen's home app, the launcher, so it stays on
+    Write-Host (Tr "    ok  the screen starts on APL Launcher (Smart Hub at power-on left on: it opens the launcher)" "    ok  l'écran démarre sur APL Launcher (Smart Hub à l'allumage laissé activé : il ouvre le launcher)") -ForegroundColor Green
+} else {
+    try {
+        Invoke-VetroExec $base "vconftool set -f -t int db/menu/smart_hub/ontvsetting/auto_start 0" | Out-Null
+        Write-Host (Tr "    ok  Smart Hub no longer opens at power-on" "    ok  Smart Hub ne s'ouvre plus à l'allumage") -ForegroundColor Green
+    } catch { $failed += (Tr "Smart Hub at startup setting" "réglage Smart Hub au démarrage") }
+}
 
 Write-Host ""
 Write-Host "  ==============================================" -ForegroundColor Green

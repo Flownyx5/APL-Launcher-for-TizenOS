@@ -38,7 +38,13 @@ namespace APL.Setup
 
         /// <summary>The screen chosen on the Install page and what Vetro said about it.</summary>
         internal string Ip = "";
-        internal VetroInfo Vetro;
+        private VetroInfo vetro;
+        /// <summary>Its port goes to the links and the scripts (Vetro.UsePort).</summary>
+        internal VetroInfo Vetro
+        {
+            get { return vetro; }
+            set { vetro = value; if (value != null) APL.Setup.Vetro.UsePort(value.Port); }
+        }
         internal bool VetroChecked;
         internal string ScriptsError;
         internal string SideDetail;

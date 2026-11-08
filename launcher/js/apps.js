@@ -18,19 +18,24 @@
         "org.tizen.browser"                 // Samsung Internet
     ];
     var OVERSCAN = "org.apps2samsung.overscan";
+    /* The PC preview and the online demo: a dock anyone could have (TizenTube, then these), not the
+       favourites of the screen this launcher was made on. */
+    var DEMO_FAVORITES = ["demo.netflix", "demo.prime", "demo.disney", "demo.appletv"];
+    function favorites() { return hasTizen() ? FAVORITES : DEMO_FAVORITES; }
 
     /* Nicer names + accent colours for known apps. Everything else
        falls back to its Tizen name + a neutral accent. */
-    /* TizenTube wears YouTube's logo and artwork (it is YouTube, without the ads): same tile, same Top Shelf. */
-    var TIZENTUBE = { name: "TizenTube", accent: "#ff0000", eyebrow: "VIDEO", bg: "images/apps/youtube-bg.jpg", tile: "images/apps/youtube-tile.png", bgBlur: "images/blur/youtube.jpg", live: "youtube" };
+    /* TizenTube wears YouTube's logo (it is YouTube, without the ads): same tile; the Top Shelf behind it is
+       drawn by the launcher in YouTube's red (Sheets of Light, genart.js). */
+    var TIZENTUBE = { name: "TizenTube", accent: "#ff0000", eyebrow: "VIDEO", tile: "images/apps/youtube-tile.png", live: "youtube" };
     /* TizenTube: by its name (TizenTube, TizenTube Cobalt…) or its package xvvl3S1TT1. */
     function isTizenTube(id, name) { return /tizen ?tube/i.test(String(name || "")) || /^xvvl3S1TT1\./.test(id); }
     var META = {
         "AquaPlay02.AquaPlay":            { eyebrow: "TELEVISION", live: "trending" },
-        "xvvl3S1bvH.TizenBrewStandalone": { name: "TizenBrew",  accent: "#1fb6e6", eyebrow: "APPS", bg: "images/bg-tizenbrew.jpg", tile: "images/tile-tizenbrew.png", bgBlur: "images/blur/tizenbrew.jpg", live: "youtube" },
-        "6YLB5zo9te.HotIptv":             { name: "Hot IPTV",   accent: "#ff7a1a", eyebrow: "TELEVISION",   bg: "images/bg-hotiptv.jpg", tile: "images/tile-hotiptv.png", bgBlur: "images/blur/hotiptv.jpg", live: "trending" },
+        "xvvl3S1bvH.TizenBrewStandalone": { name: "TizenBrew",  accent: "#1fb6e6", eyebrow: "APPS", tile: "images/tile-tizenbrew.png", live: "youtube" },
+        "6YLB5zo9te.HotIptv":             { name: "Hot IPTV",   accent: "#ff7a1a", eyebrow: "TELEVISION",   bg: "images/bg-hotiptv.jpg", tile: "images/tile-hotiptv.png", live: "trending" },
         "org.apps2samsung.overscan":      { name: "Overscan",   accent: "#2b6fff", eyebrow: "BROWSER" },
-        "org.tizen.browser":              { name: "Internet",   accent: "#2b6fff", eyebrow: "BROWSER",      bg: "images/bg-internet.jpg", tile: "images/tile-internet.png", bgBlur: "images/blur/internet.jpg" },
+        "org.tizen.browser":              { name: "Internet",   accent: "#2b6fff", eyebrow: "BROWSER",      bg: "images/bg-internet.jpg", tile: "images/tile-internet.png" },
         "org.tizen.browser.wrt":          { name: "Internet",   accent: "#2b6fff", eyebrow: "BROWSER",      bg: "images/bg-internet.jpg", tile: "images/tile-internet.png" }
     };
 
@@ -73,8 +78,16 @@
        internal screens (Channel-list, SAFCommonPlugin, Setting…). */
     var SYSTEM_ID = /^(com\.samsung\.|org\.tizen\.|com\.tizen\.|tizen\.|dir\.|org\.volt\.|samsung\.)/i;
     var TECH_NAME = /plugin|provider|service|display|daemon|agent|widget|^setting$|channel-?list|multifunction/i;
+    /* Samsung's preinstalled streaming apps, under Samsung ids and so filtered out with its services: the
+       real apps, not the "-dummy" entries that stand for them in Samsung's home. Apple TV is aria-video.
+       Reported on Tizen 6.5 (issue #21); the same ids on the M8. Netflix too (org.tizen.netflix-app, on the
+       M8 and an S95C reported on Reddit): it was missing from the Home Screen and from Show on Home Screen. */
+    var PRELOADED = ["org.tizen.primevideo", "com.samsung.tv.aria-video", "org.tizen.netflix-app"];
+    /* Not com.samsung.tv.tvPlusDeeplinker, Samsung TV Plus's entry on Tizen 6.5: launched alone it doesn't
+       open TV Plus (#21). The Samsung TV Plus app from the store (HEPsqFNie0.tvplusstandalone) is listed. */
     function isRealApp(id, name) {
         if (FAVORITES.indexOf(id) !== -1 || isTizenTube(id, name)) return true;
+        if (PRELOADED.indexOf(id) !== -1) return true;
         if (/^org\.tizen\.browser/.test(id)) return true;
         if (/^vetrotvapp/i.test(id) || /^vetro$/i.test(String(name || "").trim())) return true;
         if (STORE_ID.test(id)) return true;                                // Samsung App Store
@@ -95,10 +108,11 @@
 
     /* Demo set used only when window.tizen is absent (PC preview). */
     var DEMO_APPS = [
-        { id: "xvvl3S1TT1.TizenTubeStandalone", name: "TizenTube", icon: null },
+        // TizenBrew: the launcher shows it as TizenTube (one tile, as on a screen)
         { id: "xvvl3S1bvH.TizenBrewStandalone", name: "TizenBrew", icon: null },
-        { id: "6YLB5zo9te.HotIptv",             name: "Hot IPTV",  icon: null },
         { id: "org.tizen.browser",              name: "Internet",  icon: null },
+        { id: "demo.crunchyroll", name: "Crunchyroll", icon: null },
+        { id: "demo.twitch",      name: "Twitch",      icon: null },
         // Examples for the PC preview
         { id: "IkWsFHtOY9.Stremio",       name: "Stremio",     icon: null },
         { id: "kIciSQlYEM.plex",          name: "Plex",        icon: null },
@@ -141,19 +155,17 @@
             icon: app.icon || null,
             accent: m.accent || app.accent || null,
             eyebrow: global.APL.t(m.eyebrow || "APP"),
-            bg: asset(m.bg) || null,          // full-frame picture for the top shelf
             tile: asset(m.tile) || null,
             key: m.key || null,
-            bgBlur: asset(m.bgBlur || (m.key ? "images/blur/" + m.key + ".jpg" : null)),   // pre-blurred background (grid)               // catalogue key (netflix, primevideo…)
             live: m.live || null,             // "youtube" for TizenTube             // full-frame artwork of the tile (like tvOS icons)
-            favorite: FAVORITES.indexOf(app.id) !== -1 || isTizenTube(app.id, app.name)
+            favorite: favorites().indexOf(app.id) !== -1 || isTizenTube(app.id, app.name)
         };
     }
 
     /* Favourites first (in declared order), then the rest alphabetically. */
     function order(apps) {
         var favRank = {};
-        FAVORITES.forEach(function (id, i) { favRank[id] = i; });
+        favorites().forEach(function (id, i) { favRank[id] = i; });
         apps.forEach(function (a) { if (a.name === "TizenTube") favRank[a.id] = -1; });   // TizenTube first
         return apps.slice().sort(function (a, b) {
             var fa = (a.id in favRank), fb = (b.id in favRank);
@@ -310,6 +322,20 @@
             }, plain);
         });
     }
+    /* An item from the app's own Smart Hub rows, opened the way Samsung's home opens its tiles: the
+       tile's data in PAYLOAD, operation eden_resume. Apps read it at start-up only (a running Plex comes
+       to the front but stays where it was), so a running app starts again. As root, through Vetro:
+       the payload goes base64, Vetro doubles backslashes. */
+    function launchDeepLink(id, data) {
+        if (!/^[A-Za-z0-9]{10}[.][A-Za-z0-9._-]+$/.test(id)) return Promise.reject(new Error(global.APL.t("Can't launch the app")));
+        var b64 = global.btoa(unescape(encodeURIComponent(JSON.stringify({ values: data }))));
+        var bin = "/opt/usr/apps/" + id.split(".")[0] + "/bin/" + id;
+        return global.APL.sys.exec("for p in $(ps -eo pid,args | awk '$2 == \"" + bin + "\" {print $1}'); do kill $p; done; sleep 1; " +
+            "P=$(printf '%s' '" + b64 + "' | base64 -d); " +
+            "app_launcher -s " + id + " __APP_SVC_OP_TYPE__ http://samsung.com/appcontrol/operation/eden_resume PAYLOAD \"$P\" 2>&1 | tail -1").then(function (r) {
+            if (!/launched/.test(String(r.output || ""))) throw new Error(global.APL.t("Can't launch the app"));
+        });
+    }
     function resumeApp(id, ok, failed) {
         try {
             var T = global.tizen;
@@ -328,7 +354,7 @@
         return "(n=0; seen=0; while [ $n -lt 40 ]; do sleep 1; n=$((n+1)); " +
             "a=$(vconftool get memory/appfw/current_fullscreen_appid 2>/dev/null); " +
             "case \"$a\" in " +
-            "*csfs*|*home.sidebar*) seen=1; app_launcher -s " + MY_APP_ID + ";; " +
+            "*csfs*|*home.sidebar*|*coba.newhome*|*home.media*) seen=1; app_launcher -s " + MY_APP_ID + ";; " +
             "*TizenBrew*) if [ $seen = 1 ] || [ $n -ge 12 ]; then sleep 4; input_keyevent Down; sleep 1; input_keyevent Return; break; fi;; " +
             "esac; done) >/dev/null 2>&1 &";
     }
@@ -361,8 +387,9 @@
     global.APL.webApps = webApps;
     global.APL.openUrl = openUrl;
     global.APL.launchApp = launchApp;
+    global.APL.launchDeepLink = launchDeepLink;
     global.APL.launchTizenTube = launchTizenTube;
-    global.APL.TIZENTUBE_ART = { tile: asset(TIZENTUBE.tile), bg: asset(TIZENTUBE.bg), bgBlur: asset(TIZENTUBE.bgBlur) };
+    global.APL.TIZENTUBE_ART = { tile: asset(TIZENTUBE.tile) };
     global.APL.FAVORITES = FAVORITES;
 
 })(window);

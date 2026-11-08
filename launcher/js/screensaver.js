@@ -9,6 +9,7 @@
    type: the apps' artwork slowly scrolling by, and it tries again the
    next time.
    "dark" type: a clock on a black background.
+   On request, the clock moves from corner to corner (OLED screens).
    Any key exits the screen saver without triggering an action.
    ============================================================ */
 (function (global) {
@@ -43,8 +44,8 @@
     }
 
     function clock() {
-        var d = new Date(), h = d.getHours(), m = String(d.getMinutes()).padStart(2, "0");
-        timeEl.textContent = sys.pref("clock24") ? String(h).padStart(2, "0") + ":" + m : ((h % 12) || 12) + ":" + m;
+        var d = new Date(), h = d.getHours(), m = ((d.getMinutes()) < 10 ? "0" : "") + d.getMinutes();
+        timeEl.textContent = sys.pref("clock24") ? ((h) < 10 ? "0" : "") + h + ":" + m : ((h % 12) || 12) + ":" + m;
     }
 
     function showLabel(text) {
@@ -168,6 +169,52 @@
         slideTimer = setInterval(nextArt, 14000);
     }
 
+    /* ---------- moving clock ----------
+       Settings › Screen Saver › Move the Clock, for OLED screens: every 1 to 5 minutes the clock goes to
+       the next corner, clockwise, a few pixels off each time, so it never lands twice on the same spot.
+       Each corner is measured from its own two edges, so a wider time (9:59, then 10:00) grows inward. */
+    var moveTimer = null, corner = 0, EDGE_X = 90, EDGE_Y = 60, JITTER = 28;
+    function nudge(edge) { return (edge + Math.floor(Math.random() * (JITTER + 1))) + "px"; }
+    function placeClock(c) {
+        var s = timeEl.style, right = c === 1 || c === 2, bottom = c >= 2;
+        s.top = bottom ? "auto" : nudge(EDGE_Y);
+        s.bottom = bottom ? nudge(EDGE_Y) : "auto";
+        s.left = right ? "auto" : nudge(EDGE_X);
+        s.right = right ? nudge(EDGE_X) : "auto";
+        s.width = "auto"; s.transform = "none"; s.textAlign = right ? "right" : "left";
+        // The place name of the Aerial videos sits at the bottom left: across the screen while the clock is there
+        labelEl.style.left = c === 3 ? "auto" : "";
+        labelEl.style.right = c === 3 ? EDGE_X + "px" : "";
+    }
+    function moveClock() {
+        if (!active) return;
+        corner = (corner + 1) % 4;                              // 0 top left, 1 top right, 2 bottom right, 3 bottom left
+        if (root.classList.contains("no-motion")) { placeClock(corner); return; }
+        timeEl.classList.add("is-away");                        // fades out, moves, fades back in
+        setTimeout(function () {
+            if (!active) return;
+            placeClock(corner);
+            timeEl.classList.remove("is-away");
+        }, 900);
+    }
+    function startMoving() {
+        stopMoving();
+        var every = sys.pref("screensaverClockMove");
+        if (!every) return;
+        root.classList.add("is-moving");
+        corner = 1;                                             // top right, where the small clock always was
+        placeClock(corner);
+        moveTimer = setInterval(moveClock, every * 60000);
+    }
+    function stopMoving() {
+        clearInterval(moveTimer);
+        moveTimer = null;
+        timeEl.removeAttribute("style");
+        labelEl.removeAttribute("style");
+        timeEl.classList.remove("is-away");
+        root.classList.remove("is-moving");
+    }
+
     /* ---------- start / stop ---------- */
     function start() {
         if (active) return;
@@ -179,6 +226,7 @@
         var style = sys.pref("screensaverStyle");
         root.classList.toggle("is-dark", style === "dark");
         root.classList.toggle("is-clock", style === "clock");
+        startMoving();
         if (style === "dark") return;
         if (style === "aerial" && !sys.PREVIEW_NO_VIDEO) {
             root.classList.add("is-video");
@@ -197,6 +245,7 @@
         if (!active) return;
         active = false;
         clearInterval(slideTimer);
+        stopMoving();
         stopVideos();
         layers.forEach(function (l) { l.classList.remove("is-on"); });
         (logos || []).forEach(function (l) { l.classList.remove("is-on"); });
@@ -213,11 +262,21 @@
 
     setInterval(function () {
         var delay = sys.pref("screensaverDelay");
-        if (!active && delay && document.visibilityState !== "hidden" && Date.now() - lastInput > delay * 60000) start();
+        // Only with the launcher really in front: an app over it can leave the page "visible", and the
+        // screen saver would then greet the return to the Home Screen
+        var front = document.visibilityState !== "hidden" && (!document.hasFocus || document.hasFocus());
+        if (!active && delay && front && Date.now() - lastInput > delay * 60000) start();
         if (active) clock();
     }, 10000);
 
-    document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") stop(); });
+    // Back from an app, or Home (an app control, not a key): the Home Screen, never the screen saver.
+    // The idle time starts again from there, not from the last key pressed in the launcher.
+    function back() { if (active) stop(); lastInput = Date.now(); }
+    document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "hidden") stop();
+        else back();
+    });
+    global.addEventListener("appcontrol", back);
 
     APL.screensaver = { start: start, stop: stop, isActive: function () { return active; } };
 })(window);
