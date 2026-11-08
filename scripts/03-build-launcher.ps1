@@ -8,6 +8,10 @@
 # The package comes from dist\apl-launcher-full-v<version>.wgt when it is there (a build of your own), else
 # from the GitHub release of the version in launcher\config.xml (the latest release if that one has none),
 # checked against its SHA256SUMS-wgt.txt.
+# This fork (Flownyx5) publishes no release: its launcher is the one in this folder.
+#   -WebOnly: the package is built from launcher\ as it is (the web bridge included).
+#   Full package: the release's .NET part is kept, and its web part (res\wgt\) is replaced by launcher\.
+#   -FromRelease: the release's package as it is, as in the original project.
 # Personal files (never published) go into res\wgt\: js\keys.local.js, js\avatars.local.js, your
 # avatars and Memoji, the SF Pro fonts and your sounds.
 # -WebOnly: the launcher's own package instead (apl-launcher-v<version>.wgt, its files at the root, a web
@@ -18,8 +22,9 @@ param(
     [string]$LauncherDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "launcher"),
     [string]$OutFile = (Join-Path (Split-Path $PSScriptRoot -Parent) "dist\APL-Launcher.wgt"),
     [string]$SfProDir,   # optional: copies the SF Pro fonts before building
-    [string]$Repo = "Knikt/APL-Launcher-for-TizenOS",
-    [switch]$WebOnly
+    [string]$Repo = "Knikt/APL-Launcher-for-TizenOS",   # the release's .NET part (APL Overlay): only the original project builds it
+    [switch]$WebOnly,
+    [switch]$FromRelease
 )
 . "$PSScriptRoot\lib.ps1"
 $ErrorActionPreference = 'Stop'
@@ -71,7 +76,31 @@ function Get-FullRelease([string]$Tag) {
     [pscustomobject]@{ Tag = $rel.tag_name; Name = $pkg.name; Url = $pkg.browser_download_url; Sums = $sum.browser_download_url }
 }
 
-if (Test-Path -LiteralPath $source) {
+# Files of launcher\ that never go into a package (as in tools/make-package.sh)
+function Copy-LocalLauncher([string]$To, [string[]]$Skip) {
+    $rootLength = (Get-Item -LiteralPath $LauncherDir).FullName.TrimEnd('\').Length + 1
+    Get-ChildItem -LiteralPath $LauncherDir -Recurse -Force -File | ForEach-Object {
+        $relPath = $_.FullName.Substring($rootLength)
+        $top = ($relPath -split '[\\/]')[0]
+        if ($Skip -contains $relPath -or $Skip -contains $top) { return }
+        if ($_.Name -like '*.wgt' -or $_.Name -in @('.manifest.tmp', 'author-signature.xml', 'signature1.xml', '.DS_Store', 'Thumbs.db', 'keys.example.js')) { return }
+        $dst = Join-Path $To $relPath
+        $dir = Split-Path -Parent $dst
+        if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        Copy-Item -LiteralPath $_.FullName -Destination $dst -Force
+    }
+    # No keys of your own yet: the empty template, as in the release (the launcher loads js\keys.local.js)
+    $keys = Join-Path $To "js\keys.local.js"
+    if (-not (Test-Path -LiteralPath $keys)) { Copy-Item -LiteralPath (Join-Path $LauncherDir "js\keys.example.js") -Destination $keys -Force }
+}
+
+$fromFolder = $false
+$rel = $null
+if ($WebOnly -and -not $FromRelease) {
+    # The launcher of this folder, nothing downloaded: what is installed is exactly what is here
+    $fromFolder = $true
+    Write-Host (Tr "Package: the launcher of this folder ($version)" "Paquet : le launcher de ce dossier ($version)")
+} elseif (Test-Path -LiteralPath $source) {
     Write-Host (Tr "Package: $source (local build)" "Paquet : $source (version locale)")
 } else {
     # Windows PowerShell 5.1 can default to TLS 1.0 on older Windows 10, which GitHub refuses
@@ -113,11 +142,28 @@ if (Test-Path -LiteralPath $source) {
 Write-Title (Tr "Building the .wgt package (profile '$ProfileName')" "Compilation du paquet .wgt (profil '$ProfileName')")
 $work = Join-Path $dist "package"
 if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
-[IO.Compression.ZipFile]::ExtractToDirectory($source, $work)
-# The CI's signature (Tizen SDK default certificate) goes: the package is signed again with yours
-Get-ChildItem -LiteralPath $work -Filter "*signature*.xml" | Remove-Item -Force
 $web = if ($WebOnly) { $work } else { Join-Path $work "res\wgt" }   # where the launcher's files are
+if ($fromFolder) {
+    New-Item -ItemType Directory -Force -Path $work | Out-Null
+    Copy-LocalLauncher $work @()
+} else {
+    [IO.Compression.ZipFile]::ExtractToDirectory($source, $work)
+    # The CI's signature (Tizen SDK default certificate) goes: the package is signed again with yours
+    Get-ChildItem -LiteralPath $work -Filter "*signature*.xml" | Remove-Item -Force
+}
 if (-not (Test-Path -LiteralPath (Join-Path $web "config.xml"))) { throw (Tr "$name has no launcher in it (no config.xml where expected)." "$name ne contient pas de launcher (pas de config.xml à l'endroit attendu).") }
+if (-not $fromFolder -and -not $FromRelease) {
+    # The release's web part is replaced by this folder's launcher. Its config.xml stays (the .NET bridge
+    # takes the web bridge's id there), with this folder's version.
+    $cfg = Join-Path $web "config.xml"
+    $keep = Get-Content -LiteralPath $cfg -Raw -Encoding UTF8
+    Get-ChildItem -LiteralPath $web -Force | Where-Object { $_.Name -ne "config.xml" } | Remove-Item -Recurse -Force
+    Copy-LocalLauncher $web @("config.xml", "bridge")
+    $keep = ([regex]'(<widget[^>]*\sversion=")[^"]+(")').Replace($keep, ('${1}' + $version + '${2}'), 1)
+    [IO.File]::WriteAllText($cfg, $keep, (New-Object Text.UTF8Encoding($false)))
+    $from = if ($rel) { $rel.Tag } else { $name }
+    Write-Host (Tr "        Launcher $version from this folder, APL Overlay from $from." "        Launcher $version de ce dossier, APL Overlay de $from.") -ForegroundColor Green
+}
 $personal = @("js\keys.local.js", "js\avatars.local.js")
 foreach ($p in $personal) {
     $src = Join-Path $LauncherDir $p

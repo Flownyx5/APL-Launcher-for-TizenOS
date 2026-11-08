@@ -2,6 +2,9 @@
 
 ## 1.2.0 (Flownyx5 fork)
 Rebuilt on the original project's 1.0.22 (Knikt/APL-Launcher-for-TizenOS), with the fork's features on top. From the original: Start on APL Launcher, Liquid Glass and Dynamic Backdrops, the moving screen-saver clock, Vetro on another port, Samsung's 2025 Home, the web bridge's log and fallback port for Tizen 6, Tizen 4 support, Sources with Live TV, APL TV, Nuvio, the Top Shelf styles, apps per row, Search (the fork's Search, with films, series and where to watch them, replaces its app-only list). See below for the fork's own changes since 1.1.0 and the original's since 1.0.9.
+- Starts on its own with any remote: the bridge keeps its settings in its own file and watches Samsung's home from power-on, without waiting for the launcher to run first (an infrared remote, which Vetro doesn't intercept, opened Samsung's hub for good). It wakes Vetro when Vetro goes silent. The Diagnostic tells which remote Vetro holds and whether Return to the Launcher is active from power-on.
+- APL Launcher Setup installs this folder's launcher: on Tizen 6 (launcher alone) the package is built from `launcher\` with nothing downloaded; with APL Overlay, the original's release keeps its .NET part and gets this folder's launcher. `03-build-launcher.ps1 -FromRelease` installs the release as it is. (The original project's Setup downloads its own release, which would have put its launcher back in place of the fork's.)
+- The bridge is in the package: install again with APL Launcher Setup.
 
 ## 1.1.9 (Flownyx5 fork)
 - Return to the Launcher without APL Overlay: when Samsung's home comes to the front by itself — the Home button of a phone app (SmartThings…) or of a remote Vetro doesn't intercept, or an app that closes — the launcher's bridge brings the launcher back within about 2 s. Samsung's home opened from the Smart Hub tile stays. Settings › Advanced Features › Return to the Launcher; the Diagnostic counts how many times it happened.
