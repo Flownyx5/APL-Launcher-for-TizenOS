@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.2 (Flownyx5 fork)
+- **APL TV in this repository** (`apltv/`, MIT License, by Knikt): APL TV 1.0.10 with the fork's changes, 1.0.11. It updates itself from here, and APL Launcher Setup installs it from this folder (`06-install-apltv.ps1` builds it as the original's `make-package.sh` does; `-FromRelease` takes the original's release). On a big account (15,000 channels, 40,000 movies, 8,000 series, fake provider and TMDB, processor slowed four times):
+  - Home loads in one go: each piece of information arriving at start-up (catalog, trending titles, hidden themes, genres) drew every row again with its pictures; unchanged rows are now kept, changes that arrive by themselves are drawn once per burst, and the row in focus stays in focus when a row arrives above it. Second start: 20 rows made for 20 shown, instead of 45 to 50.
+  - No row twice: a genre or Top Rated arriving while rows were still queued below the fold added them again (first start: 101 rows, Comedy seventeen times; now 20).
+  - Covers and TMDB information only for the rows near the screen (the others when the focus comes near).
+- Return to the Launcher: on a Q60A (Tizen 6) Samsung's bar is a window of its own called `tvlauncher` (seen in the Diagnostic's Details); it now counts as Samsung's home when it has a size and sits above the launcher, whatever its process.
+- Needs APL Launcher Setup for the bridge and APL TV; the launcher's own part comes with the automatic update.
+
 ## 1.3.1 (Flownyx5 fork)
 Comes with the automatic update: no need to install again.
 - **A smoother Home Screen on older screens** (Light Effects, the default before 2022, and Minimal Effects). The key reached the screen at once (19 ms on a Q60A), but the frames after it stalled while a new full-screen picture was drawn. Measured on one slow core, presses 450 ms apart:

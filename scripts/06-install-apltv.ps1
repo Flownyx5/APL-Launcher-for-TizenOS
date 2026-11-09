@@ -4,8 +4,9 @@
 #   .\scripts\06-install-apltv.ps1 -TvIp 192.168.1.50 -ProfileName APLPartner
 #   .\scripts\06-install-apltv.ps1 -TvIp 192.168.1.50 -ProfileName APLPartner -Wgt C:\path\apl-tv-v1.0.0.wgt
 #
-# The package is the latest GitHub release of APL TV (apl-tv-v<version>.wgt, built in CI by its
-# tools/make-package.sh), checked against the release's SHA256SUMS-wgt.txt; -Wgt takes a package of your own.
+# The package is built from apltv\app of this folder (the fork's APL TV, which updates itself from this
+# repository), as its tools/make-package.sh does; -FromRelease takes the original project's latest GitHub release
+# instead (apl-tv-v<version>.wgt, checked against its SHA256SUMS-wgt.txt); -Wgt takes a package of your own.
 # Personal files (never published) go into it: your TMDB key (the one saved for the launcher, in
 # launcher\js\keys.local.js), and the launcher's SF Pro fonts and sounds. Then it is signed with your
 # certificate and installed through Vetro (or the developer mode). Your playlists and settings stay on the
@@ -18,6 +19,8 @@ param(
     [string]$Wgt,
     [string]$Repo = "Knikt/APL-TV-for-TizenOS",
     [string]$LauncherDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "launcher"),
+    [string]$AppDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "apltv\app"),
+    [switch]$FromRelease,
     [switch]$NoLaunch
 )
 . "$PSScriptRoot\lib.ps1"
@@ -30,10 +33,16 @@ $dist = Join-Path (Split-Path $PSScriptRoot -Parent) "dist"
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 
 # ---------- the package ----------
+$fromFolder = $false
 if ($Wgt) {
     if (-not (Test-Path -LiteralPath $Wgt)) { throw (Tr "Package not found: $Wgt" "Paquet introuvable : $Wgt") }
     $source = (Get-Item -LiteralPath $Wgt).FullName
     Write-Host (Tr "        Package: $source (your own)" "        Paquet : $source (le tien)")
+} elseif (-not $FromRelease -and (Test-Path -LiteralPath (Join-Path $AppDir "config.xml"))) {
+    # The APL TV of this folder, nothing downloaded
+    $fromFolder = $true
+    $source = $AppDir
+    Write-Host (Tr "        Package: APL TV of this folder ($AppDir)" "        Paquet : APL TV de ce dossier ($AppDir)")
 } else {
     try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
     $api = "https://api.github.com/repos/$Repo/releases/latest"
@@ -72,8 +81,27 @@ if ($Wgt) {
 Write-Title (Tr "Building APL TV (profile '$ProfileName')" "Compilation d'APL TV (profil '$ProfileName')")
 $work = Join-Path $dist "apltv-package"
 if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
-[IO.Compression.ZipFile]::ExtractToDirectory($source, $work)
-Get-ChildItem -LiteralPath $work -Filter "*signature*.xml" | Remove-Item -Force
+if ($fromFolder) {
+    # As tools/make-package.sh: the app without its personal and local files, the keys from the template
+    # (the TMDB key goes in below), and the release marker in place of the developer's settings
+    New-Item -ItemType Directory -Force -Path $work | Out-Null
+    $rootLen = (Get-Item -LiteralPath $AppDir).FullName.TrimEnd('\').Length + 1
+    Get-ChildItem -LiteralPath $AppDir -Recurse -Force -File | ForEach-Object {
+        $relPath = $_.FullName.Substring($rootLen)
+        $top = ($relPath -split '[\\/]')[0]
+        if ($top -in @('fonts', 'sounds')) { return }
+        if ($_.Name -like '*.wgt' -or $_.Name -like '*.local.js' -or $_.Name -in @('.manifest.tmp', 'author-signature.xml', 'signature1.xml', '.DS_Store', 'Thumbs.db', 'keys.example.js')) { return }
+        $dst = Join-Path $work $relPath
+        $dir = Split-Path -Parent $dst
+        if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        Copy-Item -LiteralPath $_.FullName -Destination $dst -Force
+    }
+    Copy-Item -LiteralPath (Join-Path $AppDir "js\keys.example.js") -Destination (Join-Path $work "js\keys.local.js") -Force
+    [IO.File]::WriteAllText((Join-Path $work "js\dev.local.js"), "/* release build */`n", (New-Object Text.UTF8Encoding($false)))
+} else {
+    [IO.Compression.ZipFile]::ExtractToDirectory($source, $work)
+    Get-ChildItem -LiteralPath $work -Filter "*signature*.xml" | Remove-Item -Force
+}
 $config = Join-Path $work "config.xml"
 $configText = if (Test-Path -LiteralPath $config) { [IO.File]::ReadAllText($config) } else { "" }
 if ($configText -notmatch ('id="' + [regex]::Escape($AppId) + '"')) { throw (Tr "$source is not an APL TV package (no $AppId in its config.xml)." "$source n'est pas un paquet APL TV (pas de $AppId dans son config.xml).") }

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://apl.tv/app" version="1.0.11" viewmodes="maximized">
+    <!--
+      APL TV: an IPTV player for your own M3U playlists and Xtream accounts, in the style of APL Launcher.
+      package id = APLTVMedia   (Tizen requires EXACTLY 10 characters [0-9A-Za-z])
+      appId      = APLTVMedia.TV
+      service    = APLTVMedia.Helper (phone setup page behind a QR code, EPG and network helper)
+    -->
+    <tizen:application id="APLTVMedia.TV" package="APLTVMedia" required_version="6.0"/>
+    <tizen:profile name="tv"/>
+
+    <name>APL TV</name>
+    <author>Knikt (Gero Corp.), adapted by Flownyx5</author>
+    <description>Live TV, movies and series from your own playlists, in the style of APL Launcher.</description>
+
+    <icon src="icon.png"/>
+    <content src="index.html"/>
+    <!-- Opened again (from APL Launcher, the Home button…): keep the page, read the request instead -->
+    <tizen:app-control>
+        <tizen:src name="index.html" reload="disable"/>
+        <tizen:operation name="http://tizen.org/appcontrol/operation/default"/>
+    </tizen:app-control>
+
+    <feature name="http://tizen.org/feature/screen.size.all"/>
+    <feature name="http://tizen.org/feature/web.service"/>
+
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+    <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+    <tizen:privilege name="http://tizen.org/privilege/tv.audio"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/avplay"/>
+    <!-- The screen's voice assistant (Alexa, Bixby): "search Dragon Ball movies", pause, next episode (js/voice.js) -->
+    <tizen:privilege name="http://developer.samsung.com/privilege/voicecontrol"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/microphone"/>
+
+    <tizen:setting screen-orientation="landscape"
+                   context-menu="disable"
+                   background-support="disable"
+                   encryption="disable"
+                   install-location="auto"
+                   hwkey-event="enable"/>
+
+    <!-- Helper service (service/service.js): the page your phone opens from the QR code to send a playlist
+         to the screen, and the network work the page cannot do itself (compressed TV guides, providers
+         without CORS). Started by the app when needed, stops on its own after 15 minutes. -->
+    <tizen:service id="APLTVMedia.Helper" auto-restart="false" on-boot="false">
+        <tizen:content src="service/service.js"/>
+        <tizen:name>APL TV Helper</tizen:name>
+        <tizen:description>Phone setup page and network helper for APL TV</tizen:description>
+        <tizen:category name="http://tizen.org/category/service"/>
+    </tizen:service>
+
+    <access origin="*" subdomains="true"/>
+    <tizen:content-security-policy>default-src * file: data: blob: 'unsafe-inline'; script-src * file: data: blob: 'unsafe-inline'; style-src * file: data: 'unsafe-inline'; img-src * file: data: blob:; media-src * file: blob:; connect-src *; font-src * file: data:</tizen:content-security-policy>
+</widget>

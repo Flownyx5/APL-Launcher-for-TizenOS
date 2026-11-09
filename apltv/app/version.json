@@ -1,0 +1,54 @@
+{
+ "version": "1.0.11",
+ "loader": 1,
+ "reinstall": "1.0.11",
+ "notes": "Home loads in one go: no rows drawn again and again, no row twice, covers only for the rows near the screen.",
+ "platforms": {
+  "tizen": {
+   "reinstall": "1.0.11"
+  },
+  "webos": {
+   "reinstall": "1.0.3"
+  },
+  "android": {
+   "reinstall": "1.0.3"
+  }
+ },
+ "scripts": [
+  "js/lang-fr.js",
+  "js/i18n.js",
+  "js/keys.local.js",
+  "js/dev.local.js",
+  "js/core.js",
+  "js/android.js",
+  "js/nav.js",
+  "js/qr.js",
+  "js/helper.js",
+  "js/smart.js",
+  "js/stalker.js",
+  "js/data.js",
+  "js/epg.js",
+  "js/meta.js",
+  "js/player.js",
+  "js/ui.js",
+  "js/home.js",
+  "js/live.js",
+  "js/guide.js",
+  "js/vod.js",
+  "js/detail.js",
+  "js/person.js",
+  "js/search.js",
+  "js/settings.js",
+  "js/multiview.js",
+  "js/osd.js",
+  "js/voice.js",
+  "js/saver.js",
+  "js/updater.js",
+  "js/app.js"
+ ],
+ "styles": [
+  "css/tv.css",
+  "css/tv2.css"
+ ],
+ "body": "<!-- The video plane sits under the page: wherever the page is transparent, the picture shows -->\n    <object id=\"av\" type=\"application/avplayer\"></object>\n    <div id=\"mv\" class=\"mv\"></div>\n\n    <!-- Backdrop: dark gradient, or the artwork of what is selected -->\n    <div id=\"bg\" class=\"bg\"><div id=\"bgImgA\" class=\"bg__img\"></div><div id=\"bgImgB\" class=\"bg__img\"></div><div class=\"bg__scrim\"></div></div>\n\n    <header id=\"top\" class=\"top\">\n        <nav id=\"tabs\" class=\"tabs\"></nav>\n        <div id=\"status\" class=\"status\"><span id=\"clock\" class=\"status__clock\">09:41</span></div>\n    </header>\n\n    <main id=\"views\" class=\"views\">\n        <section id=\"v-home\" class=\"view view--home\"></section>\n        <section id=\"v-live\" class=\"view view--live\"></section>\n        <section id=\"v-guide\" class=\"view view--guide\"></section>\n        <section id=\"v-movies\" class=\"view view--vod\"></section>\n        <section id=\"v-series\" class=\"view view--vod\"></section>\n        <section id=\"v-search\" class=\"view view--search\"></section>\n        <section id=\"v-settings\" class=\"view view--settings\"></section>\n    </main>\n\n    <section id=\"detail\" class=\"detail\"></section>\n    <section id=\"person\" class=\"person\"></section>\n    <section id=\"osd\" class=\"osd\"></section>\n    <section id=\"mvui\" class=\"mvui\"></section>\n    <section id=\"sheet\" class=\"sheet\"></section>\n\n    <div id=\"menu\" class=\"menu\"><div class=\"menu__panel\"></div></div>\n    <div id=\"alert\" class=\"alert\"></div>\n    <div id=\"toast\" class=\"toast\" aria-live=\"polite\"></div>\n    <div id=\"boot\" class=\"boot\"><div class=\"boot__logo\"><span class=\"boot__mark\">APL</span><span class=\"boot__tv\">TV</span></div><div id=\"bootMsg\" class=\"boot__msg\"></div></div>\n    <input id=\"ime\" class=\"ime\" type=\"text\" autocomplete=\"off\" autocorrect=\"off\" autocapitalize=\"off\" spellcheck=\"false\">"
+}

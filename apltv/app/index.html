@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=1920, height=1080, user-scalable=no">
+    <title>APL TV</title>
+    <link rel="stylesheet" href="css/tv.css" data-app-css>
+    <link rel="stylesheet" href="css/tv2.css" data-app-css>
+</head>
+<body class="perf is-booting">
+    <!-- The video plane sits under the page: wherever the page is transparent, the picture shows -->
+    <object id="av" type="application/avplayer"></object>
+    <div id="mv" class="mv"></div>
+
+    <!-- Backdrop: dark gradient, or the artwork of what is selected -->
+    <div id="bg" class="bg"><div id="bgImgA" class="bg__img"></div><div id="bgImgB" class="bg__img"></div><div class="bg__scrim"></div></div>
+
+    <header id="top" class="top">
+        <nav id="tabs" class="tabs"></nav>
+        <div id="status" class="status"><span id="clock" class="status__clock">09:41</span></div>
+    </header>
+
+    <main id="views" class="views">
+        <section id="v-home" class="view view--home"></section>
+        <section id="v-live" class="view view--live"></section>
+        <section id="v-guide" class="view view--guide"></section>
+        <section id="v-movies" class="view view--vod"></section>
+        <section id="v-series" class="view view--vod"></section>
+        <section id="v-search" class="view view--search"></section>
+        <section id="v-settings" class="view view--settings"></section>
+    </main>
+
+    <section id="detail" class="detail"></section>
+    <section id="person" class="person"></section>
+    <section id="osd" class="osd"></section>
+    <section id="mvui" class="mvui"></section>
+    <section id="sheet" class="sheet"></section>
+
+    <div id="menu" class="menu"><div class="menu__panel"></div></div>
+    <div id="alert" class="alert"></div>
+    <div id="toast" class="toast" aria-live="polite"></div>
+    <div id="boot" class="boot"><div class="boot__logo"><span class="boot__mark">APL</span><span class="boot__tv">TV</span></div><div id="bootMsg" class="boot__msg"></div></div>
+    <input id="ime" class="ime" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+
+    <!-- Samsung API (AVPlay, product info, voice): provided by the screen -->
+    <script src="$WEBAPIS/webapis/webapis.js"></script>
+    <!-- What this version contains, then start-up: boot.js loads the rest,
+         or the newer version downloaded by the automatic update (js/updater.js) -->
+    <script src="js/build.js"></script>
+    <script id="tv-boot" src="js/boot.js"></script>
+</body>
+</html>

@@ -1,0 +1,428 @@
+/* ============================================================
+   tv2.css: loaded after tv.css.
+   1. SPEED: what costs the most on a TV's graphics chip, removed.
+   2. BRIGHTER: less black, more contrast.
+   3. LIVE TV in the Apple TV style, the GUIDE over the picture.
+   ============================================================ */
+
+/* ---------- 1. speed ----------
+   - Masks on lists that scroll: every move redrew the whole list through the mask.
+   - The glass rim (a masked layer) on small repeated items: chips and buttons keep a plain inner line.
+   - Animated shadows: shadows change at once, only the scale is animated (as on tvOS).
+   - Shorter, snappier transitions. */
+.live__cats, .live__chans, .guide__body, .vod__grid, .sheet__listwrap { -webkit-mask-image: none; mask-image: none; }
+.btn::before, .chip::before { display: none; }
+.btn, .chip { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.10); }
+.btn--primary { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.18); }
+.btn.is-focused, .chip.is-focused { box-shadow: 0 12px 28px rgba(0,0,0,0.4); }
+.card, .ep, .pcard, .btn, .chip, .tab, .lrow, .crow, .srow, .kb__key, .menu__item, .alert__btn { transition: transform 170ms cubic-bezier(0.3, 1.25, 0.6, 1); }
+.card__art, .ep__art, .pcard__photo { transition: none; }
+.card__art::after { transition: opacity 120ms ease; }
+.live__list, .row__strip, .vod__gridin, .guide__rows, .home, .detail__in, .person__in, .sheet__list, .vod__chipstrip { transition-duration: 220ms; will-change: transform; }
+.is-pressed { transform: scale(0.95) !important; transition-duration: 80ms !important; }
+
+/* ---------- 2. brighter ---------- */
+:root { --dim: rgba(255,255,255,0.80); --faint: rgba(255,255,255,0.62); }
+.bg { background: radial-gradient(120% 100% at 20% 0%, #2a3550 0%, #161c2b 48%, #0d1018 100%); }
+.bg.is-dark .bg__scrim { background: linear-gradient(180deg, rgba(10,13,20,0.55) 0%, rgba(10,13,20,0.72) 50%, rgba(10,13,20,0.86) 100%); }
+.sheet, .person { background: radial-gradient(120% 100% at 15% 0%, #33405c 0%, #1c2333 50%, #11141c 100%); }
+.detail { background: #10131b; }
+.srow { background: rgba(255,255,255,0.16); }
+.chip { background: rgba(255,255,255,0.16); }
+.chip.is-current { background: rgba(255,255,255,0.30); }
+.btn { background: rgba(255,255,255,0.20); }
+.btn--primary { background: rgba(255,255,255,0.32); }
+.kb__key { background: rgba(255,255,255,0.14); }
+.card__fallback { background: linear-gradient(160deg, #3a4560 0%, #232a3b 100%); }
+
+/* ---------- 3. Live TV, Apple TV style ----------
+   The channel plays full screen behind the interface; its programme in large at the top left;
+   categories and channel cards on clear glass at the bottom; what comes next below. */
+.lv__scrim { position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+    background: linear-gradient(90deg, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.25) 42%, rgba(0,0,0,0) 65%),
+                linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 20%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 58%, rgba(0,0,0,0.86) 78%, rgba(0,0,0,0.92) 100%); }
+.lv__wait { position: absolute; left: 0; right: 0; top: 300px; display: flex; justify-content: center; }
+.lv__wait.is-hidden { display: none; }
+.lv__hero { position: absolute; left: 96px; top: 150px; width: 1100px; }
+.lv__brand { display: flex; align-items: center; gap: 22px; height: 80px; margin-bottom: 18px; }
+.lv__logo { height: 76px; width: 220px; background: left center / contain no-repeat; display: flex; align-items: center; font-size: 40px; font-weight: 700; }
+.lv__title { font-size: 62px; font-weight: 700; letter-spacing: -1px; line-height: 1.05; margin-bottom: 16px; text-shadow: 0 2px 24px rgba(0,0,0,0.5);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lv__meta { display: flex; align-items: center; gap: 18px; font-size: 25px; font-weight: 500; color: rgba(255,255,255,0.92); margin-bottom: 14px; }
+.lv__meta .bar { width: 220px; height: 6px; background: rgba(255,255,255,0.3); }
+.lv__desc { width: 980px; font-size: 24px; line-height: 1.4; color: rgba(255,255,255,0.86); text-shadow: 0 1px 12px rgba(0,0,0,0.6);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lv__chips { position: absolute; left: 0; right: 0; top: 566px; height: 80px; overflow: hidden; }
+.lv__chipstrip { position: absolute; left: 96px; top: 10px; display: flex; gap: 14px; transition: transform 220ms var(--ease); will-change: transform; }
+.lv__chips .chip { background: rgba(255,255,255,0.18); color: #fff; }
+.lv__chips .chip.is-current { background: rgba(255,255,255,0.34); }
+.lv__chips .chip.is-focused { background: #fff; color: #1c1c1e; }
+.lv__cards { position: absolute; left: 0; right: 0; top: 660px; height: 300px; }
+.lv__cardin { position: absolute; left: 96px; top: 0; height: 300px; transition: transform 220ms var(--ease); will-change: transform; }
+.lcard { position: absolute; top: 14px; width: 300px; transition: transform 170ms cubic-bezier(0.3, 1.25, 0.6, 1); }
+.lcard__art { position: relative; width: 300px; height: 170px; border-radius: 22px; overflow: hidden;
+    background: linear-gradient(160deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.10) 100%), rgba(30,34,46,0.55); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.14); }
+.lcard__logo { position: absolute; left: 44px; right: 44px; top: 30px; bottom: 34px; background: center / contain no-repeat; display: flex; align-items: center; justify-content: center;
+    text-align: center; font-size: 30px; font-weight: 700; line-height: 1.05; }
+.lcard__num { position: absolute; left: 14px; top: 10px; font-size: 17px; font-weight: 700; color: rgba(255,255,255,0.8); }
+.lcard__q { position: absolute; right: 12px; top: 10px; font-size: 14px; font-weight: 700; padding: 1px 6px; border-radius: 4px; border: 1.5px solid rgba(255,255,255,0.6); color: rgba(255,255,255,0.85); }
+.lcard__fav { position: absolute; right: 12px; bottom: 16px; color: #ffd60a; display: flex; }
+.lcard__bar { position: absolute; left: 16px; right: 16px; bottom: 12px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.25); overflow: hidden; }
+.lcard__bar i { display: block; height: 100%; background: #fff; }
+.lcard__t { margin-top: 12px; font-size: 22px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lcard__p { margin-top: 2px; font-size: 19px; color: rgba(255,255,255,0.78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lcard.is-focused { transform: scale(1.1); z-index: 2; }
+.lcard.is-focused .lcard__art { background: linear-gradient(160deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.18) 100%), rgba(40,44,58,0.7);
+    box-shadow: 0 0 0 4px #fff, 0 22px 40px rgba(0,0,0,0.55); }
+.lcard.is-playing .lcard__num { color: #4cc2ff; }
+.lv__next { position: absolute; left: 96px; right: 96px; top: 978px; display: flex; gap: 14px; overflow: hidden; height: 56px; }
+.lv__nextitem { flex: none; height: 50px; padding: 0 22px; border-radius: 25px; display: flex; align-items: center; gap: 12px; font-size: 21px; color: rgba(255,255,255,0.9);
+    background: rgba(255,255,255,0.13); white-space: nowrap; max-width: 540px; overflow: hidden; text-overflow: ellipsis; }
+.lv__nextitem b { font-weight: 700; color: #fff; }
+.lv__hint { position: absolute; right: 96px; top: 588px; font-size: 20px; color: rgba(255,255,255,0.72); }
+.lv__empty { position: absolute; left: 0; top: 50px; font-size: 26px; color: rgba(255,255,255,0.85); white-space: nowrap; }
+
+/* ---------- the guide over the picture: the channel plays behind, the grid sits on clear glass ---------- */
+.guide__hole { display: none; }
+.guide__shade { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0;
+    background: linear-gradient(90deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.2) 45%, rgba(0,0,0,0) 70%),
+                linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0) 18%, rgba(0,0,0,0.55) 38%, rgba(5,7,12,0.86) 48%, rgba(5,7,12,0.92) 100%); }
+.grow__ch { background: rgba(255,255,255,0.14); }
+.grow__ch.is-current { background: rgba(255,255,255,0.26); }
+.gcell { background: rgba(255,255,255,0.13); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); transition: none; }
+.gcell.is-now { background: rgba(255,255,255,0.24); }
+.gcell.is-past { opacity: 0.6; }
+.gcell.is-empty { background: rgba(255,255,255,0.07); }
+.guide__now { opacity: 0.85; z-index: 1; }
+
+/* No picture yet (just arrived): the soft backdrop, until the channel starts */
+.in-live .bg, .in-guide .bg { opacity: 1; }
+.in-live.has-video .bg, .in-guide.has-video .bg { opacity: 0; }
+
+/* The focused programme stays white even when it is the one on now */
+.gcell.is-focused, .gcell.is-now.is-focused, .gcell.is-empty.is-focused { background: #f5f5f7; color: #1c1c1e; opacity: 1; box-shadow: 0 10px 24px rgba(0,0,0,0.35); }
+.lv__hint { display: none; }
+.is-preview #av { display: none; }
+
+/* A focused chip is white even when it is the current one */
+.chip.is-focused, .chip.is-current.is-focused, .lv__chips .chip.is-focused { background: #fff; color: #1c1c1e; }
+
+/* ---------- 4. Motion, Apple TV style, moved by the graphics chip ----------
+   Measured on the M8: a card that grows while it is part of its row makes the whole row be drawn again
+   at every step of the move. So the focused card and its neighbours are separate layers in advance
+   (TV.lift in nav.js): growing, shrinking and the row sliding are only moved by the graphics chip.
+   Shadows and the light sheen change at once (drawn once into the card's own layer): only the scale
+   and the slide move. The heavy work (programme info, spare cards, pictures, backdrop) waits until the
+   move is over (TV.calm). */
+:root { --zoom: cubic-bezier(0.22, 1.18, 0.42, 1); --glide: cubic-bezier(0.25, 1, 0.5, 1); }
+
+/* Big text without blurred text shadows (they would be drawn again whenever the text changes) */
+.lv__title, .lv__desc, .hero__title, .hero__desc, .osd__clock, .detail__title { text-shadow: none; }
+
+/* What moves, and how */
+.card, .lcard, .ep, .pcard { transition: transform 300ms var(--zoom); }
+.card__art, .card__art::after, .ep__art, .pcard__photo, .lcard__art { transition: none; }
+.btn, .chip, .tab, .kb__key, .menu__item, .alert__btn, .lrow, .crow, .srow { transition: transform 240ms var(--zoom); }
+.gcell, .mvt { transition: none; }
+.live__list, .row__strip, .vod__gridin, .guide__rows, .home, .detail__in, .person__in, .sheet__list, .vod__chipstrip,
+.lv__cardin, .lv__chipstrip, .search__in, .detail__epstrip { transition: transform 360ms var(--glide); will-change: transform; }
+.is-pressed { transform: scale(0.94) !important; transition: transform 90ms ease-out !important; }
+
+/* Layers prepared in advance: the cards near the focus (TV.lift), and the small items that are few */
+.is-lift, .btn, .tab { will-change: transform; }
+
+/* Pictures: the decoded picture itself is put in the card */
+.card__img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Depth: a soft shadow under the focused item only, drawn once when the focus arrives (no white rings).
+   Measured on the M8: a blurred shadow under every cover made each new row of the grid cost 50-150 ms more. */
+.card__art, .ep__art, .pcard__photo { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
+.card.is-focused .card__art { box-shadow: 0 30px 46px -14px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.12); }
+.card.is-focused .card__art::after { opacity: 1; }
+.lcard.is-focused { transform: scale(1.1); }
+.lcard.is-focused .lcard__art { background: linear-gradient(160deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.20) 100%), rgba(52,56,72,0.78);
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,0.55), 0 28px 42px -14px rgba(0,0,0,0.85); }
+.lcard__art::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; border-radius: inherit; pointer-events: none; opacity: 0;
+    background: linear-gradient(165deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.05) 40%, rgba(255,255,255,0) 62%); }
+.lcard.is-focused .lcard__art::after { opacity: 1; }
+.ep.is-focused .ep__art { box-shadow: 0 30px 46px -14px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.12); }
+.pcard.is-focused .pcard__photo { box-shadow: 0 24px 38px -12px rgba(0,0,0,0.85); }
+.btn.is-focused, .chip.is-focused { box-shadow: 0 16px 30px -10px rgba(0,0,0,0.55); }
+.crow.is-focused, .lrow.is-focused, .srow.is-focused, .tab.is-focused { box-shadow: 0 16px 30px -12px rgba(0,0,0,0.5); }
+
+/* Live TV: the programme fades out during a move and the new one fades in once it is over */
+.lv__hero, .lv__next { transition: opacity 280ms ease; will-change: opacity; }
+.lv__hero.is-out, .lv__next.is-out { opacity: 0; transition-duration: 130ms; }
+
+/* Backdrops: layers ready in advance, a slow cinematic cross-fade only when the remote rests */
+.bg__img { transition: opacity 700ms ease; will-change: opacity; }
+
+/* Test switches (development builds) */
+.t-noslide .live__list, .t-noslide .row__strip, .t-noslide .vod__gridin, .t-noslide .guide__rows, .t-noslide .home, .t-noslide .lv__cardin, .t-noslide .lv__chipstrip { transition: none !important; }
+.t-noscale .card, .t-noscale .lcard, .t-noscale .ep, .t-noscale .pcard, .t-noscale .chip, .t-noscale .btn, .t-noscale .tab, .t-noscale .crow, .t-noscale .lrow, .t-noscale .srow { transition: none !important; }
+.t-noshadow .card__art, .t-noshadow .card.is-focused .card__art { box-shadow: none !important; }
+.t-noart .card__img { display: none; }
+
+/* Home: the tab bar steps aside once the focus goes down into the rows (as on Apple TV), it no longer covers the first row */
+.top { will-change: opacity, transform; }
+.in-rows .top { opacity: 0; transform: translateY(-40px); }
+
+/* ---------- 5. Title page: one under the other, nothing overlaps ----------
+   The first screen is a column anchored at the bottom (logo, details, plot, buttons, cast line): a long plot
+   pushes the rows below further down instead of running under them. The seasons row peeks at the bottom. */
+.detail__main { height: auto; min-height: 870px; padding: 140px 96px 30px; box-sizing: border-box; display: flex; flex-direction: column; align-items: flex-start; }
+.detail__main > :first-child { margin-top: auto; }
+.detail__title { margin-bottom: 20px; }
+.detail__logo { margin-bottom: 22px; }
+.detail__meta { margin-bottom: 16px; }
+.detail__desc { -webkit-line-clamp: 4; margin-bottom: 28px; }
+.detail__progress { margin: -10px 0 24px; }
+.detail__btns { margin-bottom: 24px; flex-wrap: nowrap; }
+.detail__people { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 1400px; width: auto; }
+.detail__section { margin-top: 0; padding: 10px 96px 380px; }
+.detail__seasons { margin-bottom: 18px; }
+.detail__section .row { margin-bottom: 34px; }
+.detail__section .row__title { padding-left: 0; }
+.detail__cast { margin-top: 10px; }
+.detail__seen { display: inline-flex; align-items: center; gap: 6px; color: #30d158; font-weight: 600; }
+.chip__seen { display: inline-flex; margin-left: 8px; color: #30d158; }
+.chip.is-focused .chip__seen { color: #1f9d4c; }
+.ep__seen { position: absolute; right: 12px; top: 12px; display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 17px;
+    background: rgba(0,0,0,0.62); color: #30d158; font-size: 18px; font-weight: 700; }
+.ep.is-seen .ep__art { opacity: 0.75; }
+.ep.is-seen.is-focused .ep__art { opacity: 1; }
+.card__seen { position: absolute; left: 12px; top: 12px; width: 38px; height: 38px; border-radius: 19px; background: rgba(0,0,0,0.62); color: #30d158;
+    display: flex; align-items: center; justify-content: center; }
+
+/* Cast photos: the face in the circle (TMDB portraits have the head in the top third) */
+.pcard__photo { background-size: cover; background-position: 50% 16%; background-repeat: no-repeat; }
+.person__photo { background-size: cover; background-position: 50% 16%; }
+
+/* ---------- 6. Player: subtitles drawn by APL TV, the Netflix-style timeline ---------- */
+.osd__subs { position: absolute; left: 140px; right: 140px; bottom: 80px; text-align: center; pointer-events: none; transition: bottom 260ms var(--glide); }
+.osd.subPos-high .osd__subs { bottom: 190px; }
+.osd.is-shown .osd__subs { bottom: 330px; }
+.osd__subs span { line-height: 1.34; font-weight: 600; color: #fff; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.subSize-s .osd__subs span { font-size: 38px; }
+.subSize-m .osd__subs span { font-size: 48px; }
+.subSize-l .osd__subs span { font-size: 60px; }
+.subSize-xl .osd__subs span { font-size: 74px; }
+.subColor-yellow .osd__subs span { color: #ffe14d; }
+.subColor-cyan .osd__subs span { color: #7fe9ff; }
+.subColor-green .osd__subs span { color: #8cff9a; }
+.subBg-outline .osd__subs span { text-shadow: 0 0 3px #000, 0 0 3px #000, 2px 2px 2px #000, -2px -2px 2px #000, 2px -2px 2px #000, -2px 2px 2px #000; }
+.subBg-shadow .osd__subs span { text-shadow: 0 3px 12px rgba(0,0,0,0.95), 0 1px 3px #000; }
+.subBg-box .osd__subs span { background: rgba(0,0,0,0.62); padding: 2px 18px; border-radius: 10px; }
+.subBg-solid .osd__subs span { background: #000; padding: 2px 18px; }
+.subprev { position: relative; width: 400px; height: 400px; border-radius: 96px; overflow: hidden;
+    background: linear-gradient(160deg, #58708f 0%, #2c3a50 45%, #121722 100%); box-shadow: 0 20px 50px rgba(0,0,0,0.45); }
+.subprev .osd__subs { left: 26px; right: 26px; bottom: 54px; }
+.subprev.subPos-high .osd__subs { bottom: 110px; }
+.subprev.subSize-s .osd__subs span { font-size: 20px; }
+.subprev.subSize-m .osd__subs span { font-size: 25px; }
+.subprev.subSize-l .osd__subs span { font-size: 31px; }
+.subprev.subSize-xl .osd__subs span { font-size: 38px; }
+.subprev.subBg-box .osd__subs span, .subprev.subBg-solid .osd__subs span { padding: 1px 9px; }
+.osd__seek .bar em { position: absolute; top: 0; bottom: 0; background: rgba(255,255,255,0.45); border-radius: 5px; }
+.osd__bubble { position: absolute; bottom: 30px; transform: translateX(-50%); padding: 10px 20px 8px; border-radius: 18px; background: #f5f5f7; color: #1c1c1e;
+    font-size: 32px; font-weight: 700; white-space: nowrap; display: flex; flex-direction: column; align-items: center; line-height: 1.1; box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
+.osd__bubble small { font-size: 19px; font-weight: 600; color: #6e6e73; margin-top: 2px; }
+.osd__seek.is-scrubbing .bar u { transform: scale(1.4); }
+
+/* ---------- 7. Search: the list moves inside a full-screen frame ---------- */
+.search__results { top: 0; padding-top: 540px; box-sizing: border-box; }
+.search__in { will-change: transform; }
+.search__field, .kb { transition: transform 360ms var(--glide), opacity 240ms ease; }
+.is-results .kb { opacity: 0; transform: translateY(-30px); }
+.is-results .search__field { transform: translateY(-110px) scale(0.9); transform-origin: left center; opacity: 0.85; }
+.in-results .top { opacity: 0; transform: translateY(-40px); }
+.search__in .row { transition: opacity 240ms ease; }
+.search__in .row.is-above { opacity: 0; }
+
+/* The timeline: the cursor and the bubble only exist while moving; the title steps aside for the bubble */
+.osd__seek .bar em, .osd__bubble { display: none; }
+.osd__seek.is-scrubbing .bar em { display: block; }
+.osd__seek.is-scrubbing .osd__bubble { display: flex; }
+.osd__bar.is-scrubbing .osd__ch { visibility: hidden; }
+.osd__bar::before { display: none; }
+.osd__bar { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.12), 0 20px 50px rgba(0,0,0,0.35); }
+
+/* The bar is repainted at each press while moving: no big blurred shadow under it (the shade already darkens);
+   the cursor and the bubble are their own layers and slide */
+.osd__bar { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.12); }
+.osd__seek .bar u { left: 0; will-change: transform; transition: none; }
+.osd__bubble { left: 0; will-change: transform; }
+
+/* ---------- 8. The player, Apple TV style ---------- */
+.osd--vod .osd__shade { height: 600px; background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.5) 45%, rgba(0,0,0,0.86) 100%); }
+.osd--vod .osd__bar { left: 96px; right: 96px; bottom: 54px; min-height: 0; padding: 0; border-radius: 0; background: none; box-shadow: none; display: block; }
+.osd--vod .osd__bar::before { display: none; }
+.pv__top { display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; margin-bottom: 22px; }
+.pv__titles { min-width: 0; }
+.pv__sub { font-size: 24px; font-weight: 600; color: rgba(255,255,255,0.78); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pv__sub:empty { display: none; }
+.pv__title { font-size: 56px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.08; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1300px; }
+.pv__icons { display: flex; gap: 22px; flex: none; }
+.pv__btn { width: 68px; height: 68px; border-radius: 34px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.16); color: #fff;
+    transition: transform 220ms var(--zoom); will-change: transform; }
+.pv__btn.is-focused { background: #f5f5f7; color: #1c1c1e; transform: scale(1.14); }
+.osd--vod .osd__seek { display: block; }
+.osd--vod .osd__seek .bar { height: 10px; }
+.osd__bar.is-scrubbing .pv__titles { visibility: hidden; }
+.pv__times { display: flex; align-items: center; gap: 14px; margin-top: 14px; font-size: 24px; font-weight: 600; color: rgba(255,255,255,0.88); font-variant-numeric: tabular-nums; }
+.pv__pp { display: flex; color: #fff; }
+.pv__end { margin-left: auto; color: rgba(255,255,255,0.6); font-weight: 500; }
+.pv__tabs { display: flex; gap: 16px; margin-top: 20px; }
+.pv__tab { height: 56px; padding: 0 28px; border-radius: 28px; display: flex; align-items: center; font-size: 24px; font-weight: 600; background: rgba(255,255,255,0.12);
+    transition: transform 220ms var(--zoom); will-change: transform; }
+.pv__tab.is-focused { background: #f5f5f7; color: #1c1c1e; transform: scale(1.07); }
+.osd--vod.is-shown .osd__subs { bottom: 400px; }
+.osd__liveicons { margin-left: auto; align-self: center; }
+/* the menus above the buttons */
+.osd__pop { position: absolute; right: 96px; bottom: 330px; width: 660px; border-radius: 30px; padding: 16px 0 14px; display: none;
+    background: rgba(38,40,50,0.94); box-shadow: 0 30px 70px rgba(0,0,0,0.5), inset 0 0 0 1.5px rgba(255,255,255,0.10); }
+.osd:not(.osd--vod) .osd__pop { bottom: 290px; }
+.osd__pop.is-on { display: block; }
+.osd__pophead { padding: 6px 30px 10px; font-size: 21px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.6); }
+.osd__poplist { max-height: 560px; overflow: hidden; position: relative; }
+.osd__popsec { padding: 16px 30px 6px; font-size: 18px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: rgba(255,255,255,0.48); }
+.osd__popitem { display: flex; align-items: center; gap: 12px; margin: 0 12px; padding: 11px 18px; border-radius: 18px; font-size: 26px; }
+.osd__popitem.is-focused { background: #f5f5f7; color: #1c1c1e; }
+.osd__popcheck { width: 28px; flex: none; display: flex; color: #0a84ff; }
+.osd__poptxt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.osd__poptxt b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.osd__poptxt small { font-size: 18px; color: rgba(255,255,255,0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.osd__popitem.is-focused small { color: #6e6e73; }
+.osd__popitem em { font-style: normal; font-size: 23px; color: rgba(255,255,255,0.6); flex: none; }
+.osd__popitem.is-focused em { color: #6e6e73; }
+.osd__sync { display: flex; align-items: center; justify-content: center; gap: 34px; padding: 18px 0 14px; font-size: 46px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.osd__sync span { font-size: 28px; opacity: 0.55; }
+.osd__pophint { padding: 0 30px 6px; font-size: 19px; line-height: 1.35; color: rgba(255,255,255,0.55); text-align: center; }
+/* "next episode": the series' picture, never the episode's */
+.osd__nextcard { position: absolute; right: 96px; bottom: 330px; width: 540px; border-radius: 28px; overflow: hidden; display: none;
+    background: rgba(30,32,40,0.94); box-shadow: 0 30px 70px rgba(0,0,0,0.55), inset 0 0 0 1.5px rgba(255,255,255,0.10); }
+.osd__nextcard.is-on { display: block; }
+.osd__nextart { height: 260px; background: #222 center / cover no-repeat; }
+.osd__nexttxt { padding: 18px 26px 24px; }
+.osd__nexttxt small { display: block; font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(255,255,255,0.6); }
+.osd__nexttxt b { display: block; font-size: 27px; margin: 4px 0 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.osd__nextbtn { display: inline-flex; align-items: center; gap: 10px; height: 56px; padding: 0 28px; border-radius: 28px; background: #f5f5f7; color: #1c1c1e; font-size: 24px; font-weight: 600; }
+.osd__nextbtn i { font-style: normal; color: #6e6e73; font-weight: 500; }
+
+/* ---------- 9. Age ratings ---------- */
+.age { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 11px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.75);
+    font-size: 21px; font-weight: 800; letter-spacing: 0.3px; color: #fff; line-height: 1; white-space: nowrap; }
+.age small { font-size: 14px; font-weight: 700; opacity: 0.7; }
+.age--1 { border-color: #ffd60a; color: #ffd60a; }
+.age--2 { border-color: #ff9f0a; color: #ff9f0a; }
+.age--3 { border-color: #ff453a; color: #fff; background: rgba(255,69,58,0.85); }
+.pv__subline { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+.pv__subline .pv__sub { margin-bottom: 0; }
+.pv__age:empty { display: none; }
+
+/* ---- GENERATED by tools/make-build.py from the gaps above: do not edit ---- */
+.no-gap * { row-gap: 0 !important; column-gap: 0 !important; }
+.no-gap .tabs > * + * { margin-left: 4px; }
+.no-gap .tabs > .dot { margin-left: calc(14px + 4px); }
+.no-gap .btn > * + * { margin-left: 14px; }
+.no-gap .btn > .dot { margin-left: calc(14px + 14px); }
+.no-gap .osd__bar > * + * { margin-left: 34px; }
+.no-gap .osd__bar > .dot { margin-left: calc(14px + 34px); }
+.no-gap .tab > * + * { margin-left: 10px; }
+.no-gap .tab > .dot { margin-left: calc(14px + 10px); }
+.no-gap .imdb > * + * { margin-left: 8px; }
+.no-gap .imdb > .dot { margin-left: calc(14px + 8px); }
+.no-gap .hero__btns > * + * { margin-left: 22px; }
+.no-gap .hero__btns > .dot { margin-left: calc(14px + 22px); }
+.no-gap .hero__dots > * + * { margin-left: 10px; }
+.no-gap .hero__dots > .dot { margin-left: calc(14px + 10px); }
+.no-gap .row__title > * + * { margin-left: 14px; }
+.no-gap .row__title > .dot { margin-left: calc(14px + 14px); }
+.no-gap .row__strip > * + * { margin-left: 36px; }
+.no-gap .row__strip > .dot { margin-left: calc(14px + 36px); }
+.no-gap .card__sub > * + * { margin-left: 10px; }
+.no-gap .card__sub > .dot { margin-left: calc(14px + 10px); }
+.no-gap .live__holemsg > * + * { margin-top: 14px; }
+.no-gap .crow__name > * + * { margin-left: 10px; }
+.no-gap .crow__name > .dot { margin-left: calc(14px + 10px); }
+.no-gap .live__chan > * + * { margin-left: 16px; }
+.no-gap .live__chan > .dot { margin-left: calc(14px + 16px); }
+.no-gap .live__time > * + * { margin-left: 18px; }
+.no-gap .live__time > .dot { margin-left: calc(14px + 18px); }
+.no-gap .guide__cat > * + * { margin-left: 14px; }
+.no-gap .guide__cat > .dot { margin-left: calc(14px + 14px); }
+.no-gap .guide__meta > * + * { margin-left: 14px; }
+.no-gap .guide__meta > .dot { margin-left: calc(14px + 14px); }
+.no-gap .grow__ch > * + * { margin-left: 14px; }
+.no-gap .grow__ch > .dot { margin-left: calc(14px + 14px); }
+.no-gap .vod__chipstrip > * + * { margin-left: 16px; }
+.no-gap .vod__chipstrip > .dot { margin-left: calc(14px + 16px); }
+.no-gap .detail__btns > * + * { margin-left: 22px; }
+.no-gap .detail__btns > .dot { margin-left: calc(14px + 22px); }
+.no-gap .detail__progress > * + * { margin-left: 16px; }
+.no-gap .detail__progress > .dot { margin-left: calc(14px + 16px); }
+.no-gap .detail__seasons > * + * { margin-left: 14px; }
+.no-gap .detail__seasons > .dot { margin-left: calc(14px + 14px); }
+.no-gap .detail__epstrip > * + * { margin-left: 32px; }
+.no-gap .detail__epstrip > .dot { margin-left: calc(14px + 32px); }
+.no-gap .person__head > * + * { margin-left: 64px; }
+.no-gap .person__head > .dot { margin-left: calc(14px + 64px); }
+.no-gap .osd__ch > * + * { margin-left: 14px; }
+.no-gap .osd__ch > .dot { margin-left: calc(14px + 14px); }
+.no-gap .osd__time > * + * { margin-left: 20px; }
+.no-gap .osd__time > .dot { margin-left: calc(14px + 20px); }
+.no-gap .osd__seek > * + * { margin-left: 22px; }
+.no-gap .osd__seek > .dot { margin-left: calc(14px + 22px); }
+.no-gap .mvt__label > * + * { margin-left: 10px; }
+.no-gap .mvt__label > .dot { margin-left: calc(14px + 10px); }
+.no-gap .mvt__empty > * + * { margin-top: 18px; }
+.no-gap .srow__label > * + * { margin-left: 14px; }
+.no-gap .srow__label > .dot { margin-left: calc(14px + 14px); }
+.no-gap .qr__state > * + * { margin-left: 14px; }
+.no-gap .qr__state > .dot { margin-left: calc(14px + 14px); }
+.no-gap .step > * + * { margin-left: 26px; }
+.no-gap .step > .dot { margin-left: calc(14px + 26px); }
+.no-gap .search__field > * + * { margin-left: 20px; }
+.no-gap .search__field > .dot { margin-left: calc(14px + 20px); }
+.no-gap .menu__item > * + * { margin-left: 40px; }
+.no-gap .menu__item > .dot { margin-left: calc(14px + 40px); }
+.no-gap .alert__buttons > * + * { margin-top: 18px; }
+.no-gap .boot > * + * { margin-top: 40px; }
+.no-gap .boot__logo > * + * { margin-left: 14px; }
+.no-gap .boot__logo > .dot { margin-left: calc(14px + 14px); }
+.no-gap .setup__row > * + * { margin-left: 24px; }
+.no-gap .setup__row > .dot { margin-left: calc(14px + 24px); }
+.no-gap .lv__brand > * + * { margin-left: 22px; }
+.no-gap .lv__brand > .dot { margin-left: calc(14px + 22px); }
+.no-gap .lv__meta > * + * { margin-left: 18px; }
+.no-gap .lv__meta > .dot { margin-left: calc(14px + 18px); }
+.no-gap .lv__chipstrip > * + * { margin-left: 14px; }
+.no-gap .lv__chipstrip > .dot { margin-left: calc(14px + 14px); }
+.no-gap .lv__next > * + * { margin-left: 14px; }
+.no-gap .lv__next > .dot { margin-left: calc(14px + 14px); }
+.no-gap .lv__nextitem > * + * { margin-left: 12px; }
+.no-gap .lv__nextitem > .dot { margin-left: calc(14px + 12px); }
+.no-gap .detail__seen > * + * { margin-left: 6px; }
+.no-gap .detail__seen > .dot { margin-left: calc(14px + 6px); }
+.no-gap .ep__seen > * + * { margin-left: 6px; }
+.no-gap .ep__seen > .dot { margin-left: calc(14px + 6px); }
+.no-gap .pv__top > * + * { margin-left: 40px; }
+.no-gap .pv__top > .dot { margin-left: calc(14px + 40px); }
+.no-gap .pv__icons > * + * { margin-left: 22px; }
+.no-gap .pv__icons > .dot { margin-left: calc(14px + 22px); }
+.no-gap .pv__times > * + * { margin-left: 14px; }
+.no-gap .pv__times > .dot { margin-left: calc(14px + 14px); }
+.no-gap .pv__tabs > * + * { margin-left: 16px; }
+.no-gap .pv__tabs > .dot { margin-left: calc(14px + 16px); }
+.no-gap .osd__popitem > * + * { margin-left: 12px; }
+.no-gap .osd__popitem > .dot { margin-left: calc(14px + 12px); }
+.no-gap .osd__sync > * + * { margin-left: 34px; }
+.no-gap .osd__sync > .dot { margin-left: calc(14px + 34px); }
+.no-gap .osd__nextbtn > * + * { margin-left: 10px; }
+.no-gap .osd__nextbtn > .dot { margin-left: calc(14px + 10px); }
+.no-gap .age > * + * { margin-left: 6px; }
+.no-gap .age > .dot { margin-left: calc(14px + 6px); }
+.no-gap .pv__subline > * + * { margin-left: 14px; }
+.no-gap .pv__subline > .dot { margin-left: calc(14px + 14px); }
+.no-gap .pv__end, .no-gap .osd__liveicons { margin-left: auto !important; }
+/* ---- end of the generated spacing ---- */

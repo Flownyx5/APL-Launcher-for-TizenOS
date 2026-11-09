@@ -673,11 +673,17 @@ function hubAbove(out) {
         if (!m) return;
         if (m[1] === APP_ID) mine.push(m[2]); else if (HOME_APPS.test(m[1])) hub.push(m[2]);
     });
+    /* A window row: "No Win_ID RcsID PID w h x y ... Title". Samsung's bar on a 2021 screen (Q60A, Tizen 6) is a
+       window of its own called "tvlauncher", in the notification layer, 0 x 0 while closed. Only a window that
+       has a size counts: a closed bar or an idle home window above the launcher is not Samsung's home on screen. */
+    var ROW = /^\s*\d+\s+0x[0-9a-f]+\s+\d+\s+(\d+)\s+(\d+)\s+(\d+)/i;
     var hubAt = -1, mineAt = -1;
     wins.forEach(function (l, i) {
-        var t = l.trim().split(/\s+/);
-        if (hubAt < 0 && hub.some(function (p) { return t.indexOf(p) !== -1; })) hubAt = i;
-        if (mineAt < 0 && mine.some(function (p) { return t.indexOf(p) !== -1; })) mineAt = i;
+        var m = ROW.exec(l);
+        if (!m) return;
+        var pid = m[1], shown = +m[2] > 0 && +m[3] > 0;
+        if (hubAt < 0 && shown && (hub.indexOf(pid) !== -1 || /tvlauncher/i.test(l))) hubAt = i;
+        if (mineAt < 0 && mine.indexOf(pid) !== -1) mineAt = i;
     });
     return { above: hubAt >= 0 && (mineAt < 0 || hubAt < mineAt), hubAt: hubAt, mineAt: mineAt, hub: hub.join(","), mine: mine.join(","),
              full: vconfValue(head, "current_fullscreen_appid") || "", wins: wins.length > 1 };

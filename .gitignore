@@ -39,3 +39,6 @@ launcher/js/avatars.local.js
 launcher/sounds/*.wav
 launcher/images/avatars/custom/
 launcher/images/avatars/memoji/
+
+# APL TV: personal keys and the dev marker are made at install time
+apltv/app/js/*.local.js
