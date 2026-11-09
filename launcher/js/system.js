@@ -88,7 +88,10 @@
         kidsMode: false,            // this profile is a child's: only the chosen apps, Settings behind the PIN
         kidsApps: [],               // apps allowed in Kids Mode (ids)
         nightState: null,           // "Good Night" running: what to put back the next morning (routines.js)
-        openAnim: "auto"            // opening an app: "auto" (fade on older screens, zoom otherwise) | "zoom" | "fade" | "none"
+        openAnim: "auto",           // opening an app: "auto" (fade on older screens, zoom otherwise) | "zoom" | "fade" | "none"
+        liquidGlass: !APL.oldScreen,// glass panes under the dock and the pill (glass.js): off before 2022, where it slowed every key
+        smoothness: "auto",         // "auto" (lighter effects when keys are measured slow, smooth.js) | "effects" | "light" | "lightest"
+        remoteFollow: true          // Vetro intercepts the remote in use: infrared while the Bluetooth one is away (bridge/service.js)
     };
     /* OLED panels, told by the model the screen reports: the S8x / S9x TVs from 2022 on, whatever the
        region letters (QE55S95BATXXU, QN65S90FAEXZA, KQ65SD95AFXKR…), and the Odyssey OLED monitors with
@@ -572,9 +575,27 @@
         }
         try { send(); } catch (e) { if (visible) startBridge().then(send).catch(function () {}); }
     }
+    /* Fork: whether the launcher has the keys. Samsung's Smart Hub bar (2021 screens) opens OVER the
+       launcher: it stays visible, it only loses the focus, and the bridge closes the bar (bridge/service.js,
+       homeGuard). A key that reaches the launcher proves it has them again. */
+    var hasKeys = true;
+    function bridgeFocus(on) {
+        if (PREVIEW || !tz || !tz.messageport || on === hasKeys) return;
+        hasKeys = on;
+        try { tz.messageport.requestTrustedRemoteMessagePort(BRIDGE_ID, BRIDGE_PORT).sendMessage([{ key: "focus", value: on ? "1" : "0" }]); } catch (e) {}
+    }
     if (!PREVIEW && global.document) {
-        document.addEventListener("visibilitychange", function () { bridgeFront(!document.hidden); });
+        document.addEventListener("visibilitychange", function () {
+            bridgeFront(!document.hidden);
+            if (!document.hidden) { hasKeys = null; bridgeFocus(true); }          // back in front: it has the keys
+        });
         setTimeout(function () { if (!document.hidden) bridgeFront(true); }, 5000);
+        // Said again every 15 s while shown: one message lost while the launcher was hidden no longer
+        // leaves the bridge thinking it is in front (it would then never watch Samsung's home)
+        setInterval(function () { if (!document.hidden) bridgeFront(true); }, 15000);
+        global.addEventListener("blur", function () { if (!document.hidden) bridgeFocus(false); });
+        global.addEventListener("focus", function () { bridgeFocus(true); });
+        document.addEventListener("keydown", function () { if (!hasKeys) bridgeFocus(true); }, true);
     }
     function vetroGet(path) {
         return bridgeRequest("GET", path, "").then(function (r) {

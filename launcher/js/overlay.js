@@ -52,7 +52,7 @@
         var apps = (APL.allApps && APL.allApps()) || [];
         var keep = apps.filter(function (a) { return !a.virtual && (a.music || (a.key && MUSIC.test(a.key))); }).map(function (a) { return a.id; });
         var cfg = { minutes: sys.pref("idleClose") ? IDLE_MINUTES : 0, apps: homeApps().split(";"), keep: keep,
-                    homeReturn: !!sys.pref("homeReturn") };
+                    homeReturn: !!sys.pref("homeReturn"), remoteFollow: sys.pref("remoteFollow") !== false };
         sys.bridgeSend([{ key: "idle", value: JSON.stringify(cfg) }]).catch(function () {});
     }
 
@@ -209,6 +209,7 @@
     }
 
     sys.onPref("homeReturn", send);
+    sys.onPref("remoteFollow", send);
     sys.onPref("alexaBridge", send);
     sys.onPref("idleClose", send);
     sys.onPref("pauseKey", send);

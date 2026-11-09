@@ -18,12 +18,12 @@ SCRIPTS = [
     "js/diag.js", "js/lang-fr.js", "js/i18n.js", "js/catalog.js", "js/system.js", "js/keys.local.js", "js/liveshelf.js", "js/app-art.js", "js/icons.js", "js/qr.js",
     "js/apps.js", "js/autoart.js", "js/genart.js", "js/navigation.js", "js/services.js", "js/settings-tree.js", "js/settings.js",
     "js/controlcenter.js", "js/avatars.local.js", "js/profiles.js", "js/devices.js", "js/sources.js", "js/search.js", "js/appmenu.js", "js/aerials.js", "js/screensaver.js", "js/folders.js", "js/switcher.js", "js/widgets.js", "js/overlay.js",
-    "js/ambient.js", "js/search-plus.js", "js/phone.js", "js/routines.js", "js/startup.js", "js/diagnostic.js",
+    "js/smooth.js", "js/ambient.js", "js/search-plus.js", "js/phone.js", "js/routines.js", "js/startup.js", "js/diagnostic.js",
     "js/updater.js", "js/launcher.js", "js/glass.js", "js/preview.js",
 ]
 STYLES = ["css/launcher.css", "css/glass.css"]
 LOADER = 2          # raise it when boot.js changes: the screens will ask for APL Launcher Setup
-REINSTALL = "1.2.0"  # minimum installed version: raise it when config.xml changes (permissions…)
+REINSTALL = "1.3.0"  # minimum installed version: raise it when config.xml changes (permissions…)
 
 notes = ""
 if "--notes" in sys.argv:

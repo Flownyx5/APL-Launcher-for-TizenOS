@@ -247,6 +247,7 @@
     var wanted = "";         /* the artwork that should be on screen right now */
 
     function bake(src, done, el) {
+        if (!skinOn()) { if (done) done(); return; }
         if (!src) { drop(); return; }
         wanted = src;
         if (src.indexOf("grad:") === 0) {
@@ -278,6 +279,7 @@
     /* The pane for a picture that is about to be shown (the next title of the
        app in focus): made now, so the change lands on a ready slice. */
     function prefetch(src) {
+        if (!skinOn()) return;
         if (src && !cache[src] && src !== bakedFrom) render(src, function () {});
     }
 
@@ -384,7 +386,7 @@
     }
 
     function paint() {
-        if (!ensure()) return;
+        if (!skinOn() || !ensure()) return;
         if (!baked) return;
         var list = document.querySelectorAll(TARGETS.join(",")), i, el, r, key, l;
         for (i = 0; i < list.length; i++) {
@@ -426,6 +428,7 @@
     /* Bake the picture now and call back once the pane is ready, so the caller can
        swap the picture and the glass in the same frame (launcher.js setPoster). */
     function prepare(src, done, el) {
+        if (!skinOn()) { if (done) done(); return; }
         if (!done) { if (src) bake(src, null, el); return; }
         var called = false;
         function call() { if (called) return; called = true; done(); }
@@ -443,6 +446,7 @@
     }
 
     function refresh() {
+        if (!skinOn()) return;
         global.clearTimeout(timer);
         timer = global.setTimeout(function () {
             var src = forced || scene() || gradScene();
@@ -473,6 +477,7 @@
 
     /* Bake again only when the artwork really changed. */
     function sync() {
+        if (!skinOn()) return;
         var src = forced || scene() || gradScene();
         if (src && src !== bakedFrom) bake(src);
     }
@@ -503,6 +508,7 @@
     /* A page that opens over the Home Screen re-slices after its own layout
        has settled: one call, and its panes carry the material. */
     APL.glassAfter = function (el) {
+        if (!skinOn()) return;
         if (el && el.classList) el.classList.add("has-glass");
         /* A panel's tiles have no geometry until they have slid in, so one look
            at 0 ms only dresses whichever tile was already laid out. Look again
@@ -519,16 +525,31 @@
        picture, so they have nothing to switch off. Visual Effects keeps its own
        job - the live blur behind Settings, menus, toasts, Search and the grid's
        wallpaper - which is the costly one and stays off by default. */
-    function skinOn() { return true; }
+    /* Fork: off by default on screens before 2022 (APL.oldScreen). Cheap to draw, but every key,
+       transition and class change in the page re-sliced the panes (layout reads, a bake per picture,
+       and a backdrop that waited up to 1.2 s for its bake): that was a large part of the lag in menus
+       and Settings on a Tizen 6 TV. Settings › Appearance › Liquid Glass. */
+    function skinOn() { var s = APL.sys; return !(s && s.pref) || s.pref("liquidGlass") !== false; }
 
     function apply() {
         body = document.body;
         if (!body) return;
+        if (!skinOn()) { off(); return; }
         /* Always on: the pane is a frozen slice, not a filter, so it is not
            tied to Visual Effects (the live blur) at all. */
         body.classList.add("glass");
         refresh();
         wire();
+    }
+    function off() {
+        if (body) body.classList.remove("glass");
+        global.clearTimeout(timer); global.clearTimeout(settle); global.clearTimeout(empty);
+        var panes = document.querySelectorAll(".cg__glass"), i;
+        for (i = 0; i < panes.length; i++) if (panes[i].parentNode) panes[i].parentNode.removeChild(panes[i]);
+        var list = document.querySelectorAll(TARGETS.join(","));
+        for (i = 0; i < list.length; i++) { list[i].__cgLayer = null; list[i].__cgKey = ""; }
+        baked = ""; bakedFrom = ""; wanted = "";
+        notify();
     }
 
     /* Wired once, and only while the skin is on. */
@@ -551,13 +572,14 @@
         document.addEventListener("keydown", paint, true);
         /* A redrawn tile gets its layer back, and a backdrop that has just
            finished fading gets sliced in place of the one before it. */
-        document.addEventListener("keyup", function () { paint(); sync(); }, true);
-        document.addEventListener("transitionend", function () { paint(); sync(); }, true);
+        document.addEventListener("keyup", function () { if (skinOn()) { paint(); sync(); } }, true);
+        document.addEventListener("transitionend", function () { if (skinOn()) { paint(); sync(); } }, true);
         /* Surfaces rebuilt while the glass is on (Control Center redraws its
            tiles on every move) get their lens back within a frame: no flash of
            the plain fill, no glass that appears and is gone again. */
         if (global.MutationObserver) {
             var observer = new global.MutationObserver(function () {
+                if (!skinOn()) return;
                 global.clearTimeout(observer._t);
                 observer._t = global.setTimeout(paint, 40);
             });
@@ -569,6 +591,7 @@
                the first key press. */
             var boom = 0;
             var layers = new global.MutationObserver(function () {
+                if (!skinOn()) return;
                 global.clearTimeout(boom);
                 boom = global.setTimeout(function () { refresh(); sync(); }, 60);
             });
@@ -579,6 +602,7 @@
 
     function start() {
         apply();
+        if (APL.sys && APL.sys.onPref) APL.sys.onPref("liquidGlass", function () { apply(); });
         /* The pref store and the screen settle at their own pace, and this used
            to bail out here for good if the class was not on the body yet: one
            boot-order race and the glass never came on at all, which is what

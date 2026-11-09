@@ -2,9 +2,10 @@
    startup.js — start with the screen, every time.
 
    Two background services must start on their own when the screen
-   starts: Vetro's (vetrotvapp.svc: the Home key, root) and the
-   launcher's bridge (APLauncher.Bridge: opens the launcher after a
-   full start, brings it back after sleep, wakes Vetro up).
+   starts, and start again if they stop: Vetro's (vetrotvapp.svc: the
+   Home key, root) and the launcher's bridge (APLauncher.Bridge: opens
+   the launcher after a full start, brings it back after sleep and over
+   Samsung's home, wakes Vetro up, follows the remote in use).
    Some installers record them without "start at boot" (and Vetro's
    without "restart"): after a full start nothing comes back until
    Vetro is opened by hand. Vetro repairs its own flags only once
@@ -20,7 +21,9 @@
 
     var APL = global.APL, sys = APL.sys;
     var DB = "/opt/dbspace/.pkgmgr_parser.db";
-    var WANT = { "APLauncher.Bridge": ["onboot"], "vetrotvapp.svc": ["onboot", "autorestart"] };
+    // The bridge also restarts when it stops: it shares its process with Vetro's service, and without it
+    // nothing watches Samsung's home or follows the remote in use (bridge/service.js)
+    var WANT = { "APLauncher.Bridge": ["onboot", "autorestart"], "vetrotvapp.svc": ["onboot", "autorestart"] };
     var FIELD = { onboot: "app_onboot", autorestart: "app_autorestart" };
     var state = null;               // { apps: { id: { onboot, autorestart } }, fixed: [..], error }
 

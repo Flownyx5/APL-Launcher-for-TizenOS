@@ -26,6 +26,8 @@
         });
     }
     function R(state, detail) { return { state: state, detail: detail || "" }; }
+    var lastSnaps = [], fullEl = null, reportText = "";
+    var SNAP_KINDS = { over: "Samsung's bar over the launcher", full: "Samsung's home in full screen", "focus lost": "focus lost, not to Samsung's home" };
     function msg(e) { return (e && e.message) || String(e || ""); }
     function getJson(url) { return global.fetch(url, { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }); }
     var PREVIEW = sys.PREVIEW;
@@ -174,8 +176,16 @@
                     var pol = (d && d.status && d.status.policy) || {}, held = pol.mode === "filter" ? pol.device : "";
                     var others = ((d && d.devices) || []).filter(function (x) { return x.selectable && x.name !== held; }).map(function (x) { return x.name; });
                     var more = others.length ? " · " + APL.t("not held: {list} (its Home goes to Samsung, Return to the Launcher brings the launcher back)", { list: others.join(", ") }) : "";
-                    if (!held) return R("warn", APL.t("no remote intercepted: Vetro › Remapper › choose the remote, Remote interception on") + more);
-                    return R(pol.connected ? "ok" : "warn", held + (pol.connected ? "" : " · " + APL.t("not connected right now")) + more);
+                    return limit(sys.bridgeState(), 9000).catch(function () { return null; }).then(function (st) {
+                        var f = (st && st.follow) || null, fol = "";
+                        var fl = String((f && f.last) || "").replace("failed: ", APL.t("failed: ")).replace("infrared", APL.t("infrared"));
+                        if (!sys.pref("remoteFollow")) fol = " · " + APL.t("following the remote in use: off");
+                        else if (f && f.on) fol = " · " + APL.t("follows the remote in use") + (f.switches ? " (" + APL.t("moved {n} times, last: {l}", { n: f.switches, l: fl }) + ")" : "") +
+                                                  (f.error ? " · " + f.error : "");
+                        else if (st) fol = " · " + APL.t("following the remote in use: not in the launcher service, install again with APL Launcher Setup");
+                        if (!held) return R("warn", APL.t("no remote intercepted: Vetro › Remapper › choose the remote, Remote interception on") + more + fol);
+                        return R(pol.connected ? "ok" : "warn", held + (pol.connected ? "" : " · " + APL.t("not connected right now")) + more + fol);
+                    });
                 }, function (e) { return R("warn", APL.t("Vetro doesn't say ({e})", { e: msg(e).slice(0, 60) })); });
             } },
             { label: APL.t("Return to the Launcher"), run: function () {
@@ -185,9 +195,15 @@
                 return limit(sys.bridgeState(), 9000).then(function (st) {
                     var g = st.homeGuard || {};
                     if (!g.on) return R("warn", APL.t("not running in the launcher service: install again with APL Launcher Setup"));
-                    return R("ok", APL.t("on: Samsung's home is watched while the launcher is behind") +
+                    lastSnaps = g.snaps || [];
+                    var seen = lastSnaps.length ? lastSnaps[lastSnaps.length - 1] : null;
+                    return R(g.fails && !g.back ? "warn" : "ok", APL.t("on: Samsung's home is watched while the launcher is behind") +
                                    (g.fromStart ? " · " + APL.t("active from power-on") : "") +
-                                   (g.back ? " · " + APL.t("brought back {n} times (last {t})", { n: g.back, t: g.last }) : ""));
+                                   (g.back ? " · " + APL.t("brought back {n} times (last {t})", { n: g.back, t: g.last }) : "") +
+                                   (g.how ? " · " + APL.t("how: {h}", { h: APL.t(g.how) }) : "") +
+                                   (g.fails ? " · " + APL.t("{n} times not back", { n: g.fails }) : "") +
+                                   (g.asleep ? " · " + APL.t("Samsung's home seen {n} times while the screen said it was going to sleep (state {pm}): left alone", { n: g.asleep, pm: g.pm }) : "") +
+                                   (seen ? " · " + APL.t("last seen: {k} at {t}", { k: APL.t(SNAP_KINDS[seen.kind] || seen.kind), t: seen.at }) : ""));
                 });
             } },
             { label: "APL Overlay", run: function () {
@@ -334,6 +350,10 @@
             }, function () { return null; });
             return mem.then(function (mb) {
                 var d = APL.t("{fps} frames per second", { fps: fps }) + (mb ? " · " + APL.t("{mb} MB of memory free", { mb: mb }) : "");
+                var sm = APL.smooth ? APL.smooth.state() : null;
+                if (sm) d += " · " + APL.t("effects: {l}", { l: [APL.t("All Effects"), APL.t("Light Effects"), APL.t("Minimal Effects")][sm.level] }) +
+                             (sm.median ? " · " + APL.t("key to screen {ms} ms", { ms: sm.median }) : "");
+                if (APL.genArt && APL.genArt.where) d += " · " + APL.t("backgrounds painted: {w}", { w: APL.genArt.where() });
                 return R(fps >= 50 ? "ok" : fps >= 30 ? "warn" : "fail", d);
             });
         });
@@ -385,6 +405,9 @@
             running = false;
             sumEl.textContent = APL.t("{ok} work · {warn} with a limit · {fail} don't work · {skip} not tested", count);
             var text = "APL Launcher diagnostic — " + new Date().toISOString().slice(0, 16).replace("T", " ") + "\n" + out.join("\n");
+            // What the screen showed the last times Samsung's home was seen (for the phone remote's report)
+            if (lastSnaps.length) text += "\n\n" + lastSnaps.map(function (x) { return "[" + x.at + " " + x.kind + "]\n" + x.text; }).join("\n\n");
+            reportText = text;
             try { global.localStorage.setItem("apl.diag", text); } catch (e) {}
             try { console.log(text); } catch (e) {}
             if (!PREVIEW) sys.bridgeSend([{ key: "report", value: text }]).catch(function () {});
@@ -402,21 +425,36 @@
         head.appendChild(sumEl);
         var btns = el("div", "diag__btns");
         var again = el("div", "diag__btn", APL.t("Run Again"));
+        var details = el("div", "diag__btn", APL.t("Details"));
         var close_ = el("div", "diag__btn", APL.t("Close"));
-        btns.appendChild(again); btns.appendChild(close_);
+        btns.appendChild(again); btns.appendChild(details); btns.appendChild(close_);
         head.appendChild(btns);
         head.appendChild(el("div", "diag__spin"));
         root.appendChild(head);
         listEl = el("div", "diag__list");
         root.appendChild(listEl);
+        // Every line in full (the list cuts the long ones), and what the screen showed when Samsung's home came
+        fullEl = el("pre", "diag__full");
+        root.appendChild(fullEl);
         footEl = el("div", "diag__foot");
         root.appendChild(footEl);
         document.body.appendChild(root);
         nav = new APL.Nav({
-            onSelect: function (i) { if (i === 0) { if (!running) run(); } else close(); },
-            onBack: close
+            onSelect: function (i) {
+                if (i === 0) { if (!running) { root.classList.remove("is-full"); details.textContent = APL.t("Details"); run(); } }
+                else if (i === 1) {
+                    var on = root.classList.toggle("is-full");
+                    details.textContent = on ? APL.t("List") : APL.t("Details");
+                    if (on) fullEl.textContent = reportText || APL.t("The tests are still running.");
+                }
+                else close();
+            },
+            onBack: function () {
+                if (root.classList.contains("is-full")) { root.classList.remove("is-full"); details.textContent = APL.t("Details"); return; }
+                close();
+            }
         });
-        nav.setTiles([again, close_]);
+        nav.setTiles([again, details, close_]);
     }
 
     function open() {
@@ -425,7 +463,7 @@
         root.classList.add("is-open");
         isOpen = true;
         APL.pushNav(nav);
-        nav.focus(1);
+        nav.focus(2);
         run();
     }
     function close() {

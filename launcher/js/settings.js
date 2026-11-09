@@ -235,7 +235,10 @@
     /* ---------- focus ---------- */
     function ensureVisible(row) {
         // Margins to stay out of the list's top / bottom fade zones.
-        var view = 880, top = row.offsetTop, h = row.offsetHeight;
+        // Read once per row (a row never moves inside its list): reading it right after the focus
+        // change made the screen work out the whole page's style and layout on every key
+        if (!row._top) { row._top = row.offsetTop; row._h = row.offsetHeight; }
+        var view = 880, top = row._top, h = row._h;
         if (top + listY < 30) listY = -top + 30;
         else if (top + h + listY > view - 80) listY = view - 80 - top - h;
         listEl.style.transform = "translateY(" + listY + "px)";

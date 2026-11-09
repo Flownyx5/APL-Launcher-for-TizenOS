@@ -97,6 +97,10 @@
                             APL.t("Optional: HD backgrounds for movies and shows. Set it in APL Launcher Setup."))
                     ], APL.t("The keys are set in APL Launcher Setup, on the PC."))
                 ], APL.t("The Top Shelf shows the first one available, top to bottom. Turn one off to skip it.")),
+                choice(APL.t("Smoothness"), "smoothness",
+                    [["auto", APL.t("Automatic")], ["effects", APL.t("All Effects")], ["light", APL.t("Light Effects")], ["lightest", APL.t("Minimal Effects")]],
+                    APL.t("Automatic: the screen times each key press and lightens the effects if it is slow (lighter from the start on screens before 2022). Light Effects: short movements, no shadows that move. Minimal Effects: nothing animates on a key.")),
+                toggle(APL.t("Liquid Glass"), "liquidGlass", APL.t("Glass panes under the dock, the clock and Control Center, cut from the picture behind. Off by default on screens before 2022, where it slowed down every key.")),
                 toggle(APL.t("Visual Effects"), "visualEffects", APL.t("Blur and glass. Prettier but slower: off by default so the screen stays smooth.")),
                 toggle(APL.t("Dynamic Backdrops"), "cleanFrameBackdrops",
                     APL.t("A film or series that service streams right now, on the apps that have nothing of their own to show: the storefront's trending list for your country (JustWatch, no key). Apps with a Top Shelf keep it - What You're Watching, What's Popular, Plex, Spotify and the players' Continue Watching come first.")),
@@ -123,7 +127,8 @@
                 toggle(APL.t("Search Hidden Apps"), "searchHidden",
                     APL.t("Search also finds the apps hidden from the Home Screen. Off: only what the Home Screen and its folders show.")),
                 toggle(APL.t("Full Screen Hint"), "showHint", APL.t("Shows “Press ▲ for full screen” on the Home Screen.")),
-                toggle(APL.t("Return to the Launcher"), "homeReturn", APL.t("When an app closes, or when Samsung's home opens on its own (a phone app's Home button, a remote Vetro doesn't intercept), the screen comes back here. Samsung's home opened from the launcher's Smart Hub tile stays."))
+                toggle(APL.t("Return to the Launcher"), "homeReturn", APL.t("When an app closes, or when Samsung's home opens on its own (a phone app's Home button, a remote Vetro doesn't intercept), the screen comes back here. Samsung's home opened from the launcher's Smart Hub tile stays.")),
+                toggle(APL.t("Follow the Remote in Use"), "remoteFollow", APL.t("Vetro holds one remote at a time. While the Bluetooth remote is away (flat, not paired), Vetro moves to the infrared receiver, so an old infrared remote's Home opens the launcher too; it moves back when the Bluetooth remote returns. Only when remote interception is on in Vetro."))
             ], APL.t("The apps shown, their order, and coming back here.")),
 
             /* -------- Remote and Devices -------- */

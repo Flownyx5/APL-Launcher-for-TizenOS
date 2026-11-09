@@ -441,7 +441,7 @@
             x.drawImage(body, 0, 0);
             x.globalAlpha = light ? 0.8 : 0.95; x.drawImage(rim, 0, 0); x.globalAlpha = 1;
         });
-        return blurred(c, 0.10).toDataURL("image/jpeg", 0.9);
+        return blurred(c, 0.10);
     }
     /* Blur by a share of the width: canvas filter at half size, else smooth down- and up-scaling. */
     function blurred(src, share) {
@@ -473,10 +473,87 @@
     }
     /* Both themes; a color without saturation (black, white) gives graphite / silver. */
     /* main: the app's color {h, s, l}; st: what study() found in its tile or logo, for a second color. */
-    function sheets(id, main, st) {
+    function sheetCanvases(id, main, st) {
         var grey = main.s < 15, two = grey ? null : secondColour(main, st);
         var list = sheetPlan(id, main.h, two), s = grey ? 6 : clamp(main.s, 55, 92), l = grey ? 38 : sheetLight(main.l);
         return { dark: paintSheets(list, s, false, l), light: paintSheets(list, s, true, l) };
+    }
+    function sheets(id, main, st) {
+        var c = sheetCanvases(id, main, st);
+        return { dark: c.dark.toDataURL("image/jpeg", 0.9), light: c.light.toDataURL("image/jpeg", 0.9) };
+    }
+
+    /* ---------- painted away from the screen ----------
+       Sheets of Light are the heaviest drawing the launcher does (blurred shadows over full layers,
+       twice per app). On the screen's own thread that froze the Home Screen and Settings for seconds
+       per app while the backgrounds were made after an install (measured: 15 s of drawing for a
+       dozen apps on a TV-class processor). The same functions run in a Worker on an OffscreenCanvas:
+       the screen never waits for them. Without a Worker (or if it fails), they run here, but only
+       once nothing has been pressed for 2 s. */
+    var worker = null, workerOk = null, jobs = {}, jobN = 0, lastKey = 0;
+    var WORKER_FNS = [clamp, hsl, hueGap, sheetRandom, edgePoint, sheetPath, sheetLine, covered, pointIn, sheetPlan,
+                      falloff, lightMask, warm, sheetLight, paintSheets, blurred, secondColour, sheetCanvases];
+    function workerSource() {
+        return '"use strict";\nvar SW = ' + SW + ", SH = " + SH + ", EDGE = " + EDGE + ", CORNERS = " + JSON.stringify(CORNERS) + ";\n" +
+            "function canvas(w, h) { return new OffscreenCanvas(w, h); }\n" +
+            WORKER_FNS.map(String).join("\n") + "\n" +
+            "function url(c) { return c.convertToBlob({ type: 'image/jpeg', quality: 0.9 }).then(function (b) {\n" +
+            "    return new Promise(function (ok, ko) { var r = new FileReader(); r.onload = function () { ok(r.result); }; r.onerror = ko; r.readAsDataURL(b); }); }); }\n" +
+            "onmessage = function (e) { var d = e.data;\n" +
+            "    try { var c = sheetCanvases(d.id, d.main, d.st);\n" +
+            "        Promise.all([url(c.dark), url(c.light)]).then(function (u) { postMessage({ n: d.n, dark: u[0], light: u[1] }); },\n" +
+            "            function (x) { postMessage({ n: d.n, error: String(x) }); });\n" +
+            "    } catch (x) { postMessage({ n: d.n, error: String(x && x.message || x) }); } };\n";
+    }
+    function startWorker() {
+        if (workerOk === false) return null;
+        if (worker) return worker;
+        try {
+            if (typeof global.Worker !== "function" || typeof global.OffscreenCanvas !== "function" ||
+                !global.OffscreenCanvas.prototype.convertToBlob || !global.Blob || !global.URL || !global.URL.createObjectURL) throw new Error("no OffscreenCanvas");
+            worker = new global.Worker(global.URL.createObjectURL(new global.Blob([workerSource()], { type: "application/javascript" })));
+            worker.onmessage = function (e) {
+                var d = e.data || {}, job = jobs[d.n];
+                if (!job) return;
+                delete jobs[d.n];
+                if (d.error || !d.dark) { workerFailed(d.error); job.local(); return; }
+                workerOk = true;
+                job.done({ dark: d.dark, light: d.light });
+            };
+            worker.onerror = function (e) { workerFailed(e && e.message); if (e && e.preventDefault) e.preventDefault(); };
+            return worker;
+        } catch (e) { workerFailed(e.message); return null; }
+    }
+    /* The Worker can't paint on this screen: the waiting jobs and the next ones are painted here. */
+    function workerFailed(why) {
+        if (workerOk === false) return;
+        workerOk = false;
+        APL.genArtWhere = "main (" + String(why || "worker error").slice(0, 80) + ")";
+        try { if (worker) worker.terminate(); } catch (e) {}
+        worker = null;
+        var waiting = jobs; jobs = {};
+        Object.keys(waiting).forEach(function (k) { waiting[k].local(); });
+    }
+    document.addEventListener("keydown", function () { lastKey = Date.now(); }, true);
+    function whenQuiet(fn) {
+        (function wait() {
+            var calm = Date.now() - lastKey;
+            if (calm < 2000 || document.hidden) { global.setTimeout(wait, Math.max(400, 2000 - calm)); return; }
+            fn();
+        })();
+    }
+    function sheetsAsync(id, main, st) {
+        return new Promise(function (resolve, reject) {
+            function local() { whenQuiet(function () { try { resolve(sheets(id, main, st)); } catch (e) { reject(e); } }); }
+            var w = startWorker();
+            if (!w) { local(); return; }
+            var n = ++jobN;
+            jobs[n] = { done: resolve, local: local };
+            // Only the colours cross over: plain numbers, nothing tied to this page
+            var lite = st ? { second: st.second || null, accent: st.accent || null } : null;
+            try { w.postMessage({ n: n, id: id, main: { h: main.h, s: main.s, l: main.l }, st: lite }); }
+            catch (e) { delete jobs[n]; workerFailed(e.message); local(); }
+        });
     }
     /* The logo's other color, if it has a clear one far enough from the main color. */
     function secondColour(main, st) {
@@ -505,9 +582,10 @@
         var out = { mode: mode };
         // An app with its tile and its color already (catalog): only the sheets, nothing to look at
         if (!img && known && (app.tile || app.tileHtml)) {
-            var both = sheets(app.id, known, tile ? study(tile) : null);
-            out.bgDark = both.dark; out.bgLight = both.light;
-            return out;
+            return sheetsAsync(app.id, known, tile ? study(tile) : null).then(function (both) {
+                out.bgDark = both.dark; out.bgLight = both.light;
+                return out;
+            });
         }
         if (img) {
             st = study(img);
@@ -522,9 +600,14 @@
         if (known) { hue = known.h; sat = known.s; lit = known.l; }
         out.tile = paintTile(base, logo);
         out.accent = rgb(hslToRgb(hue, sat, 50));
-        if (mode === SHEETS) { var two = sheets(app.id, { h: hue, s: sat, l: lit }, st); out.bgDark = two.dark; out.bgLight = two.light; }
-        else out.bg = paintBg(logo, hue, sat);
-        return out;
+        if (mode === SHEETS) {
+            return sheetsAsync(app.id, { h: hue, s: sat, l: lit }, st).then(function (two) {
+                out.bgDark = two.dark; out.bgLight = two.light;
+                return out;
+            });
+        }
+        out.bg = paintBg(logo, hue, sat);
+        return Promise.resolve(out);
     }
 
     function stored(app) {
@@ -591,7 +674,8 @@
         var logoP = tileOnly ? Promise.resolve(null) : ownTile ? load(app.tile) : findLogo(app, art);
         var tileP = tileOnly && app.tile ? load(app.tile) : Promise.resolve(null);
         return Promise.all([logoP, tileP]).then(function (got) {
-            var out = paint(app, got[0], got[1]);
+            return paint(app, got[0], got[1]);
+        }).then(function (out) {
             out.v = VERSION;
             out.of = String(app.icon || "");
             put(app, out);
@@ -610,5 +694,6 @@
         } catch (e) {}
     }
 
-    APL.genArt = { make: make, applyCached: applyCached, missing: missing, clear: clear, undo: undo, retheme: retheme };
+    APL.genArt = { make: make, applyCached: applyCached, missing: missing, clear: clear, undo: undo, retheme: retheme,
+                   where: function () { return workerOk === true ? "worker" : workerOk === false ? (APL.genArtWhere || "main") : "not used yet"; } };
 })(window);

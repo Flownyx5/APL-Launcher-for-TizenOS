@@ -242,7 +242,7 @@ function withPort(fn) {
 function stopLater() {
     clearTimeout(idle);
     // Stays while the launcher is in front or the screen sleeps on it, to bring it back at wake-up
-    if (launcherFront || sleeping || waking || inArt || vetroWake.busy || (idleApps && idleApps.minutes > 0) || (homeGuard && homeGuard.on) || (remote && remote.server)) return;
+    if (launcherFront || sleeping || waking || inArt || vetroWake.busy || (idleApps && idleApps.minutes > 0) || (homeGuard && homeGuard.on) || (follow && follow.on) || (remote && remote.server)) return;
     idle = setTimeout(function () {
         try { tizen.application.getCurrentApplication().exit(); } catch (e) {}
     }, IDLE_MS);
@@ -297,20 +297,32 @@ function onMessage(data, attached) {
     if (field(data, "vetro") === "wake") { wakeVetro(); stopLater(); return; }
     var ic = field(data, "idle");
     if (ic) { idleConfig(ic); return; }
-    if (field(data, "home") === "wanted") { homeGuard.wanted = true; homeGuard.seenAt = 0; return; }
-    var front = field(data, "front");
-    if (front) {                        // the launcher came in front ("1") or left it ("0")
+    if (field(data, "home") === "wanted") { homeGuard.wanted = true; homeGuard.wantedAt = Date.now(); homeGuard.seenAt = 0; return; }
+    var front = field(data, "front"), focus = field(data, "focus");
+    if (focus) {                        // the launcher has the keys ("1"), or something over it took them ("0")
+        var had = focused;
+        focused = focus === "1";
+        if (!focused && had) { blurAt = Date.now(); homeGuard.overLooks = 0; }
+        if (focused) homeGuard.wanted = false;                 // back on the launcher: Samsung's home is gone
+    }
+    if (front) {                        // the launcher came in front ("1") or left it ("0"), repeated every 15 s
+        var was = frontNow();
         launcherFront = front === "1";
+        if (launcherFront) { frontAt = Date.now(); if (!was) homeGuard.wanted = false; }
         if (!launcherFront) { hiddenAt = Date.now(); checkSleep(SLEEP_CHECKS); }
         stopLater();
         return;
     }
+    if (focus) return;
     stopLater();
     var id = field(data, "id"), method = field(data, "method") || "GET", path = field(data, "path"), body = field(data, "body");
     if (path === "/__bridge/state") {               // Diagnostic: how this service and Vetro started
         answer(id, 200, JSON.stringify({ startedAt: startedAt, uptime: upSeconds(), vetroWake: vetroWake,
                                          idle: { minutes: idleApps.minutes, closed: idleApps.closed.slice(-6), checks: idleApps.checks },
-                                         homeGuard: { on: homeGuard.on, back: homeGuard.back, last: homeGuard.last, fromStart: homeGuard.fromStart } }), attached);
+                                         homeGuard: { on: homeGuard.on, back: homeGuard.back, last: homeGuard.last, fromStart: homeGuard.fromStart,
+                                                      how: homeGuard.how, fails: homeGuard.fails, wanted: homeGuard.wanted, snaps: homeGuard.snaps,
+                                                      front: frontNow(), focused: focused, asleep: homeGuard.asleep || 0, pm: homeGuard.pm || "" },
+                                         follow: { on: follow.on, switches: follow.switches, last: follow.last, error: follow.error, state: follow.state, checks: follow.checks } }), attached);
         return;
     }
     if (++requestsSeen <= 20) note("request " + id + ": " + method + " " + path.split("?")[0] + (attached ? " (port attached)" : ""));
@@ -550,26 +562,148 @@ function idleConfig(json, fromFile) {
     if (idleApps.minutes > 0 && !idleApps.timer) idleApps.timer = setInterval(idleCheck, IDLE_CHECK_MS);
     if (idleApps.minutes === 0 && idleApps.timer) { clearInterval(idleApps.timer); idleApps.timer = null; }
     homeGuardConfig(c.homeReturn === true);
+    followConfig(c.remoteFollow !== false);
     stopLater();
 }
 
 /* ---------- back to the launcher when Samsung's home shows ----------
    APL Overlay's "Return to the Launcher", for screens without it. Samsung's home comes to the front
    when a remote that Vetro doesn't intercept presses Home (a phone app such as SmartThings, an
-   infrared remote while the Bluetooth one is chosen in Vetro), or when an app closes. While the
-   launcher isn't in front, the app in front is read every 1.2 s; Samsung's home seen twice in a row
-   (it flashes by while apps start) brings the launcher back. Not when it was asked for (the
-   launcher's Smart Hub tile): it then stays until something else is in front. Settings › Advanced
-   Features › Return to the Launcher. */
-var HOME_GUARD_MS = 1200;
-var homeGuard = { on: false, timer: null, busy: false, wanted: false, seenAt: 0, back: 0, last: "", silent: 0 };
+   infrared remote while the Bluetooth one is chosen in Vetro), or when an app closes.
+   Two shapes of it:
+   - full screen (an app closed, 2022 screens and after): while the launcher isn't in front, the app in
+     front is read every 1.2 s; Samsung's home seen twice in a row (it flashes by while apps start)
+     brings the launcher back;
+   - over the launcher (the Smart Hub bar of the 2021 screens): the launcher stays visible behind it,
+     it only loses the focus. The launcher says so (focus "0"); after 2.5 s, if one of Samsung's home
+     windows is above the launcher's, it is closed the same way.
+   Each return goes in steps, each one checked before the next: the launcher opened again (as Vetro's
+   Home rule does), then Back sent to Samsung's home, then both again. The way that worked is kept for the
+   Diagnostic, with what the screen showed the last two times.
+   Not when Samsung's home was asked for (the launcher's Smart Hub tile): it then stays until the launcher
+   is back or something else is in front (15 minutes at most). Settings › Home Screen › Return to the
+   Launcher. The launcher repeats that it is in front every 15 s: one message lost while it was hidden no
+   longer leaves Samsung's home unwatched. */
+var HOME_GUARD_MS = 1200, FRONT_STALE_MS = 50000, OVER_AFTER_MS = 2500, OVER_LOOKS = 6, STEP_MS = 1800, WANTED_MS = 15 * 60000;
+var HOME_APPS = /csfs|home\.sidebar|coba\.newhome|home\.media/;
+var homeGuard = { on: false, timer: null, busy: false, wanted: false, wantedAt: 0, seenAt: 0, back: 0, last: "", silent: 0,
+                  how: "", fails: 0, steps: null, overLooks: 0, snaps: [], fromStart: false, app: "", appSince: 0, odd: false };
+var frontAt = 0, focused = true, blurAt = 0;
 function homeGuardConfig(on) {
     homeGuard.on = !!on;
     if (homeGuard.on && !homeGuard.timer) homeGuard.timer = setInterval(homeGuardTick, HOME_GUARD_MS);
-    if (!homeGuard.on && homeGuard.timer) { clearInterval(homeGuard.timer); homeGuard.timer = null; }
+    if (!homeGuard.on && homeGuard.timer) { clearInterval(homeGuard.timer); homeGuard.timer = null; homeGuard.steps = null; }
+}
+/* In front for real: said less than 50 s ago (the launcher repeats it every 15 s while it is shown, and
+   a hidden launcher is frozen, so it stops saying it). */
+function frontNow() { return launcherFront && Date.now() - frontAt < FRONT_STALE_MS; }
+function clock() { return new Date().toISOString().slice(11, 16); }
+function hubFree(app) { homeGuard.seenAt = 0; if (app && !HOME_APPS.test(app)) homeGuard.wanted = false; }
+
+/* The launcher opened again, the way Vetro's Home rule does (app_launcher, as root), or through the
+   app framework. "return" tells it this is not a press on Home (two of those open the App Switcher). */
+function launchSelf(asRoot) {
+    if (asRoot) { shell("app_launcher -s " + APP_ID + " apl_action return >/dev/null 2>&1", function () {}); return; }
+    try {
+        var ctl = new tizen.ApplicationControl("http://tizen.org/appcontrol/operation/default", null, null, null,
+                                               [new tizen.ApplicationControlData("apl_action", ["return"])]);
+        tizen.application.launchAppControl(ctl, APP_ID, function () {}, function () {
+            try { tizen.application.launch(APP_ID, function () {}, function () {}); } catch (e) {}
+        });
+    } catch (e) { try { tizen.application.launch(APP_ID, function () {}, function () {}); } catch (x) {} }
+}
+var STEPS = {
+    // Samsung's home in full screen
+    full: [function () { launchSelf(false); },
+           function () { launchSelf(true); },
+           function () { shell("input_keyevent XF86Back >/dev/null 2>&1; sleep 1; app_launcher -s " + APP_ID + " apl_action return >/dev/null 2>&1", function () {}); }],
+    // Samsung's bar over the launcher: the launcher is already in front, the bar has the keys
+    over: [function () { launchSelf(true); },
+           function () { shell("input_keyevent XF86Back >/dev/null 2>&1", function () {}); },
+           function () { shell("input_keyevent XF86Back >/dev/null 2>&1; sleep 1; app_launcher -s " + APP_ID + " apl_action return >/dev/null 2>&1", function () {}); }]
+};
+var STEP_NAMES = { full: ["launcher opened", "launcher opened as root", "Back, then the launcher"],
+                   over: ["launcher opened as root", "Back", "Back, then the launcher"] };
+function bringBack(kind) {
+    homeGuard.steps = { kind: kind, step: 0, at: Date.now() };
+    STEPS[kind][0]();
+    followCheck(true);                  // Home came from a remote Vetro doesn't hold: is it the one in use?
+}
+/* After each step: back in front (and with the keys), or the next step, or given up for this time. */
+function stepCheck(app) {
+    var st = homeGuard.steps;
+    var ok = st.kind === "full" ? (frontNow() || (app && !HOME_APPS.test(app))) : (frontNow() && focused);
+    if (ok) {
+        homeGuard.steps = null;
+        homeGuard.back++;
+        homeGuard.last = clock();
+        homeGuard.how = STEP_NAMES[st.kind][st.step];
+        note("return to the launcher (" + st.kind + "): " + homeGuard.how);
+        return;
+    }
+    if (Date.now() - st.at < STEP_MS) return;
+    if (++st.step >= STEPS[st.kind].length) {
+        homeGuard.steps = null;
+        homeGuard.fails++;
+        homeGuard.how = "not back after " + STEPS[st.kind].length + " steps (" + st.kind + ")";
+        note("return to the launcher (" + st.kind + "): failed");
+        return;
+    }
+    st.at = Date.now();
+    STEPS[st.kind][st.step]();
+}
+function snap(kind, text) {
+    homeGuard.snaps.push({ at: clock(), kind: kind, text: String(text || "").slice(0, 1400) });
+    if (homeGuard.snaps.length > 2) homeGuard.snaps.shift();
+}
+/* Is one of Samsung's home windows above the launcher's? enlightenment_info lists the windows from the
+   top; a window is told by its process (app_launcher -S gives "appId (pid)"). */
+var OVER_CMD = "vconftool get memory/appfw/current_fullscreen_appid 2>/dev/null; echo APPS; " +
+               "app_launcher -S 2>/dev/null | grep -E 'csfs|home.sidebar|coba.newhome|home.media|" + APP_ID + "'; echo WINS; " +
+               "enlightenment_info -topvwins 2>/dev/null | head -40";
+function hubAbove(out) {
+    var parts = String(out).split(/\nWINS\n?/), head = parts[0] || "", wins = (parts[1] || "").split("\n");
+    var hub = [], mine = [];
+    (head.split(/\nAPPS\n?/)[1] || "").split("\n").forEach(function (l) {
+        var m = /^\s*(\S+)\s*\((\d+)\)/.exec(l);
+        if (!m) return;
+        if (m[1] === APP_ID) mine.push(m[2]); else if (HOME_APPS.test(m[1])) hub.push(m[2]);
+    });
+    var hubAt = -1, mineAt = -1;
+    wins.forEach(function (l, i) {
+        var t = l.trim().split(/\s+/);
+        if (hubAt < 0 && hub.some(function (p) { return t.indexOf(p) !== -1; })) hubAt = i;
+        if (mineAt < 0 && mine.some(function (p) { return t.indexOf(p) !== -1; })) mineAt = i;
+    });
+    return { above: hubAt >= 0 && (mineAt < 0 || hubAt < mineAt), hubAt: hubAt, mineAt: mineAt, hub: hub.join(","), mine: mine.join(","),
+             full: vconfValue(head, "current_fullscreen_appid") || "", wins: wins.length > 1 };
 }
 function homeGuardTick() {
-    if (!homeGuard.on || launcherFront || sleeping || waking || homeGuard.busy) { homeGuard.seenAt = 0; return; }
+    if (!homeGuard.on || sleeping || waking || homeGuard.busy) { homeGuard.seenAt = 0; return; }
+    if (homeGuard.wanted && Date.now() - homeGuard.wantedAt > WANTED_MS) homeGuard.wanted = false;
+    var over = frontNow() && !focused && Date.now() - blurAt >= OVER_AFTER_MS;
+    if (frontNow() && !over && !homeGuard.steps) { homeGuard.seenAt = 0; return; }       // in front, with the keys
+    if (homeGuard.steps && homeGuard.steps.kind === "over" && frontNow() && focused) { stepCheck(""); return; }
+    if (over && !homeGuard.steps) {
+        if (homeGuard.wanted || homeGuard.overLooks >= OVER_LOOKS) return;            // asked for, or looked enough
+        homeGuard.overLooks++;
+        homeGuard.busy = true;
+        shell(OVER_CMD, function (out) {
+            homeGuard.busy = false;
+            if (!out || !frontNow() || focused) return;
+            var h = hubAbove(out);
+            if (HOME_APPS.test(h.full) || h.above) {
+                snap("over", "front " + h.full + " | home " + h.hub + " @" + h.hubAt + " | launcher " + h.mine + " @" + h.mineAt + "\n" + String(out).split(/\nWINS\n?/)[1]);
+                homeGuard.overLooks = OVER_LOOKS;
+                bringBack(HOME_APPS.test(h.full) ? "full" : "over");
+            } else if (homeGuard.overLooks === 1) {
+                snap("focus lost", "front " + h.full + " | home " + h.hub + " @" + h.hubAt + " | launcher " + h.mine + " @" + h.mineAt + (h.wins ? "\n" + String(out).split(/\nWINS\n?/)[1] : " | no window list"));
+            }
+        });
+        return;
+    }
+    // The same app in front for a minute (a film): one look every 2.4 s is enough, the screen keeps its processor
+    if (!homeGuard.steps && homeGuard.app && !HOME_APPS.test(homeGuard.app) && Date.now() - homeGuard.appSince > 60000 && (homeGuard.odd = !homeGuard.odd)) return;
     homeGuard.busy = true;
     shell("vconftool get memory/appfw/current_fullscreen_appid 2>/dev/null; vconftool get memory/pm/state 2>/dev/null", function (out) {
         homeGuard.busy = false;
@@ -579,17 +713,90 @@ function homeGuardTick() {
             return;
         }
         homeGuard.silent = 0;
-        if (launcherFront) { homeGuard.seenAt = 0; return; }
         var app = vconfValue(out, "current_fullscreen_appid") || "", pm = vconfValue(out, "memory/pm/state");
-        if (pm && pm !== "1") { homeGuard.seenAt = 0; return; }          // going to sleep: left alone
-        var home = /csfs|home\.sidebar|coba\.newhome/.test(app);          // Samsung's home (2025: the new Home)
-        if (!home) { homeGuard.seenAt = 0; if (app) homeGuard.wanted = false; return; }
+        if (homeGuard.steps) { stepCheck(app); return; }
+        if (frontNow()) { homeGuard.seenAt = 0; return; }
+        if (pm && pm !== "1") {                                          // going to sleep: left alone
+            homeGuard.seenAt = 0;
+            if (HOME_APPS.test(app)) { homeGuard.asleep = (homeGuard.asleep || 0) + 1; homeGuard.pm = pm; }   // for the Diagnostic
+            return;
+        }
+        if (!HOME_APPS.test(app)) {                                      // Samsung's home (2025: the new Home)
+            if (app !== homeGuard.app) { homeGuard.app = app; homeGuard.appSince = Date.now(); }
+            hubFree(app);
+            return;
+        }
+        homeGuard.app = app;
         if (homeGuard.wanted) return;                                    // opened on purpose: it stays
         if (!homeGuard.seenAt) { homeGuard.seenAt = Date.now(); return; }
         homeGuard.seenAt = 0;
-        homeGuard.back++;
-        homeGuard.last = new Date().toISOString().slice(11, 16);
-        try { tizen.application.launch(APP_ID, function () {}, function () {}); } catch (e) {}
+        snap("full", "front " + app);
+        bringBack("full");
+    });
+}
+
+/* ---------- the remote in your hand ----------
+   Vetro intercepts one remote only (its Home rule opens the launcher): the Bluetooth one, usually. While
+   that one is away (flat battery, not paired: memory/bluetooth/bt_smart_rc_connected false), the screen
+   is driven by infrared, through the receiver "wt61p807 rc device", and its Home opened Samsung's home.
+   Every 20 s, and whenever Samsung's home came back by itself, the bridge looks: the Bluetooth remote
+   away and Vetro on it, Vetro is moved to the infrared receiver; the Bluetooth remote back, Vetro goes
+   back to it. Only when interception is on in Vetro (never turned on here), at most once every 30 s.
+   Settings › Home Screen › Follow the Remote in Use. */
+var FOLLOW_MS = 20000, FOLLOW_GAP_MS = 30000;
+var BT_REMOTE = /smart ?control|bluetooth/i, IR_REMOTE = /wt61p807|rc device|infrared/i;
+var follow = { on: false, timer: null, busy: false, at: 0, switches: 0, last: "", error: "", btNode: "", state: null, checks: 0 };
+function followConfig(on) {
+    follow.on = !!on;
+    if (follow.on && !follow.timer) { follow.timer = setInterval(followCheck, FOLLOW_MS); setTimeout(followCheck, 5000); }
+    if (!follow.on && follow.timer) { clearInterval(follow.timer); follow.timer = null; }
+}
+function vetroJson(method, path, body, done) {
+    withPort(function () {
+        vetro(method, path, Buffer.from(body ? JSON.stringify(body) : "", "utf8"), 20000, function (status, text) {
+            var j = null;
+            try { j = JSON.parse(text); } catch (e) {}
+            done(status, j);
+        });
+    });
+}
+function followCheck(soon) {
+    if (!follow.on || follow.busy || sleeping || waking) return;
+    if (soon === true && Date.now() - follow.at < FOLLOW_GAP_MS) return;
+    follow.busy = true;
+    shell("vconftool get memory/bluetooth/bt_smart_rc_connected 2>/dev/null", function (out) {
+        var v = vconfValue(out, "bt_smart_rc_connected");
+        var bt = v === undefined ? null : /^(1|true)$/i.test(v);       // null: the screen doesn't say
+        vetroJson("GET", "/input", null, function (status, j) {
+            follow.busy = false;
+            follow.checks++;
+            if (status !== 200 || !j || !j.status) { follow.error = "Vetro /input: " + status; return; }
+            follow.error = "";
+            var p = j.status.policy || {}, pref = j.status.preference || null;
+            var devices = (j.devices || []).filter(function (d) { return d && d.selectable && d.node; });
+            var ir = devices.filter(function (d) { return IR_REMOTE.test(d.name || ""); })[0] || null;
+            var bts = devices.filter(function (d) { return BT_REMOTE.test(d.name || "") && !IR_REMOTE.test(d.name || ""); });
+            var onIr = !!ir && (p.node === ir.node || IR_REMOTE.test(p.device || ""));
+            var btAway = bt === false || (bt === null && !bts.length);
+            follow.state = { bt: bt, mode: p.mode || "", device: p.device || "", connected: !!p.connected, ir: ir ? ir.node : "", bt_nodes: bts.map(function (d) { return d.node; }) };
+            // Interception off (or listening only) in Vetro: the owner's choice, nothing changes
+            if (!(p.mode === "filter" || (p.mode !== "observe" && pref && pref.enabled))) return;
+            var target = null;
+            if (btAway && !onIr && ir) { target = ir; if (p.node) follow.btNode = p.node; }
+            else if (!btAway && onIr && bts.length) {
+                target = bts.filter(function (d) { return d.node === follow.btNode; })[0] || bts[0];
+            }
+            if (!target || Date.now() - follow.at < FOLLOW_GAP_MS) return;
+            follow.at = Date.now();
+            var name = target === ir ? "infrared" : "Bluetooth";
+            vetroJson("POST", "/input", { mode: "filter", device: target.node }, function (st2, r) {
+                var ok = st2 === 200 && !!r && r.ok !== false;
+                if (ok) follow.switches++;
+                follow.last = (ok ? "" : "failed: ") + name + " (" + target.node + ") " + clock();
+                if (!ok) follow.error = String((r && r.error) || st2).slice(0, 80);
+                note("remote follow: " + follow.last + (ok ? "" : " " + follow.error));
+            });
+        });
     });
 }
 
@@ -908,4 +1115,4 @@ module.exports.onStart = function () { start(); openLauncher(LAUNCH_TRIES); if (
 // Some environments run the script without calling onStart
 try { start(); openLauncher(LAUNCH_TRIES); if (isBooting()) wakeVetro(); } catch (e) {}
 module.exports.onRequest = function () { start(); };
-module.exports.onExit = function () { clearTimeout(idle); clearInterval(ticking); ticking = null; port = null; stopRemote(); if (idleApps.timer) clearInterval(idleApps.timer); if (homeGuard.timer) clearInterval(homeGuard.timer); };
+module.exports.onExit = function () { clearTimeout(idle); clearInterval(ticking); ticking = null; port = null; stopRemote(); if (idleApps.timer) clearInterval(idleApps.timer); if (homeGuard.timer) clearInterval(homeGuard.timer); if (follow.timer) clearInterval(follow.timer); };

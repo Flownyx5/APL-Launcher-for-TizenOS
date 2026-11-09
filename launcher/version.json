@@ -1,8 +1,8 @@
 {
- "version": "1.2.0",
+ "version": "1.3.0",
  "loader": 2,
- "reinstall": "1.2.0",
- "notes": "1.2.0: rebuilt on the original 1.0.22 with the fork's features; starts on its own with any remote.",
+ "reinstall": "1.3.0",
+ "notes": "1.3.0: smooth on older screens (backgrounds painted off-screen, lighter effects measured on the screen), Samsung's Smart Hub closed by itself, Vetro follows the remote in use.",
  "scripts": [
   "js/diag.js",
   "js/lang-fr.js",
@@ -34,6 +34,7 @@
   "js/switcher.js",
   "js/widgets.js",
   "js/overlay.js",
+  "js/smooth.js",
   "js/ambient.js",
   "js/search-plus.js",
   "js/phone.js",
