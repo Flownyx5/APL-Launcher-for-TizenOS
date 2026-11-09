@@ -47,10 +47,29 @@
        background instead (bridge/service.js, idleCheck). Music apps are left alone: they play behind. */
     var MUSIC = /^(spotify|deezer|applemusic|amazonmusic|qobuz|tidal|youtubemusic)$/;
     var checked = false;                // APL Overlay looked for (start): before that, nothing is sent
+    /* Fork: an app the bridge closed twice within 15 minutes started again by itself (Samsung's browser did,
+       every 2 to 3 minutes on a Q60A): closing it again and again cost the screen a start each time, so it is
+       kept from then on. Read from the bridge's own list, so it works with a bridge installed before this. */
+    var RESPAWN_KEY = "apl.respawn", respawn = {};
+    try { respawn = JSON.parse(global.localStorage.getItem(RESPAWN_KEY) || "{}") || {}; } catch (e) { respawn = {}; }
+    function minutesOf(hhmm) { var m = /^(\d\d):(\d\d)$/.exec(hhmm || ""); return m ? +m[1] * 60 + +m[2] : -1; }
+    function learnRespawn(st) {
+        var closed = (st && st.idle && st.idle.closed) || [], last = {}, added = false;
+        ((st && st.idle && st.idle.respawn) || []).forEach(function (id) { if (!respawn[id]) { respawn[id] = true; added = true; } });
+        closed.forEach(function (x) {
+            var parts = String(x).split(" "), t = minutesOf(parts[0]), id = parts[1];
+            if (!id || t < 0) return;
+            if (last[id] !== undefined && ((t - last[id] + 1440) % 1440) <= 15 && !respawn[id]) { respawn[id] = true; added = true; }
+            last[id] = t;
+        });
+        if (added) { try { global.localStorage.setItem(RESPAWN_KEY, JSON.stringify(respawn)); } catch (e) {} }
+        return added;
+    }
     function sendBridgeIdle() {
         if (sys.PREVIEW || installed || !checked) return;
         var apps = (APL.allApps && APL.allApps()) || [];
-        var keep = apps.filter(function (a) { return !a.virtual && (a.music || (a.key && MUSIC.test(a.key))); }).map(function (a) { return a.id; });
+        var keep = apps.filter(function (a) { return !a.virtual && (a.music || (a.key && MUSIC.test(a.key))); }).map(function (a) { return a.id; })
+                       .concat(Object.keys(respawn));
         var cfg = { minutes: sys.pref("idleClose") ? IDLE_MINUTES : 0, apps: homeApps().split(";"), keep: keep,
                     homeReturn: !!sys.pref("homeReturn"), remoteFollow: sys.pref("remoteFollow") !== false };
         sys.bridgeSend([{ key: "idle", value: JSON.stringify(cfg) }]).catch(function () {});
@@ -204,8 +223,18 @@
             installed = i !== -1;
             checked = true;
             if (installed) OVERLAY = OVERLAY_IDS[i];
-            if (installed) send(); else { checkHomeRule(); sendBridgeIdle(); }
+            if (installed) send(); else { checkHomeRule(); sendBridgeIdle(); watchRespawn(); }
         });
+    }
+    var respawnTimer = null;
+    function watchRespawn() {
+        if (respawnTimer || !sys.bridgeState) return;
+        function look() {
+            if (!sys.pref("idleClose")) return;
+            sys.bridgeState().then(function (st) { if (learnRespawn(st)) sendBridgeIdle(); }, function () {});
+        }
+        respawnTimer = setInterval(look, 5 * 60000);
+        setTimeout(look, 90000);
     }
 
     sys.onPref("homeReturn", send);

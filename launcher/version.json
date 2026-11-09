@@ -1,8 +1,8 @@
 {
- "version": "1.3.0",
+ "version": "1.3.1",
  "loader": 2,
  "reinstall": "1.3.0",
- "notes": "1.3.0: smooth on older screens (backgrounds painted off-screen, lighter effects measured on the screen), Samsung's Smart Hub closed by itself, Vetro follows the remote in use.",
+ "notes": "1.3.1: a smoother Home Screen on older screens; apps that start again by themselves are no longer closed over and over.",
  "scripts": [
   "js/diag.js",
   "js/lang-fr.js",

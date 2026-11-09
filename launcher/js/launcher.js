@@ -209,8 +209,13 @@
        Not the small copy of live content: enlarged 6 times without a blur, it showed as big pixels in
        the dock (seen on the M8); the dock is then clear glass over the picture. */
     var frostSrc, frostToken = 0;
+    /* Lighter effects (smooth.js, html.lite: screens before 2022, or keys measured slow) */
+    function lite() { return document.documentElement.classList.contains("lite"); }
     function frost(src) {
-        if (!dom.dock || src === frostSrc) return;           // the same picture: nothing to repaint
+        if (!dom.dock) return;
+        // Lighter effects: no copy of the picture in the dock (repainted on every change of backdrop)
+        if (lite()) { if (frostSrc !== null) { frostSrc = null; ++frostToken; dom.dock.style.setProperty("--glass-img", "none"); } return; }
+        if (src === frostSrc) return;                         // the same picture: nothing to repaint
         frostSrc = src;
         var token = ++frostToken;
         // Swapped once decoded: the dock never flashes to the bare tint while the picture loads
@@ -416,7 +421,7 @@
         if (!APL.appArt || !APL.appArt.next) return;
         rotTimer = setTimeout(function () {
             rotTimer = null;
-            if (apps[nav.index] !== app || mode === "grid" || overlayOpen()) { startRotate(app); return; }
+            if (apps[nav.index] !== app || mode === "grid" || overlayOpen() || (lite() && Date.now() - lastKeyAt < 4000)) { startRotate(app); return; }
             var pick = null;
             try { pick = APL.appArt.next(app, ++rotN); } catch (e) {}
             if (pick && pick.url) { setPoster(app, pick); return; }
@@ -441,7 +446,8 @@
             if (bgActive.dataset.poster && bgActive.dataset.poster !== pick.url) bgActive._stale = true;
             wantBlur(pick.url, app, pick.url);
             var next;
-            if (apps.indexOf(app) < DOCK_SIZE) {
+            // Lighter effects: the two spare layers take turns, rather than a new full-screen layer per poster
+            if (apps.indexOf(app) < DOCK_SIZE && !lite()) {
                 next = document.createElement("div");
                 next.className = "bg";
                 dom.bgA.parentNode.insertBefore(next, dom.bgA);
@@ -727,7 +733,7 @@
         });
     }
     /* After a short pause on the app, its current content is loaded. */
-    function startLive(app) {
+    function startLive(app, delay) {
         stopLive();
         if (!APL.live || !APL.live.hasSource(app)) return;
         liveTimer = setTimeout(function () {
@@ -739,16 +745,18 @@
                 warmNext(items, 1);
                 liveRotate = setInterval(function () {
                     if (mode === "grid") return;                 // paused under the grid
+                    if (lite() && Date.now() - lastKeyAt < 4000) return;   // never while the remote is in use
                     if (apps[nav.index] !== app) { stopLive(); return; }
                     n = (n + 1) % items.length;
                     setLiveBackdrop(app, items[n], n, items, 0);
                     warmNext(items, n + 1);
                 }, LIVE_ROTATE_MS);
             });
-        }, 650);
+        }, delay !== undefined ? delay : lite() ? 1100 : 650);
     }
 
-    var bgTimer = null, lastFocus = 0;
+    var bgTimer = null, lastFocus = 0, liveFallback = null, lastKeyAt = 0;
+    document.addEventListener("keydown", function () { lastKeyAt = Date.now(); }, true);
     function onFocus(i, el) {
         lastFocus = i;
         rotN = 0;
@@ -773,8 +781,22 @@
         // Full-screen artwork changed a fraction of a second after the focus: when
         // scrolling fast, a large image isn't decoded on every press.
         clearTimeout(bgTimer);
-        var swap = function () { setBackdrop(app); startLive(app); };
-        if (!bgActive.dataset.app) swap(); else bgTimer = setTimeout(swap, 170);
+        var swap = function () {
+            /* Lighter effects: one full-screen picture per app, not two. An app with a shelf of its own
+               goes straight to it (known titles are kept on the screen, so it is there at once), and its
+               own artwork only comes if the shelf has nothing to show within 1.5 s. */
+            clearTimeout(liveFallback);
+            if (live && lite()) {
+                startLive(app, 0);
+                liveFallback = setTimeout(function () {
+                    if (apps[nav.index] === app && mode !== "grid" && String(bgActive.dataset.app || "").indexOf(app.id + "#") !== 0) setBackdrop(app);
+                }, 1500);
+                return;
+            }
+            setBackdrop(app); startLive(app);
+        };
+        // Lighter effects: only once the focus rests (a hand on the remote presses about every 300 ms)
+        if (!bgActive.dataset.app) swap(); else bgTimer = setTimeout(swap, lite() ? 340 : 170);
     }
 
     function launch(i) {

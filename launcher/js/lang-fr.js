@@ -354,6 +354,8 @@ window.APL_LANG_FR = {
     "Full Screen Hint": "Indication plein écran",
     "Shows “Press ▲ for full screen” on the Home Screen.": "Affiche « Appuyez sur ▲ pour passer en plein écran » sur l'accueil.",
     "Return to the Launcher": "Revenir sur le launcher",
+    "Home Screen: longest frame after a key {ms} ms": "accueil : image la plus longue après une touche {ms} ms",
+    "left alone, they start again by themselves: {list}": "laissées car elles se relancent seules : {list}",
     "The tests are still running.": "Les tests sont encore en cours.",
     "List": "Liste",
     "Details": "Détails",

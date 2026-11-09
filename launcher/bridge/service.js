@@ -318,7 +318,7 @@ function onMessage(data, attached) {
     var id = field(data, "id"), method = field(data, "method") || "GET", path = field(data, "path"), body = field(data, "body");
     if (path === "/__bridge/state") {               // Diagnostic: how this service and Vetro started
         answer(id, 200, JSON.stringify({ startedAt: startedAt, uptime: upSeconds(), vetroWake: vetroWake,
-                                         idle: { minutes: idleApps.minutes, closed: idleApps.closed.slice(-6), checks: idleApps.checks },
+                                         idle: { minutes: idleApps.minutes, closed: idleApps.closed.slice(-6), checks: idleApps.checks, respawn: Object.keys(idleApps.respawn) },
                                          homeGuard: { on: homeGuard.on, back: homeGuard.back, last: homeGuard.last, fromStart: homeGuard.fromStart,
                                                       how: homeGuard.how, fails: homeGuard.fails, wanted: homeGuard.wanted, snaps: homeGuard.snaps,
                                                       front: frontNow(), focused: focused, asleep: homeGuard.asleep || 0, pm: homeGuard.pm || "" },
@@ -531,7 +531,11 @@ var IDLE_RECEIVERS = /airplay|ScreenMirroring|multiscreen/i;
 var IDLE_SELF = ["com.samsung.tv.home.media", "com.samsung.tv.mycontents", "com.samsung.tv.quicklaunch", "org.tizen.browser",
                  "com.samsung.tv.bixbycapsuleviewer", "com.samsung.tv.aria-video", "com.samsung.tv.cobalt-yt",
                  "MCmYXNxgcu.DisneyPlus", "org.tizen.netflix-app", "org.tizen.primevideo", "HEPsqFNie0.tvplusstandalone"];
-var idleApps = { minutes: 0, home: {}, keep: {}, lastUsed: {}, seen: {}, front: "", timer: null, busy: false, closed: [], checks: 0 };
+var idleApps = { minutes: 0, home: {}, keep: {}, lastUsed: {}, seen: {}, front: "", timer: null, busy: false, closed: [], checks: 0,
+                 closedAt: {}, respawn: {} };
+/* An app that starts again by itself soon after it was closed (Samsung's browser did, every 2 to 3 minutes on a
+   Q60A) is left alone from then on: closing it again and again cost the screen a start each time. */
+var IDLE_RESPAWN_MS = 15 * 60000;
 
 /* The launcher's settings for these two jobs, kept next to the bridge's log: at the next start of the
    screen they apply at once, before the launcher has ever run (a remote Vetro doesn't intercept, such as an
@@ -810,7 +814,7 @@ function idleFront(app) {
 }
 
 function idleClosable(id) {
-    if (IDLE_NEVER.test(id) || IDLE_RECEIVERS.test(id) || idleApps.keep[id]) return false;
+    if (IDLE_NEVER.test(id) || IDLE_RECEIVERS.test(id) || idleApps.keep[id] || idleApps.respawn[id]) return false;
     return !!(idleApps.seen[id] || idleApps.home[id] || IDLE_SELF.indexOf(id) !== -1);
 }
 
@@ -826,6 +830,11 @@ function idleCheck() {
             var m = /^\s*([A-Za-z0-9_.-]+) \(\d+\)\s*$/.exec(line);
             if (!m) return;
             var id = m[1];
+            if (idleApps.closedAt[id] && !idleApps.seen[id] && now - idleApps.closedAt[id] < IDLE_RESPAWN_MS) {
+                idleApps.respawn[id] = true;                             // back on its own: left alone
+                note("idle: " + id + " started again by itself after being closed, left alone from now on");
+            }
+            delete idleApps.closedAt[id];
             if (id === idleApps.front || !idleClosable(id)) return;
             var used = idleApps.lastUsed[id];
             if (!used) { idleApps.lastUsed[id] = now; return; }          // already behind when this started: counted from now
@@ -834,7 +843,7 @@ function idleCheck() {
         });
         if (!close.length) { idleApps.busy = false; return; }
         shell(close.map(function (id) { delete idleApps.lastUsed[id]; return "app_launcher -k " + id + " >/dev/null 2>&1"; }).join("; ") + "; true", function () {
-            close.forEach(function (id) { idleApps.closed.push(new Date().toISOString().slice(11, 16) + " " + id); });
+            close.forEach(function (id) { idleApps.closed.push(new Date().toISOString().slice(11, 16) + " " + id); idleApps.closedAt[id] = Date.now(); });
             if (idleApps.closed.length > 20) idleApps.closed = idleApps.closed.slice(-20);
             idleApps.busy = false;
         });

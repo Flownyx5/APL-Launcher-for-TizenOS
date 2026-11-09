@@ -156,7 +156,8 @@
                     if (!i.minutes) return R("warn", APL.t("not running in the launcher service: install again with APL Launcher Setup"));
                     var last = (i.closed || []).slice(-3).join(", ");
                     return R("ok", APL.t("on: after {m} min in the background · {n} checks", { m: i.minutes, n: i.checks || 0 }) +
-                                   (last ? " · " + APL.t("last closed: {list}", { list: last }) : ""));
+                                   (last ? " · " + APL.t("last closed: {list}", { list: last }) : "") +
+                                   (i.respawn && i.respawn.length ? " · " + APL.t("left alone, they start again by themselves: {list}", { list: i.respawn.join(", ") }) : ""));
                 });
             } },
             { label: APL.t("Start on APL Launcher"), run: function () {
@@ -352,7 +353,8 @@
                 var d = APL.t("{fps} frames per second", { fps: fps }) + (mb ? " · " + APL.t("{mb} MB of memory free", { mb: mb }) : "");
                 var sm = APL.smooth ? APL.smooth.state() : null;
                 if (sm) d += " · " + APL.t("effects: {l}", { l: [APL.t("All Effects"), APL.t("Light Effects"), APL.t("Minimal Effects")][sm.level] }) +
-                             (sm.median ? " · " + APL.t("key to screen {ms} ms", { ms: sm.median }) : "");
+                             (sm.median ? " · " + APL.t("key to screen {ms} ms", { ms: sm.median }) : "") +
+                             (sm.home ? " · " + APL.t("Home Screen: longest frame after a key {ms} ms", { ms: sm.home }) : "");
                 if (APL.genArt && APL.genArt.where) d += " · " + APL.t("backgrounds painted: {w}", { w: APL.genArt.where() });
                 return R(fps >= 50 ? "ok" : fps >= 30 ? "warn" : "fail", d);
             });

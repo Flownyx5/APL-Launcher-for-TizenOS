@@ -151,7 +151,7 @@
         if (fxEl.getAttribute("data-kind") !== k) buildFx(k);
         void fxEl.offsetWidth;
         fxEl.classList.add("is-on");
-        fxTimer = setTimeout(function () { fxEl.classList.remove("is-on"); }, FX_MS);
+        fxTimer = setTimeout(function () { fxEl.classList.remove("is-on"); }, document.documentElement.classList.contains("lite") ? 12000 : FX_MS);
     }
 
     /* ---------- start ---------- */

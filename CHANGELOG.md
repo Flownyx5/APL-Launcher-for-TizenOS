@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.1 (Flownyx5 fork)
+Comes with the automatic update: no need to install again.
+- **A smoother Home Screen on older screens** (Light Effects, the default before 2022, and Minimal Effects). The key reached the screen at once (19 ms on a Q60A), but the frames after it stalled while a new full-screen picture was drawn. Measured on one slow core, presses 450 ms apart:
+  - only the backdrop on screen is a layer: 8 full-screen layers were kept ready (30 megapixels to draw and to hold), now 15 megapixels;
+  - one full-screen picture per app, not two: an app with a shelf of its own goes straight to it, its own artwork only if the shelf shows nothing within 1.5 s;
+  - the picture changes once the focus rests (340 ms), and the Top Shelf never rotates while the remote is in use;
+  - the dock no longer repaints a copy of the picture with a masked rim and two blurred shadows: a tint with a lit top edge;
+  - the posters take turns on two layers instead of a new full-screen layer each time; the grid's blurred wallpaper is only drawn in the grid; rain or snow lasts 12 s.
+  With Light Effects the longest frame went from 1564 ms to 442 ms and the drawing time from 5.3 s to 2.1 s; with Minimal Effects from 410 ms to 219 ms.
+- **Apps that start again by themselves are left alone.** Closing unused apps closed Samsung's browser at 10:20, 10:23 and 10:25 on a Q60A: it started again each time, at the cost of a start of the browser every few minutes. An app closed twice within 15 minutes is kept from then on (the launcher reads it from the bridge's list, so this works with the 1.3.0 bridge; a 1.3.1 bridge also sees it itself). The Diagnostic lists them.
+- Diagnostic: the Home Screen's longest frame after a key (median), which also lowers the effects by itself in Automatic.
+
 ## 1.3.0 (Flownyx5 fork)
 - **Smooth on older screens.** Measured with a TV-class processor: after an install the Home Screen and Settings froze for seconds because the Sheets of Light backgrounds (genart.js) were painted on the screen's own thread, twice per app (15 s of drawing for a dozen apps). They are now painted in a Worker on an OffscreenCanvas, pixel for pixel the same, and the screen never waits for them (without a Worker: only after 2 s without a key). Liquid Glass (glass.js) re-sliced its panes on every key, transition and class change, and held each new backdrop up to 1.2 s for its bake: off by default on screens before 2022 (Settings › Appearance › Liquid Glass). Settings rows no longer read their position after every focus change.
 - **Smoothness, measured on the screen** (js/smooth.js): each key press is timed until the frame that shows it. Older screens start with the light effects (no mask over the Settings list, no moving blurred shadows, no drop shadows on big pictures); if the keys are still slow (median above 90 ms), one more step: nothing animates on a key. Settings › Appearance › Smoothness: Automatic, All Effects, Light Effects, Minimal Effects. On the test bench (software rendering on one core), a step in Settings went from about 300 ms to 140 ms, and from 224 ms to 125 ms in a submenu; the time spent drawing fell eightfold. Right after an install (processor slowed six times), moving along the Home Screen blocked the screen 17 s in all, now 3 s.

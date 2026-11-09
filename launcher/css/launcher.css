@@ -1551,3 +1551,22 @@ html, body {
               -webkit-column-count: 2; column-count: 2; -webkit-column-gap: 48px; column-gap: 48px; }
 .diag.is-full .diag__list { display: none; }
 .diag.is-full .diag__full { display: block; }
+
+/* Smoothness, the Home Screen (html.lite). Measured on one slow core: 8 full-screen backdrop layers were
+   kept ready (30 megapixels to draw and to hold, ~120 MB on the screen's graphics memory), and the dock
+   repainted a copy of the picture with a masked rim and two blurred shadows on every change. Only the
+   backdrop on screen is a layer; the dock is a tint with a lit top edge. */
+.lite .bg { will-change: auto; }
+.lite .bg.is-active { will-change: opacity; }
+.lite .dock, .lite .perf .dock {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 60%), rgba(26, 28, 36, 0.52);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.lite .status, .lite .perf .status, .lite .cc__t, .lite .perf .cc__t { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2); }
+.lite .cc__t.is-focused { box-shadow: none; }
+.lite .dock::before, .lite .status::before, .lite .cc__t::before { display: none; }
+.lite .theme-light .dock, .lite .theme-light.perf .dock { background: rgba(244, 245, 249, 0.78); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7); }
+.lite .shelfinfo { text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85); }
+/* The grid's blurred wallpaper is only drawn in the grid; the rain or snow is shorter (ambient.js) */
+.lite .bgblur { visibility: hidden; }
+.lite .mode-grid .bgblur { visibility: visible; }
