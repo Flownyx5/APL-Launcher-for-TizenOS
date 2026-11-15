@@ -191,6 +191,9 @@
 
     /* All the apps, one after another, in the background. onChange: redraw. */
     var running = false;
+    /* LG (APL.platform.directGlass) draws in 4K: each redraw of the Home Screen costs much more there, and a
+       2022 LG answered a key in 5 s during this pass (#55). It goes slower there, with fewer redraws. */
+    var SLOW = !!(APL.platform && APL.platform.directGlass);
     function run(apps, onChange) {
         if (running || !sys.pref("autoArt")) return;
         if (sys.PREVIEW) { previewArt(apps, onChange); return; }
@@ -210,8 +213,8 @@
             }).then(function (made) {
                 if (made) dirty = true;
             }, function () {}).then(function () {
-                if (dirty && ++n % 6 === 0) { onChange(); dirty = false; }
-                setTimeout(next, 250);           // gently: the screen stays smooth
+                if (dirty && ++n % (SLOW ? 12 : 6) === 0) { onChange(); dirty = false; }
+                setTimeout(next, SLOW ? 700 : 250);           // gently: the screen stays smooth
             });
         })();
     }

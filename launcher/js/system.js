@@ -89,7 +89,81 @@
     function load(k, fallback) {
         try { var v = JSON.parse(global.localStorage.getItem(k) || "null"); return v || fallback; } catch (e) { return fallback; }
     }
-    function save(k, v) { try { global.localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+    function save(k, v) {
+        var text = JSON.stringify(v);
+        try { global.localStorage.setItem(k, text); } catch (e) {}
+        if (COPY_KEYS.test(k)) copyLater(k, text);
+    }
+
+    /* ---------- a second copy of the settings, in IndexedDB ----------
+       A screen switched off at the wall can come back with its local storage empty: every setting, the
+       profiles and the Home Screen layout gone, and the version installed by APL Launcher Setup instead of
+       the downloaded one (#60, a Frame 2022). Local storage reaches the disk a while after each change;
+       an IndexedDB write is on the disk once it is done. So each setting saved above is also written there
+       a moment later, and at start-up, when local storage has none of them but the copy has, they are put
+       back and the page loads once more with them. A real first start has no copy, so nothing comes back. */
+    var COPY_DB = "apl-settings-copy", COPY_KEYS = /^apl\.(prefs|profiles)(\.|$)/;
+    var copyDb = null, copyPending = {}, copyTimer = null, copyHold = false;
+    function copyOpen() {
+        if (copyDb) return copyDb;
+        copyDb = new Promise(function (resolve, reject) {
+            if (!global.indexedDB) { reject(new Error("no IndexedDB")); return; }
+            var rq = global.indexedDB.open(COPY_DB, 1);
+            rq.onupgradeneeded = function () { rq.result.createObjectStore("kv"); };
+            rq.onsuccess = function () { resolve(rq.result); };
+            rq.onerror = function () { reject(rq.error); };
+        });
+        copyDb.catch(function () {});
+        return copyDb;
+    }
+    function copyLater(k, text) {
+        copyPending[k] = text;
+        clearTimeout(copyTimer);
+        copyTimer = setTimeout(copyFlush, 1500);
+    }
+    function copyFlush() {
+        if (copyHold) return;                       // the copy is being read back: it must not be written over first
+        var batch = copyPending;
+        copyPending = {};
+        if (!Object.keys(batch).length) return;
+        copyOpen().then(function (db) {
+            var store = db.transaction("kv", "readwrite").objectStore("kv");
+            Object.keys(batch).forEach(function (k) {
+                if (batch[k] === null) store.delete(k); else store.put(batch[k], k);
+            });
+        }).catch(function () {});
+    }
+    function copyDrop(k) { copyLater(k, null); }
+    /* Everything already in local storage (the first start with this code, then once in a while) */
+    function copyAll() {
+        try {
+            for (var i = 0; i < global.localStorage.length; i++) {
+                var k = global.localStorage.key(i);
+                if (COPY_KEYS.test(k)) copyPending[k] = global.localStorage.getItem(k);
+            }
+        } catch (e) {}
+        copyFlush();
+    }
+    function copyRestore() {
+        copyHold = true;
+        copyOpen().then(function (db) {
+            return new Promise(function (resolve) {
+                var out = {}, rq = db.transaction("kv", "readonly").objectStore("kv").openCursor();
+                rq.onsuccess = function () { var c = rq.result; if (c) { out[c.key] = c.value; c["continue"](); } else resolve(out); };
+                rq.onerror = function () { resolve(out); };
+            });
+        }).then(function (saved) {
+            var keys = Object.keys(saved).filter(function (k) { return COPY_KEYS.test(k) && typeof saved[k] === "string"; });
+            var again = false;
+            try { again = !!global.sessionStorage.getItem("apl.copyRestored"); } catch (e) {}
+            if (!keys.length || again) { copyHold = false; copyAll(); return; }
+            keys.forEach(function (k) { try { global.localStorage.setItem(k, saved[k]); } catch (e) {} });
+            try { global.sessionStorage.setItem("apl.copyRestored", "1"); } catch (e) {}
+            global.location.reload();
+        }, function () { copyHold = false; copyFlush(); });
+    }
+    var storageLost = false;
+    try { storageLost = global.localStorage.getItem("apl.prefs") === null && global.localStorage.getItem("apl.profiles") === null; } catch (e) {}
 
     var prefs = load("apl.prefs", {});
     var household = load("apl.profiles", null);
@@ -113,6 +187,9 @@
         delete pp.appBackgrounds;
         save("apl.prefs." + p.id, pp);
     });
+
+    // Local storage came back empty (a screen switched off at the wall): the copy, if there is one, comes back
+    if (storageLost) copyRestore(); else setTimeout(copyAll, 10000);
 
     function currentProfile() {
         for (var i = 0; i < household.list.length; i++) if (household.list[i].id === household.current) return household.list[i];
@@ -192,6 +269,7 @@
             if (household.list.length < 2) return false;
             household.list = household.list.filter(function (p) { return p.id !== id; });
             try { global.localStorage.removeItem("apl.prefs." + id); } catch (e) {}
+            copyDrop("apl.prefs." + id);
             if (household.current === id) profiles.switchTo(household.list[0].id);
             save("apl.profiles", household);
             return true;

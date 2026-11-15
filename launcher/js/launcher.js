@@ -1547,8 +1547,10 @@
             buildList(list);
             watchPackages();
             setTimeout(preloadDock, 400);
-            // Then a background search for missing artwork (new apps included)
-            setTimeout(function () { if (APL.autoArt) APL.autoArt.run(allApps, render); }, 3500);
+            // Then a background search for missing artwork (new apps included). On LG, once the start-up is over:
+            // it ran into the busiest first seconds there (#55)
+            setTimeout(function () { if (APL.autoArt) APL.autoArt.run(allApps, render); },
+                       APL.platform && APL.platform.directGlass ? 15000 : 3500);
             showCcHint();
             render();
             if (APL.overlay) APL.overlay.start();
@@ -1953,7 +1955,17 @@
 
     APL.refreshArt = function () { if (APL.autoArt) APL.autoArt.refresh(allApps, render); };
     // render() too: Black changes no made background, yet every layer must be redrawn
-    APL.restyleArt = function () { if (APL.autoArt) APL.autoArt.restyle(allApps, render); render(); };
+    /* Settings › Top Shelf › Otherwise. Every app's generated picture is painted again only when its style
+       really changes, between Sheets of Light and Large Logo (genart.js bgMode). Black and Wallpaper only
+       cover those pictures: painting them all again took the processor for a minute on a 2022 LG, at each
+       change (#55). */
+    function artStyle() { return APL.sys.pref("shelfArt") === "logo" ? "logo" : "sheets"; }
+    var artStyleNow = artStyle();
+    APL.restyleArt = function () {
+        var style = artStyle();
+        if (style !== artStyleNow && APL.autoArt) { artStyleNow = style; APL.autoArt.restyle(allApps, render); }
+        render();
+    };
 
     APL.resetHomeOrder = function () {
         APL.sys.setPref("appOrder", []);
