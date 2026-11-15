@@ -1,3 +1,14 @@
+## 1.2.0
+
+- The title under the picture is the film or show's own logo (TMDB, in the
+  interface's language) instead of plain text, at 120 px.
+- The storefront catalogue is gone: JustWatch and `app-art.js` are removed,
+  and the wall shows each app's own Top Shelf or its own artwork.
+- Trailers no longer show captions, and the title fades in with its picture.
+- `◀ ▶` step through the app's own titles, and the shelf's pictures are
+  fetched ahead so the first step is a swap.
+- App icons stand on the backdrop: no plate, no halo box, rounder corners.
+
 # Changelog
 
 ## 1.2.0

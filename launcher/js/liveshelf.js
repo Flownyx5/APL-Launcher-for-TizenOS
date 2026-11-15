@@ -141,6 +141,100 @@
         try { global.localStorage.setItem("apl.live." + k, JSON.stringify({ v: CACHE_VERSION, t: Date.now(), items: items })); } catch (e) {}
     }
 
+    /* ---------- the pictures themselves, kept on the screen ---------- */
+    /* The lists of titles stay 6 h, their pictures did not: every launch fetched
+       the same ten backdrops again, and a picture that is not there yet is a
+       download before it can be drawn. They are kept as blobs in the screen's own
+       storage and drawn from there, so a step - and a launch - finds them ready.
+       Forty-eight at most, newest kept; the store lives beside the lists. */
+    var ART_DB = "apl-art", ART_STORE = "pics", ART_MAX = 48;
+    var ART_TTL = 6 * 3600 * 1000;              // the same six hours as the lists of titles
+    var artUrls = {}, artDb = null, artHydrated = false;
+
+    function artOpenDb(then) {
+        if (!global.indexedDB) { then(null); return; }
+        if (artDb) { then(artDb); return; }
+        var req;
+        try { req = global.indexedDB.open(ART_DB, 1); } catch (e) { then(null); return; }
+        req.onupgradeneeded = function () {
+            var db = req.result;
+            if (!db.objectStoreNames.contains(ART_STORE)) db.createObjectStore(ART_STORE);
+        };
+        req.onsuccess = function () { artDb = req.result; then(artDb); };
+        req.onerror = function () { then(null); };
+    }
+    function artDrop(url) {
+        if (!artDb) return;
+        try { artDb.transaction(ART_STORE, "readwrite").objectStore(ART_STORE)["delete"](url); } catch (e) {}
+    }
+    /* Once, at start-up: every kept picture becomes an object URL in memory, so a
+       shelf can be shown from it without waiting for a single read. */
+    function artHydrate() {
+        artOpenDb(function (db) {
+            if (!db || artHydrated) return;
+            artHydrated = true;
+            var tx, store, cur, found = [];
+            try { tx = db.transaction(ART_STORE, "readonly"); store = tx.objectStore(ART_STORE); } catch (e) { return; }
+            cur = store.openCursor();
+            cur.onsuccess = function () {
+                var c = cur.result;
+                if (c) { found.push({ url: c.key, rec: c.value }); c.continue(); return; }
+                found.sort(function (a, b) { return ((b.rec && b.rec.t) || 0) - ((a.rec && a.rec.t) || 0); });
+                found.forEach(function (e, i) {
+                    /* A picture kept from an older list is a picture of a show
+                       the app may not even open on any more: it goes. */
+                    if (i >= ART_MAX || Date.now() - ((e.rec && e.rec.t) || 0) > ART_TTL) { artDrop(e.url); return; }
+                    if (e.rec && e.rec.blob) {
+                        try { artUrls[e.url] = global.URL.createObjectURL(e.rec.blob); } catch (err) {}
+                    }
+                });
+            };
+        });
+    }
+    /* A picture that has just been fetched for the wall is kept for next time. */
+    function artKeep(url) {
+        if (!url || !/^https?:/i.test(url) || artUrls["!" + url]) return;
+        artUrls["!" + url] = true;
+        artOpenDb(function (db) {
+            if (!db) return;
+            global.fetch(url).then(function (r) { return r.ok ? r.blob() : null; }).then(function (b) {
+                if (!b) return;
+                try { db.transaction(ART_STORE, "readwrite").objectStore(ART_STORE).put({ blob: b, t: Date.now() }, url); } catch (e) {}
+            })["catch"](function () {});
+        });
+    }
+    /* The picture to draw: the one on the screen if it is there, its address otherwise. */
+    function artLook(url) { return (url && artUrls[url]) || ""; }
+
+    /* One picture per app, and its name kept: an app's first backdrop is written
+       down here, so the wall can have it the moment that app takes the focus -
+       before its shelf has even been asked for. */
+    function artFirst(appId) {
+        var rec;
+        try { rec = JSON.parse(global.localStorage.getItem("apl.art.first." + appId) || "null"); } catch (e) { return ""; }
+        /* Six hours, like the list the address came from: an app whose shelf has
+           been refreshed since opens on whatever it shows now. The picture itself
+           is dropped by artHydrate; this is what stops a stale address being used
+           while the new one is on its way. */
+        if (!rec || !rec.u || Date.now() - (rec.t || 0) > ART_TTL) return "";
+        return rec.u;
+    }
+    function artRemember(appId, url, index) {
+        if (!appId || !url || !/^https?:/i.test(url)) return;   // a data: picture is not an address to keep
+        try { global.localStorage.setItem("apl.art.first." + appId, JSON.stringify({ u: url, t: Date.now(), i: index || 0 })); } catch (e) {}
+    }
+    /* Which title of the shelf that picture is: the wall opens on it rather than on
+       the first one, so the picture does not change back a moment later. */
+    function artFirstIndex(appId) {
+        var rec;
+        try { rec = JSON.parse(global.localStorage.getItem("apl.art.first." + appId) || "null"); } catch (e) { return 0; }
+        if (!rec || Date.now() - (rec.t || 0) > ART_TTL) return 0;
+        return rec.i || 0;
+    }
+
+    APL.artCache = { look: artLook, keep: artKeep, first: artFirst, firstIndex: artFirstIndex, remember: artRemember };
+    setTimeout(artHydrate, 0);
+
     function getJson(url) {
         return global.fetch(url).then(function (r) {
             if (!r.ok) throw new Error("HTTP " + r.status);
@@ -606,6 +700,28 @@
             return artOf(hit);
         }).catch(function () { return null; });
     }
+    /* The official title logo of a film or a series (TMDB, the same picture the cards lay over a
+       backdrop): the wall shows it in place of the name when one exists. */
+    function logoArt(title, year) {
+        if (!KEYS.tmdb || !title) return Promise.resolve("");
+        function pickLogo(list, lang) {
+            return (list || []).filter(function (b) { return b.iso_639_1 === lang && b.file_path; })
+                .sort(function (a, b) { return (b.vote_average || 0) - (a.vote_average || 0); })[0];
+        }
+        return getJson(TMDB + "/search/multi?api_key=" + KEYS.tmdb + "&language=" + APL.locale + "&query=" + encodeURIComponent(title)).then(function (d) {
+            var found = (d.results || []).filter(function (r) { return r.media_type === "tv" || r.media_type === "movie"; });
+            var exact = found.filter(function (r) { return same(r.name || r.title, title) || same(r.original_name || r.original_title, title); });
+            var dated = exact.filter(function (r) { return year && String(r.first_air_date || r.release_date || "").substr(0, 4) === year; });
+            var hit = dated[0] || exact[0] || found[0];
+            if (!hit) return "";
+            var kind = hit.media_type === "tv" ? "tv" : "movie";
+            return getJson(TMDB + "/" + kind + "/" + hit.id + "/images?api_key=" + KEYS.tmdb + "&include_image_language=" + APL.lang + ",en,null").then(function (im) {
+                var logo = pickLogo(im.logos, APL.lang) || pickLogo(im.logos, "en");
+                return logo ? IMG + big("w500") + logo.file_path : "";
+            });
+        }).catch(function () { return ""; });
+    }
+
     /* Like on Apple TV, the picture with the title already drawn on it: TMDB tags it with a language, the
        interface's language first. Else the textless background, with the title logo laid over it (widgets.js). */
     /* A card is about a quarter of the screen wide: 1280 px is sharp on a page drawn in 4K, where the
@@ -648,6 +764,7 @@
 
     APL.live = {
         searchArt: searchArt,
+        logoOf: logoArt,
         findImdb: findImdb,
         itemsFor: itemsFor,
         itemsNow: itemsNow,

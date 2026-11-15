@@ -13,6 +13,9 @@
     <!-- Top Shelf: full-frame artwork of the selected app (2 layers for the fade) -->
     <div id="bgA" class="bg"></div>
     <div id="bgB" class="bg"></div>
+    <!-- A trailer over the full-screen artwork (js/trailer.js): its own layer, so
+         a change of picture never takes the video away with it -->
+    <div id="trailerLayer" class="trailerlayer" aria-hidden="true"></div>
     <!-- Blurred grid background: a small pre-blurred image, nothing computed live -->
     <div id="bgBlur" class="bgblur"></div>
     <div class="scrim"></div>

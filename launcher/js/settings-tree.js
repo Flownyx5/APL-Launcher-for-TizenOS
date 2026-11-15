@@ -98,8 +98,8 @@
                     ], APL.t("The keys are set in APL Launcher Setup, on the PC."))
                 ], APL.t("The Top Shelf shows the first one available, top to bottom. Turn one off to skip it.")),
                 toggle(APL.t("Visual Effects"), "visualEffects", APL.t("Blur and glass. Prettier but slower: off by default so the screen stays smooth.")),
-                toggle(APL.t("Dynamic Backdrops"), "cleanFrameBackdrops",
-                    APL.t("A film or series that service streams right now, on the apps that have nothing of their own to show: the storefront's trending list for your country (JustWatch, no key). Apps with a Top Shelf keep it - What You're Watching, What's Popular, Plex, Spotify and the players' Continue Watching come first.")),
+                toggle(APL.t("Trailers in Full Screen"), "trailers",
+                    APL.t("A muted trailer of the title on the wall, two seconds after ▲, in full screen. Needs a TMDB key. Nothing is fetched while you browse.")),
                 toggle(APL.t("Slow Background Motion"), "bgMotion", APL.t("A slow camera move over the Home Screen images. Pretty, but it keeps the screen very busy and slows everything else down."))
             ], APL.t("Theme, Top Shelf, visual effects.")),
 

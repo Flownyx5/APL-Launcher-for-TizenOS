@@ -227,11 +227,23 @@ html, body {
 }
 
 /* Top Shelf movie title and rating: on the left, without touching the hint in the center */
-.shelfinfo { position: fixed; left: 90px; top: calc(var(--dock-top) - 133px); width: 640px; z-index: 9; color: #fff; opacity: 0; pointer-events: none; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85); transition: opacity 220ms ease; }
+.shelfinfo { position: fixed; left: 90px; top: calc(var(--dock-top) - 215px); width: 1400px; z-index: 9; color: #fff; opacity: 0; pointer-events: none; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85); transition: opacity 220ms ease; }
 .shelfinfo.is-visible { opacity: 1; }
 .mode-grid .shelfinfo, .has-wdg .shelfinfo { opacity: 0; }
 .mode-full .shelfinfo { top: 910px; width: 1200px; }
-.shelfinfo__title { font-size: 44px; font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The logo's height is reserved whether it is there or not: the rating and the
+   year sit where they will sit, and the logo grows up into its own space instead
+   of pushing them down when its file arrives a moment later. */
+.shelfinfo__title { min-height: 120px; display: flex; align-items: flex-end; font-size: 44px; font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The title's own logo, where TMDB has one: never stretched, never above the
+   height the name would have taken. */
+.shelfinfo__title.is-swap { animation: titleSwap 240ms ease both; }
+@keyframes titleSwap {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+}
+.shelfinfo__logo { display: block; height: 120px; width: auto; max-width: 1320px; object-fit: contain; flex: 0 0 auto; filter: drop-shadow(0 3px 14px rgba(0, 0, 0, 0.8)); opacity: 0; transition: opacity 320ms ease-out; }
+.shelfinfo__logo.is-in { opacity: 1; }
 .shelfinfo__open { display: none; margin-top: 14px; font-size: 24px; font-weight: 600; color: rgba(255, 255, 255, 0.95); }
 .mode-full .shelfinfo.can-open .shelfinfo__open { display: block; }
 .shelfinfo__meta { margin-top: 6px; font-size: 26px; font-weight: 500; color: rgba(255, 255, 255, 0.88); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -878,8 +890,17 @@ html, body {
 .mode-grid .bg.is-motion { animation-play-state: paused; }
 .reduce-motion .bg.is-motion { animation: none; }
 
-.tile__card--icon { overflow: hidden; }
-.tile__card--icon .tile__icon { position: relative; z-index: 1; }
+/* No fill, no shadow, no sheen: anything drawn behind a transparent icon is a
+   rectangle with the icon's outline in the middle of it. */
+.tile__card--icon { overflow: hidden; background: transparent !important; box-shadow: none; }
+.tile__card--icon::after { content: none; }
+/* An app with no catalogue artwork: its real icon is the tile, edge to edge, as
+   on tvOS. Kept at 68 % with the card's colour around it, the icon sat inside a
+   rectangle of that colour - the plate that was still showing behind the icons.
+   The rounded clip of the card shapes it, so the icon needs no frame of its own.
+   The App Store icon keeps its own rounded square (it is drawn that way). */
+.tile__card--icon .tile__icon { position: relative; z-index: 1; width: 100%; height: 100%; max-width: none; object-fit: cover; }
+.tile__card--icon .tile__icon--app { width: 100%; height: 100%; max-width: none; object-fit: cover; border-radius: 0; box-shadow: none; }
 /* App Store icon: rounded square like an app, with a soft shadow */
 .tile__icon--app { height: 74%; border-radius: 22%; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); }
 
@@ -1369,3 +1390,35 @@ html, body {
 html.is-cc-overlay, html.is-cc-overlay body { background: transparent; }
 .is-cc-overlay .bg, .is-cc-overlay .bgblur, .is-cc-overlay .scrim, .is-cc-overlay .status, .is-cc-overlay .shelfinfo,
 .is-cc-overlay .hint, .is-cc-overlay .home, .is-cc-overlay .boot { display: none; }
+
+/* ---------- Trailer over the full-screen artwork ----------
+   A layer of its own, between the pictures and the scrim: the picture under it
+   can change without taking the video with it, and the scrim, the dock and the
+   title cards stay above exactly as they were. */
+.trailerlayer {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 600ms linear;
+}
+
+.trailerlayer.is-on { opacity: 1; }
+
+/* Larger than the layer, so the player's own corner branding falls outside the
+   frame: the video is cropped at the edges, which nothing in the picture
+   notices. The extra height goes to the bottom, where the player keeps its
+   progress bar, its title card and the "watch on YouTube" line - 6 % all round
+   left those in view, 12 % down the bottom takes them out. */
+.trailerlayer {
+    overflow: hidden;
+}
+
+.trailerlayer > iframe {
+    position: absolute;
+    top: -6%;
+    left: -3%;
+    width: 106%;
+    height: 118%;
+    border: 0;
+}

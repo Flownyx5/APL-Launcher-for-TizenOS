@@ -54,7 +54,6 @@
         hubShelf: true,             // Top Shelf: the apps' own Smart Hub rows first (liveshelf.js)
         liveShelf: true,            //   then the content of the moment (TMDB / YouTube…), then shelfArt
         visualEffects: PREVIEW,     // blur / glass: costly on the screen, off by default
-        cleanFrameBackdrops: false, // a poster only where an app shows nothing of its own (app-art.js)
         gameWanted: false,          // Game Mode requested (applied when switching to an input)
         ccHintCount: 0,             // number of times the Control Center tip has been shown
         appearance: "dark",         // "dark" | "light" | "auto" (follows the sun)
