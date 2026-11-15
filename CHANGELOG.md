@@ -1,15 +1,10 @@
-## 1.2.0
-
-- The title under the picture is the film or show's own logo (TMDB, in the
-  interface's language) instead of plain text, at 120 px.
-- The storefront catalogue is gone: JustWatch and `app-art.js` are removed,
-  and the wall shows each app's own Top Shelf or its own artwork.
-- Trailers no longer show captions, and the title fades in with its picture.
-- `◀ ▶` step through the app's own titles, and the shelf's pictures are
-  fetched ahead so the first step is a swap.
-- App icons stand on the backdrop: no plate, no halo box, rounder corners.
-
 # Changelog
+
+## Next version (not released yet)
+- **The Home Screen, quicker and with logos**, by praneet (#59). The title under the picture is the film or show's own logo (TMDB, in the interface's language) instead of plain text. Each dock app's picture is kept on the screen for six hours and shows the moment the app takes the focus. In full screen, `◀ ▶` step through the app's titles at once, their pictures fetched ahead. App icons stand on the backdrop, with no plate behind them. *Settings › Appearance › Trailers in Full Screen* (off by default, needs a TMDB key): a muted trailer of the title two seconds after ▲. The storefront pictures from JustWatch (*Dynamic Backdrops*) are gone: each app shows its own Top Shelf or its own artwork.
+- **Multi View opens the Control Center** on the remotes that have that button (#47), with Sources in it. It comes with APL Overlay, so install once with APL Launcher Setup, or run *Settings › Remote and Devices › Set Up the Remote Buttons*.
+- The Home app: off accessories step back, the corners are rounder, and `tools/make-backdrops.py` makes its drawn backdrops, by praneet (#53).
+- Polish for everything 1.2 added, the Home app included, by klaganowski (#54).
 
 ## 1.2.0
 - **Home Assistant: a Home app**, by praneet (#33). *Settings › Apps › Home Assistant*: paste a long-lived access token once, on the TV (in Home Assistant: your profile, Security, Long-lived access tokens), and a Home tile wearing Home Assistant's logo opens your house: rooms down the side, categories above, and OK on an accessory for its temperature, speed, brightness or mode. *Edit Layout* moves, groups or hides accessories, kept on the TV and never written back to Home Assistant. Four drawn backdrops (Dusk, Linen, Forest, Night), or your own pictures through `install-via-vetro.py --backdrops`.
