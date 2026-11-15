@@ -601,9 +601,14 @@
             APL.glass.release();
         }
     }
+    /* LG, 4K: the blurred picture is opaque (its margin covers the canvas), so the screen draws it without
+       blending, and once it has faded in, the gradient under it stops being drawn (launcher.css, wdg--blurred) */
+    var LG = !!(APL.platform && APL.platform.directGlass), blurredAt = 0;
     function paintBlur(src, soft) {
         var token = ++blurToken;
         blur.style.opacity = "0";
+        global.clearTimeout(blurredAt);
+        if (root) root.classList.remove("wdg--blurred");
         if (!src) { glassFollow(""); return; }
         var img = new global.Image();
         /* Drawn into 192 x 108: TMDB's 300 px copy. Its 4K original was decoded whole by the page
@@ -611,13 +616,16 @@
         if (APL.artSize) src = APL.artSize(src, "w300");
         img.onload = function () {
             if (token !== blurToken) return;
-            var ctx = blur.getContext("2d"), w = blur.width, h = blur.height, m = 14;
+            var ctx = LG ? blur.getContext("2d", { alpha: false }) : blur.getContext("2d"), w = blur.width, h = blur.height, m = 14;
             ctx.clearRect(0, 0, w, h);
             if ("filter" in ctx) ctx.filter = "blur(" + (soft ? 16 : 5) + "px) saturate(150%) brightness(0.85)";
             var r = Math.max((w + 2 * m) / img.naturalWidth, (h + 2 * m) / img.naturalHeight);
             var dw = img.naturalWidth * r, dh = img.naturalHeight * r;
             ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
             blur.style.opacity = "1";
+            if (LG) blurredAt = global.setTimeout(function () {
+                if (token === blurToken && root) root.classList.add("wdg--blurred");
+            }, 300);                                        // after its 240 ms fade
             if (root && root.classList.contains("is-on")) glassFollow(src);
         };
         img.src = src;
@@ -636,6 +644,7 @@
         // Below the clock and the dock, above the Top Shelf picture and its gradient
         var scrim = document.querySelector(".scrim");
         scrim.parentNode.insertBefore(root, scrim.nextSibling);
+        watchFade();
     }
 
     function addCard(c) {
@@ -716,6 +725,19 @@
         root.classList.toggle("is-on", on);
         if (!on) glassFollow("");                           // the Top Shelf's picture is behind the glass again
         document.body.classList.toggle("has-wdg", on);      // instead of the Top Shelf and its hint
+        if (!on) document.body.classList.remove("wdg-solid");
+    }
+    /* LG: once faded in, the cards' opaque background covers the screen whole, and the backdrop and its scrim
+       under it stop being drawn (launcher.css). Their fade (wdgIn) starts again each time the cards come back
+       on screen, from the grid too, and the backdrop is drawn again for the length of it. */
+    function watchFade() {
+        if (!LG) return;
+        root.addEventListener("animationstart", function (e) {
+            if (e.target === root) document.body.classList.remove("wdg-solid");
+        });
+        root.addEventListener("animationend", function (e) {
+            if (e.target === root && root.classList.contains("is-on")) document.body.classList.add("wdg-solid");
+        });
     }
 
     /* Back from an app: what was just watched counts right away. */

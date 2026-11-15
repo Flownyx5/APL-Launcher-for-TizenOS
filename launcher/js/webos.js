@@ -62,6 +62,13 @@
     function scrimUp() {
         var s = document.querySelector(".scrim");
         if (!s) return;
+        /* Its top band is a layer of its own (launcher.css): the scrim is only its bottom half, and the empty
+           middle of the screen is no longer blended on every frame */
+        if (!document.querySelector(".scrim-top")) {
+            var band = document.createElement("div");
+            band.className = "scrim-top";
+            s.parentNode.insertBefore(band, s);         // before it: what is laid after the scrim stays above both
+        }
         global.requestAnimationFrame(function () { global.setTimeout(function () { s.classList.add("is-up"); }, 300); });
     }
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", scrimUp); else scrimUp();

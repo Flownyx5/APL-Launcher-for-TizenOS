@@ -593,10 +593,22 @@
         return data;
     }
 
-    function paint() {
+    /* LG: only the surfaces on screen. The Control Center's tiles and the Sources cards stay laid out while
+       their panel is closed, and measuring their eighteen panes on every move along the dock was most of
+       paint()'s 22 ms a move on a G5 (three looks a move, each laying the page out). A panel that opens asks
+       for its own (paint(true) from the Control Center, glassAfter, the observer below). */
+    function onScreen(all) {
+        if (all || !DIRECT) return document.querySelectorAll(TARGETS.join(","));
+        var sel = ".dock,.status,.search-hint";
+        if (document.querySelector(".cc.is-open")) sel += ",.cc__t";
+        if (document.querySelector(".sources.is-open")) sel += ",.scard__art--glass";
+        return document.querySelectorAll(sel);
+    }
+
+    function paint(all) {
         if (!ensure()) return;
         if (!baked) return;
-        var list = document.querySelectorAll(TARGETS.join(",")), i, el, r, key, l;
+        var list = onScreen(all === true), i, el, r, key, l;
         /* Panes set to 0 in the write pass below and to 1 after it: one layout
            read for all of them, not one per surface. */
         var fades = [];
@@ -818,8 +830,31 @@
         /* Surfaces rebuilt while the glass is on (Control Center redraws its
            tiles on every move) get their lens back within a frame: no flash of
            the plain fill, no glass that appears and is gone again. */
+        /* LG: a mutation is a reason to look only when it adds a surface or rebuilds one (the Control Center
+           redraws its tiles). The title over the dock, the clock and the hint change on every move, and each
+           of those was a full paint() 40 ms later. */
+        var GLASS_SEL = TARGETS.join(",");
+        function isSurface(n) {
+            var m = n && n.nodeType === 1 && (n.matches || n.webkitMatchesSelector);
+            return !!(m && m.call(n, GLASS_SEL));
+        }
+        function touchesGlass(records) {
+            var i, j, list, n;
+            for (i = 0; i < records.length; i++) {
+                list = records[i].addedNodes;
+                if (!list || !list.length) continue;
+                if (isSurface(records[i].target)) return true;
+                for (j = 0; j < list.length; j++) {
+                    n = list[j];
+                    if (n.nodeType !== 1 || String(n.className).indexOf("cg__") === 0) continue;
+                    if (isSurface(n) || (n.querySelector && n.querySelector(GLASS_SEL))) return true;
+                }
+            }
+            return false;
+        }
         if (global.MutationObserver) {
-            var observer = new global.MutationObserver(function () {
+            var observer = new global.MutationObserver(function (records) {
+                if (DIRECT && !touchesGlass(records)) return;
                 global.clearTimeout(observer._t);
                 observer._t = global.setTimeout(paint, 40);
             });

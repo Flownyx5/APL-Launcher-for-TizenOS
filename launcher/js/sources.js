@@ -227,6 +227,8 @@
 
     function open() {
         if (!root) buildDom();
+        global.clearTimeout(goneAt);
+        root.classList.remove("is-gone");
         picking = null;
         render(0);
         root.classList.add("is-open");
@@ -263,7 +265,11 @@
         document.body.classList.remove("has-sources");
         APL.popNav(nav);
         isOpen = false;
+        /* LG: out of the page once faded out, its cards' layers with it (launcher.css is-gone) */
+        global.clearTimeout(goneAt);
+        goneAt = global.setTimeout(function () { if (!isOpen) root.classList.add("is-gone"); }, 400);
     }
+    var goneAt = 0;
 
     APL.sources = { open: open, close: close, isOpen: function () { return isOpen; }, homeTiles: homeTiles };
 })(window);

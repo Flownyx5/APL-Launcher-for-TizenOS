@@ -586,7 +586,7 @@
         paintCaption(nav.current());
         /* The new tiles get their glass in this same frame: waiting for glass.js
            to notice them showed their plain fill for a moment as the panel opened. */
-        if (APL.glass && APL.glass.paint) APL.glass.paint();
+        if (APL.glass && APL.glass.paint) APL.glass.paint(true);
     }
     /* render() with the tiles already there: each one gets its fresh item and is drawn again */
     function redraw() {
@@ -610,7 +610,7 @@
         nav.setTiles(focusables);
         nav.focus(Math.min(lastMainIndex, focusables.length - 1));
         paintCaption(nav.current());
-        if (APL.glass && APL.glass.paint) APL.glass.paint();
+        if (APL.glass && APL.glass.paint) APL.glass.paint(true);
     }
 
     function captionOf(it) {
@@ -724,6 +724,8 @@
 
     function open() {
         if (!root) buildDom();
+        global.clearTimeout(goneAt);
+        root.classList.remove("is-gone");
         view = "main";
         lastMainIndex = 2;                      // Wi-Fi (after the avatar and Sleep): never "Sleep" by mistake
         render();
@@ -745,9 +747,13 @@
         document.body.classList.remove("has-cc");
         APL.popNav(nav);
         isOpen = false;
+        /* LG: out of the page once its panel has gone, with its 54 layers (launcher.css is-gone) */
+        global.clearTimeout(goneAt);
+        goneAt = global.setTimeout(function () { if (!isOpen) root.classList.add("is-gone"); }, 450);
         if (CC && P.ccQuit) P.ccQuit();          // over the apps: the window goes with it
     }
 
+    var goneAt = 0;
     setInterval(function () { if (isOpen) refresh(); }, 15000);
 
     APL.controlCenter = {

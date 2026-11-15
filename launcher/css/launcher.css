@@ -1404,6 +1404,35 @@ html, body {
    panel was left unpainted, a black bar (a G5). */
 .is-webos .perf .settings__listwrap { -webkit-mask-image: none; mask-image: none; }
 
+/* LG, 4K: the screen blends every full-screen layer on every frame, 8.3 million pixels each, and that was the
+   limit on a G5 (the inspector's quads: 37 Mpx a frame at rest on the Home Screen, 67 during a crossfade,
+   frames dropped while the GPU caught up). What is covered whole is no longer drawn at all:
+   - the page's own black: the TV's window is black already (appinfo.json bgColor), and it was blended under
+     every picture;
+   - under the Continue cards, once they have faded in (an opaque gradient, then their opaque blurred
+     picture, widgets.js wdg-solid): the backdrop, its scrim and the grid's blur;
+   - under the cards' blurred picture, their gradient (a layer of its own that only fades, widgets.js);
+   - the scrim's empty middle: its bottom half and its top band are two layers, a third of the screen less;
+   - the Control Center and Sources while closed: 70 layers the screen kept in every frame (is-gone). */
+html.is-webos, .is-webos body { background: transparent; }
+.is-webos body.wdg-solid:not(.mode-grid) .bg,
+.is-webos body.wdg-solid:not(.mode-grid) .scrim,
+.is-webos body.wdg-solid:not(.mode-grid) .scrim-top,
+.is-webos body.wdg-solid:not(.mode-grid) .bgblur { visibility: hidden; }
+.is-webos .wdg__bg { background: none; }
+.is-webos .wdg__bg::before { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+    background: linear-gradient(120deg, #20409a 0%, #1476a8 55%, #0f8f96 100%); will-change: opacity; }
+.is-webos .wdg--blurred .wdg__bg::before { opacity: 0; }
+.is-webos .scrim, .is-webos .mode-grid .scrim, .is-webos .perf.mode-grid .scrim, .is-webos .theme-light.mode-grid .scrim,
+.is-webos .theme-light.perf.mode-grid .scrim { top: 50%; height: 12.5%;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 40%, rgba(0,0,0,0.92) 72%, #000 100%); }
+.is-webos .scrim-top { position: fixed; top: 0; left: 0; width: 100%; height: 16%; pointer-events: none;
+    background: linear-gradient(180deg, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0) 100%);
+    transition: opacity 500ms ease; will-change: opacity; }
+.is-webos .mode-full .scrim-top { opacity: 0.25; }
+.is-webos .mode-grid .scrim-top, .is-webos.is-cc-overlay .scrim-top { opacity: 0; }
+.is-webos .cc.is-gone, .is-webos .sources.is-gone { display: none; }
+
 /* The Control Center over the apps (LG's Guide button on a rooted TV, js/webos.js): this page is a window LG
    draws over the app in front, see-through, with nothing but the panel. The app's own picture stays under it. */
 html.is-cc-overlay, html.is-cc-overlay body { background: transparent; }
