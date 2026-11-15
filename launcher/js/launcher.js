@@ -788,6 +788,18 @@
         set.sheen.classList.add("is-on");
         set.name.classList.toggle("is-on", !!text);
     }
+    /* A rounded rectangle's path. The canvas's own roundRect is Chrome 99: webOS 6 (LG 2021, Chromium 79) doesn't
+       have it, and the launcher stopped at start with "x.roundRect is not a function" (#61). */
+    function roundPath(x, l, t, w, h, r) {
+        if (x.roundRect) { x.roundRect(l, t, w, h, r); return; }
+        r = Math.max(0, Math.min(r, w / 2, h / 2));
+        x.moveTo(l + r, t);
+        x.arcTo(l + w, t, l + w, t + h, r);
+        x.arcTo(l + w, t + h, l, t + h, r);
+        x.arcTo(l, t + h, l, t, r);
+        x.arcTo(l, t, l + w, t, r);
+        x.closePath();
+    }
     var focusPics = { key: "" };
     function focusArt() {
         var perf = dom.body.classList.contains("perf"), key = TILE_W + "x" + TILE_H + (perf ? "p" : "");
@@ -804,7 +816,7 @@
             x.shadowOffsetY = sh[0] / Q;
             x.fillStyle = "#000";
             x.beginPath();
-            x.roundRect((P - sh[2]) / Q - FAR, (P - sh[2]) / Q, (w + 2 * sh[2]) / Q, (h + 2 * sh[2]) / Q, Math.max(0, R + sh[2]) / Q);
+            roundPath(x, (P - sh[2]) / Q - FAR, (P - sh[2]) / Q, (w + 2 * sh[2]) / Q, (h + 2 * sh[2]) / Q, Math.max(0, R + sh[2]) / Q);
             x.fill();
         });
         focusPics.lift = c.toDataURL("image/png");
