@@ -604,9 +604,11 @@
     /* LG, 4K: the blurred picture is opaque (its margin covers the canvas), so the screen draws it without
        blending, and once it has faded in, the gradient under it stops being drawn (launcher.css, wdg--blurred) */
     var LG = !!(APL.platform && APL.platform.directGlass), blurredAt = 0;
+    var blurShown = "";          /* the picture the cards' blur shows now, for the glass */
     function paintBlur(src, soft) {
         var token = ++blurToken;
         blur.style.opacity = "0";
+        blurShown = "";
         global.clearTimeout(blurredAt);
         if (root) root.classList.remove("wdg--blurred");
         if (!src) { glassFollow(""); return; }
@@ -623,6 +625,7 @@
             var dw = img.naturalWidth * r, dh = img.naturalHeight * r;
             ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
             blur.style.opacity = "1";
+            blurShown = src;
             if (LG) blurredAt = global.setTimeout(function () {
                 if (token === blurToken && root) root.classList.add("wdg--blurred");
             }, 300);                                        // after its 240 ms fade
@@ -677,6 +680,7 @@
         paintBlur(video ? video.image : (shownApp && shownApp.bg) || (cards[0] && cards[0].image), !video);
         setShown(cards.length > 0);
         row.style.transform = "";
+        rowShift = 0;
         markOut(0);
     }
 
@@ -707,7 +711,13 @@
     /* Same cards as on screen: nothing is redrawn. While on the cards, nothing moves under the focus. */
     function paint(id, cards) {
         var text = id + JSON.stringify(cards.map(light));
-        if (text === painted) { setShown(cards.length > 0); return; }
+        if (text === painted) {
+            setShown(cards.length > 0);
+            /* The same cards back (from the grid, or after an app without any): setShown(false) gave the glass
+               the Top Shelf's picture, so it takes the cards' own again (#57) */
+            if (cards.length && blurShown) glassFollow(blurShown);
+            return;
+        }
         if (focused) return;
         painted = text;
         render(cards);
@@ -716,7 +726,7 @@
         trendCard().then(function (c) {
             if (!c || painted !== text || document.hidden) return;
             addCard(c);
-            markOut(0);
+            markOut(rowShift);
             // The background follows the movie, unless the app has its own movie picture to show
             if (!cards.some(function (x) { return x.kind === "video" && x.image && !x.appArt; })) paintBlur(c.image);
         });
@@ -776,11 +786,13 @@
     /* More than two cards (Nuvio, Stremio, Android TV's Play Next: up to MAX_CARDS): the third one peeks at the
        right edge, and the row slides so the card in focus is whole on screen (asked on Reddit: "only two"). */
     var SAFE_RIGHT = 1830;                               // the stage is 1920 wide, the row starts at 90
+    var rowShift = 0;            /* how far the row has slid left, for markOut */
     function slideTo(card) {
         var item = card && card.parentNode;
         if (!item || !row) return;
         var right = 90 + item.offsetLeft + item.offsetWidth, shift = Math.max(0, right - SAFE_RIGHT);
         row.style.transform = shift ? "translateX(" + (-shift) + "px)" : "";
+        rowShift = shift;
         markOut(shift);
     }
     /* A card cut by the edge of the screen keeps its picture, not its heading: at the right edge the heading
@@ -795,6 +807,8 @@
     function leaveCards() {
         if (!focused) return false;
         if (row) row.style.transform = "";
+        rowShift = 0;
+        markOut(0);                  // the row is back in place: the headings of the cards on screen again
         focused = false;
         var c = nav.current();
         if (c) c.classList.remove("is-focused");

@@ -838,12 +838,17 @@
             var m = n && n.nodeType === 1 && (n.matches || n.webkitMatchesSelector);
             return !!(m && m.call(n, GLASS_SEL));
         }
+        /* Inside a surface: the clock's minutes and the weather change the clock pill's width */
+        function inSurface(n) {
+            for (var k = 0; n && n !== body && k < 6; k++, n = n.parentNode) if (isSurface(n)) return true;
+            return false;
+        }
         function touchesGlass(records) {
             var i, j, list, n;
             for (i = 0; i < records.length; i++) {
                 list = records[i].addedNodes;
                 if (!list || !list.length) continue;
-                if (isSurface(records[i].target)) return true;
+                if (inSurface(records[i].target) && String(list[0].className || "").indexOf("cg__") !== 0) return true;
                 for (j = 0; j < list.length; j++) {
                     n = list[j];
                     if (n.nodeType !== 1 || String(n.className).indexOf("cg__") === 0) continue;

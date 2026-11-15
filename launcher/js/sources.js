@@ -228,9 +228,11 @@
     function open() {
         if (!root) buildDom();
         global.clearTimeout(goneAt);
+        var wasGone = root.classList.contains("is-gone");
         root.classList.remove("is-gone");
         picking = null;
         render(0);
+        if (wasGone) void root.offsetWidth;          // laid out closed first, so it fades in instead of popping
         root.classList.add("is-open");
         document.body.classList.add("has-sources");      // the Home Screen steps back (launcher.css)
         APL.pushNav(nav);

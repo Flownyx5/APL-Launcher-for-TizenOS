@@ -723,6 +723,9 @@
     }
 
     function open() {
+        /* Read again: on Android the platform layer (android.js) is loaded after this file, and the Samsung-only
+           tiles (Adaptive Picture) showed there as Unavailable */
+        P = APL.platform;
         if (!root) buildDom();
         global.clearTimeout(goneAt);
         root.classList.remove("is-gone");

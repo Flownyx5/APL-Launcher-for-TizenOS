@@ -154,11 +154,18 @@
             });
         }).then(function (saved) {
             var keys = Object.keys(saved).filter(function (k) { return COPY_KEYS.test(k) && typeof saved[k] === "string"; });
+            /* Put back once per window: the mark is kept in sessionStorage, and in window.name when that
+               throws too, so a storage that stays empty can never reload the page over and over */
             var again = false;
             try { again = !!global.sessionStorage.getItem("apl.copyRestored"); } catch (e) {}
-            if (!keys.length || again) { copyHold = false; copyAll(); return; }
+            if (String(global.name || "").indexOf("apl-copy-restored") !== -1) again = true;
+            if (!keys.length) { copyHold = false; copyAll(); return; }
+            /* Already put back and still empty (the storage refuses to write): the copy is kept as it is. Writing
+               this start's defaults over it lost the settings for good. */
+            if (again) { copyPending = {}; copyHold = false; return; }
             keys.forEach(function (k) { try { global.localStorage.setItem(k, saved[k]); } catch (e) {} });
             try { global.sessionStorage.setItem("apl.copyRestored", "1"); } catch (e) {}
+            try { global.name = "apl-copy-restored"; } catch (e) {}
             global.location.reload();
         }, function () { copyHold = false; copyFlush(); });
     }

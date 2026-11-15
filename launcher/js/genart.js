@@ -649,7 +649,7 @@
             }
         }
         for (i = 0; i < GRADIENTS.length; i++) {
-            out.push({ id: "grad:" + GRADIENTS[i][0], name: t(GRADIENTS[i][1]),
+            out.push({ id: "grad:" + GRADIENTS[i][0], name: t(GRADIENTS[i][1]), stops: GRADIENTS[i][2],
                        css: "linear-gradient(180deg, " + GRADIENTS[i][2].join(", ") + ")" });
         }
         return out;

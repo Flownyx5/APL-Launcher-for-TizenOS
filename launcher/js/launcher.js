@@ -78,7 +78,9 @@
     function wallpaper() { return walled() && APL.wallpapers ? APL.wallpapers.current() : null; }
     function artOf(app) {
         if (black()) return null;
-        if (walled()) { var w = wallpaper(); return w && w.url ? w.url : null; }
+        /* Through APL_ASSET like every local image: a screen running the downloaded update over an older
+           package has no images/backdrops of its own (the picture was black, and the glass had nothing) */
+        if (walled()) { var w = wallpaper(); return w && w.url ? asset(w.url) : null; }
         return app.bg;
     }
     function plain(app) { return (black() || (walled() && !artOf(app))) && !app.shelfHtml; }
@@ -122,6 +124,19 @@
         });
         return (glowPics[colour] = c.toDataURL("image/png"));
     }
+    /* The gradient wallpaper as the same kind of small picture, for a card of its own on LG */
+    var gradPics = {};
+    function gradPic(stops) {
+        var key = stops.join("|");
+        if (gradPics[key]) return gradPics[key];
+        var W = 64, H = 216, c = document.createElement("canvas"), x = c.getContext("2d"), g, i;
+        c.width = W; c.height = H;
+        g = x.createLinearGradient(0, 0, 0, H);
+        for (i = 0; i < stops.length; i++) g.addColorStop(stops.length > 1 ? i / (stops.length - 1) : 0, stops[i]);
+        x.fillStyle = g;
+        x.fillRect(0, 0, W, H);
+        return (gradPics[key] = c.toDataURL("image/png"));
+    }
     function cardBack(layer, app) {
         var glow = layer.querySelector("img.bg__glow");
         if (APL.platform && APL.platform.cardPics && !artOf(app) && !plain(app)) {
@@ -132,7 +147,9 @@
                 glow.alt = "";
                 layer.insertBefore(glow, layer.firstChild);
             }
-            var src = glowPic(brandColour(app));
+            /* On the gradient wallpaper, the gradient: the glow ignored it (Settings, Sources, a pinned input) */
+            var wall = wallpaper();
+            var src = wall && wall.stops ? gradPic(wall.stops) : glowPic(brandColour(app));
             if (glow.getAttribute("src") !== src) glow.src = src;
             return;
         }
@@ -1171,6 +1188,7 @@
                 warmItems(items, app);
                 liveRotate = setInterval(function () {
                     if (mode === "grid" || mode === "full") return;  // paused under the grid and in full screen
+                    if (document.hidden) return;                     // and behind an app: nobody sees it
                     if (apps[nav.index] !== app) { stopLive(); return; }
                     n = (n + 1) % items.length;
                     setLiveBackdrop(app, items[n], n, items, 0);
@@ -1971,8 +1989,14 @@
        really changes, between Sheets of Light and Large Logo (genart.js bgMode). Black and Wallpaper only
        cover those pictures: painting them all again took the processor for a minute on a 2022 LG, at each
        change (#55). */
-    function artStyle() { return APL.sys.pref("shelfArt") === "logo" ? "logo" : "sheets"; }
-    var artStyleNow = artStyle();
+    /* Black and Wallpaper show no generated picture: choosing them keeps the style drawn (a Large Logo user
+       picking Black repainted every picture as sheets nobody saw, then again on the way back, #55) */
+    var artStyleNow = "sheets";
+    function artStyle() {
+        var a = APL.sys.pref("shelfArt");
+        return a === "black" || a === "wall" ? artStyleNow : a === "logo" ? "logo" : "sheets";
+    }
+    artStyleNow = artStyle();
     APL.restyleArt = function () {
         var style = artStyle();
         if (style !== artStyleNow && APL.autoArt) { artStyleNow = style; APL.autoArt.restyle(allApps, render); }

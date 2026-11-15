@@ -241,6 +241,13 @@
             return r.json();
         });
     }
+    /* A title's ids never change: one request each, however many ask. Its rating and its fanart.tv picture
+       each asked TMDB for the same ids, so every series on the Top Shelf was looked up twice. */
+    var idsAsked = {};
+    function getIds(url) {
+        if (!idsAsked[url]) idsAsked[url] = getJson(url).then(null, function (e) { delete idsAsked[url]; throw e; });
+        return idsAsked[url];
+    }
 
     var TMDB = "https://api.themoviedb.org/3";
     var IMG = "https://image.tmdb.org/t/p/";
@@ -262,7 +269,7 @@
     function fanart(r) {
         if (!KEYS.fanart) return Promise.resolve(null);
         var idP = r._kind === "movie" ? Promise.resolve({ path: "movies/" + r.id })
-            : getJson(TMDB + "/tv/" + r.id + "/external_ids?api_key=" + KEYS.tmdb)
+            : getIds(TMDB + "/tv/" + r.id + "/external_ids?api_key=" + KEYS.tmdb)
                 .then(function (x) { return x.tvdb_id ? { path: "tv/" + x.tvdb_id } : null; });
         return idP.then(function (id) {
             if (!id) return null;
@@ -288,7 +295,7 @@
     /* The rating of a TMDB result: IMDb if there is one, else TMDB. */
     function noteFor(r, imdbId) {
         var other = { rating: ratingOf(r), ratingFrom: "TMDB" };
-        var id = imdbId ? Promise.resolve(imdbId) : getJson(TMDB + "/" + r._kind + "/" + r.id + "/external_ids?api_key=" + KEYS.tmdb).then(function (x) { return x.imdb_id; });
+        var id = imdbId ? Promise.resolve(imdbId) : getIds(TMDB + "/" + r._kind + "/" + r.id + "/external_ids?api_key=" + KEYS.tmdb).then(function (x) { return x.imdb_id; });
         return id.then(function (i) { return i ? imdbRating(r._kind, i) : null; }).then(function (n) {
             return n ? { rating: n, ratingFrom: "IMDb" } : other;
         }, function () { return other; });

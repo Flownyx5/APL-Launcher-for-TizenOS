@@ -157,6 +157,13 @@
                 if (!r || r.sent || !r.ok) throw new Error(APL.t("Vetro did not save the buttons"));
             }) : Promise.resolve();
             return saved.then(function () {
+                /* After Give Home Back: what it turned off comes back with the buttons, as its message says */
+                var gave = sys.pref("gaveHome");
+                if (gave) {
+                    sys.setPref("gaveHome", null);
+                    sys.setPref("homeReturn", gave.homeReturn !== false);     // its listener tells APL Overlay
+                    if (gave.homeApp) sys.native.set("homeApp", 1).then(null, function () {});
+                }
                 return sys.exec("cat " + REMAP_FILE).then(function (r) {
                     var store = {};
                     try { store = JSON.parse(r.output || "{}"); } catch (e) {}
@@ -186,10 +193,14 @@
                 if (!x || x.sent || !x.ok) throw new Error(APL.t("Vetro did not save the buttons"));
             }) : Promise.resolve();
             return saved.then(function () {
+                var wasReturning = !!sys.pref("homeReturn");
                 sys.setPref("homeReturn", false);
                 send();                                     // APL Overlay stops bringing the launcher back
-                return sys.native.get("homeApp").then(function (on) { return on === 1 ? sys.native.set("homeApp", 0) : 0; },
-                                                      function () { return 0; });
+                return sys.native.get("homeApp").then(function (on) {
+                    // Remembered, so Set Up the Remote Buttons can bring back what was on (setUpButtons)
+                    sys.setPref("gaveHome", { homeApp: on === 1, homeReturn: wasReturning });
+                    return on === 1 ? sys.native.set("homeApp", 0) : 0;
+                }, function () { sys.setPref("gaveHome", { homeApp: false, homeReturn: wasReturning }); return 0; });
             }).then(function () { return { removed: removed }; });
         });
     }

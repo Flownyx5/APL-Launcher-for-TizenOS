@@ -52,13 +52,15 @@
             pill.className = "status__weather";
             clock.parentNode.insertBefore(pill, clock);
         }
-        var p = place();
+        var p = place(), was = pill.style.display + pill.innerHTML;
         if (!w || !sys.pref("weather") || !p || w.key !== keyOf(p) || typeof w.temp !== "number") {
             pill.style.display = "none";
-            return;
+        } else {
+            pill.style.display = "";
+            pill.innerHTML = APL.icon(iconFor(w.code, w.day), 26, 1.8) + "<span>" + Math.round(w.temp) + "°</span>";
         }
-        pill.style.display = "";
-        pill.innerHTML = APL.icon(iconFor(w.code, w.day), 26, 1.8) + "<span>" + Math.round(w.temp) + "°</span>";
+        /* The clock pill grew or shrank: its glass is cut again for its new width */
+        if (pill.style.display + pill.innerHTML !== was && APL.glass && APL.glass.paint) global.setTimeout(function () { APL.glass.paint(); }, 0);
     }
 
     function getJson(url) {
@@ -157,9 +159,12 @@
         var q = field.value.replace(/^\s+|\s+$/g, "");
         if (q.length < 2) { nav.focus(0); return; }
         note.textContent = APL.t("Searching…");
+        var ask = ++asked;            // only the latest search fills the list, and only while the picker is open
         getJson(GEO + "?name=" + encodeURIComponent(q) + "&count=6&language=" + encodeURIComponent(APL.lang || "en") + "&format=json").then(function (j) {
+            if (ask !== asked || !open) return;
             showFound((j && j.results) || []);
         }, function (e) {
+            if (ask !== asked || !open) return;
             showFound([]);
             note.textContent = APL.t("No answer from the weather service: {error}", { error: e.message });
         });
@@ -189,14 +194,15 @@
         sys.setPref("weatherPlace", { name: f.name, region: f.region, cc: f.cc, lat: f.lat, lon: f.lon });
         sys.setPref("weather", true);
         close();
-        start();
-        load(true);
+        start();                      // loads it (or setPref("weather") above did, through its listener): one request
         APL.toast(APL.t("Weather for {city}", { city: f.name }), true);
         if (APL.settings && APL.settings.refresh) APL.settings.refresh();
     }
 
+    var asked = 0;
     function pickCity() {
         if (open) return;
+        asked++;
         if (!root) build();
         open = true;
         found = [];
