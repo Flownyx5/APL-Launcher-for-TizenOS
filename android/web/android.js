@@ -527,7 +527,7 @@
     }
     function watchNextCards(id) {
         var app = ((APL.allApps && APL.allApps()) || []).filter(function (a) { return a.id === id; })[0] || {};
-        return (watchNext()[id] || []).slice(0, 2).map(function (r) {
+        return (watchNext()[id] || []).slice(0, 6).map(function (r) {      // the row slides past two (widgets.js)
             var ep = r.season && r.number ? "S" + r.season + " E" + r.number : r.number ? "E" + r.number : "";
             var started = r.duration > 0 && r.position > 0;
             var left = started ? T("{n} min left", { n: Math.max(1, Math.round((r.duration - r.position) / 60000)) }) : "";

@@ -38,6 +38,7 @@
     var CACHE_MS = 10 * 60000, DONE_AT = 0.95;          // watched to 95%: it is finished
     var ART_KEY = "apl.wdg.art2";             // 2: pictures with the title drawn on them (liveshelf.js keyArt)
     var root = null, row = null, shownFor = null, shownApp = null, cache = {}, pending = {};
+    var MAX_CARDS = 6;                                   // a row that slides past two (slideTo)
 
     /* ---------- names and pictures: kept on the screen, they don't change ---------- */
     var art = {};
@@ -307,7 +308,7 @@
     function stremioCards() {
         return sys.exec("export LC_ALL=C; cat '" + STREMIO_STORE + "'/*.log 2>/dev/null | tr -d '[:cntrl:]' | grep -a 'library_recent' | sed -E 's/.*_file:..library_recent//' | " +
                         "grep -a -o -E '" + STREMIO_FIELDS + "' | head -c 120000").then(function (r) {
-            return Promise.all(stremioRecent(readable(r.output)).slice(0, 2).map(stremioCard));
+            return Promise.all(stremioRecent(readable(r.output)).slice(0, MAX_CARDS).map(stremioCard));
         });
     }
     /* A record starts at its "_id". Like Stremio: partly watched, not removed, most recent first. */
@@ -349,7 +350,7 @@
             // Cut at the array's end ("}]"): what the app wrote after it (its account, for one) stays on the screen
             return sys.exec("export LC_ALL=C; cat '" + store + "'/*.log 2>/dev/null | tr -d '[:cntrl:]' | grep -a 'watchProgressItems' | " +
                             "sed -E 's/.*watchProgressItems//' | sed -E 's/[}][]].*/}]/' | head -c 30000").then(function (r) {
-                return Promise.all(nuvioRecent(readable(r.output)).slice(0, 2).map(nuvioCard));
+                return Promise.all(nuvioRecent(readable(r.output)).slice(0, MAX_CARDS).map(nuvioCard));
             });
         };
     }
@@ -586,10 +587,24 @@
     /* Blurred background, like on tvOS: the picture is drawn once into a tiny canvas that the screen
        stretches. No blur is recomputed while navigating. */
     var blur = null, blurToken = 0;
+    /* The dock, the clock pill and the Control Center are glass cut from the picture behind them (glass.js).
+       With the cards up, the picture on screen is the cards' own blurred one, not the Top Shelf's: the glass
+       is given that picture, then the Top Shelf's back when the cards go. It kept the app before's picture
+       behind Nuvio's cards on a Frame (#57). */
+    var glassSrc = "";
+    function glassFollow(src) {
+        if (!APL.glass || !APL.glass.setSource) return;
+        if (src) {
+            if (src !== glassSrc) { glassSrc = src; APL.glass.setSource(src); }
+        } else if (glassSrc) {
+            glassSrc = "";
+            APL.glass.release();
+        }
+    }
     function paintBlur(src, soft) {
         var token = ++blurToken;
         blur.style.opacity = "0";
-        if (!src) return;
+        if (!src) { glassFollow(""); return; }
         var img = new global.Image();
         /* Drawn into 192 x 108: TMDB's 300 px copy. Its 4K original was decoded whole by the page
            itself when the canvas was drawn, 0.4 s with nothing moving on an LG G5 */
@@ -603,6 +618,7 @@
             var dw = img.naturalWidth * r, dh = img.naturalHeight * r;
             ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
             blur.style.opacity = "1";
+            if (root && root.classList.contains("is-on")) glassFollow(src);
         };
         img.src = src;
     }
@@ -695,6 +711,7 @@
     }
     function setShown(on) {
         root.classList.toggle("is-on", on);
+        if (!on) glassFollow("");                           // the Top Shelf's picture is behind the glass again
         document.body.classList.toggle("has-wdg", on);      // instead of the Top Shelf and its hint
     }
 
@@ -720,7 +737,8 @@
                     if (a && c && c.launch) launchWith(a, c.launch); else if (a) APL.openApp(a);
                 },
                 onBack: leaveCards,
-                onEdge: function (dir) { if (dir === "down") leaveCards(); }
+                onEdge: function (dir) { if (dir === "down") leaveCards(); },
+                onFocus: function (i, t) { slideTo(t); }
             });
         }
         nav.setTiles(tiles);
@@ -730,8 +748,18 @@
         focused = true;
         return true;
     }
+    /* More than two cards (Nuvio, Stremio, Android TV's Play Next: up to MAX_CARDS): the third one peeks at the
+       right edge, and the row slides so the card in focus is whole on screen (asked on Reddit: "only two"). */
+    var SAFE_RIGHT = 1830;                               // the stage is 1920 wide, the row starts at 90
+    function slideTo(card) {
+        var item = card && card.parentNode;
+        if (!item || !row) return;
+        var right = 90 + item.offsetLeft + item.offsetWidth, shift = Math.max(0, right - SAFE_RIGHT);
+        row.style.transform = shift ? "translateX(" + (-shift) + "px)" : "";
+    }
     function leaveCards() {
         if (!focused) return false;
+        if (row) row.style.transform = "";
         focused = false;
         var c = nav.current();
         if (c) c.classList.remove("is-focused");

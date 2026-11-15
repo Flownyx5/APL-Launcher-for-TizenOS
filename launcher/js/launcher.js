@@ -69,13 +69,24 @@
        its own artwork included (the launcher's own Settings and Sources keep their large icon). What the
        apps show (What You're Watching, What's Popular) has its own switches. */
     function black() { return APL.sys.pref("shelfArt") === "black"; }
-    function artOf(app) { return black() ? null : app.bg; }
-    function plain(app) { return black() && !app.shelfHtml; }
+    /* Settings › Appearance › Top Shelf › Otherwise › Wallpaper: one picture or colour gradient behind every app,
+       like Black but not dark (asked on Reddit and GitHub: "one static background", "gradient colour
+       backgrounds", "my own wallpaper"). The pictures are the Home app's drawn backdrops and the ones added with
+       install-via-vetro.py --backdrops (APL.wallpapers, settings-tree.js). What the apps show (What You're
+       Watching, What's Popular) keeps its own switches, as with Black. */
+    function walled() { return APL.sys.pref("shelfArt") === "wall"; }
+    function wallpaper() { return walled() && APL.wallpapers ? APL.wallpapers.current() : null; }
+    function artOf(app) {
+        if (black()) return null;
+        if (walled()) { var w = wallpaper(); return w && w.url ? w.url : null; }
+        return app.bg;
+    }
+    function plain(app) { return (black() || (walled() && !artOf(app))) && !app.shelfHtml; }
 
     function backdropFor(app) {
         var bg = artOf(app);
         if (bg) return "#000 center / cover no-repeat url('" + bg + "')";
-        if (plain(app)) return "#07080c";
+        if (plain(app)) { var w = wallpaper(); return (w && w.css) || "#07080c"; }
         // No artwork yet (genart.js draws it once): a glow in the app's colour on a dark background.
         var a = brandColour(app);
         return "radial-gradient(60% 70% at 50% 44%, " + rgba(a, 0.42) + ", rgba(0,0,0,0) 70%)," +
@@ -1170,7 +1181,8 @@
         // the blurred background; it no longer changes from one app to the next (and nothing to decode).
         if (!inDock) { clearTimeout(bgTimer); return; }
         var live = APL.live && APL.live.hasSource(app);
-        dom.hint.classList.toggle("is-visible", (!!artOf(app) || live) && APL.sys.pref("showHint"));
+        // ▲ for full screen only where there is a film to see: not over one wallpaper shared by every app
+        dom.hint.classList.toggle("is-visible", ((!!artOf(app) && !walled()) || live) && APL.sys.pref("showHint"));
         warmNear(i);                                   // either side, before it is asked for
         if (live && bgActive.dataset.app && bgActive.dataset.app.indexOf(app.id + "#") === 0) return;   // already shown
         /* Its own artwork is already the layer on screen (after a change of the

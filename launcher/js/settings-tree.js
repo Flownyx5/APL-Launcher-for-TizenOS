@@ -85,9 +85,15 @@
                     toggle(APL.t("What's Popular"), "liveShelf",
                         APL.t("Trending films, series and videos on each service, top albums, games, sports. Films and series need a TMDB key, videos a YouTube key (see Online Services).")),
                     choice(APL.t("Otherwise"), "shelfArt",
-                        [["sheets", APL.t("Sheets of Light")], ["logo", APL.t("Large Logo")], ["black", APL.t("Black")]],
-                        APL.t("Apps with their own artwork keep it (YouTube, Netflix, Steam…). For the others: soft sheets of light in their colors, or their logo on a halo of their color. Black: plain dark behind every app, artwork included."),
+                        [["sheets", APL.t("Sheets of Light")], ["logo", APL.t("Large Logo")], ["wall", APL.t("Wallpaper")], ["black", APL.t("Black")]],
+                        APL.t("Apps with their own artwork keep it (YouTube, Netflix, Steam…). For the others: soft sheets of light in their colors, or their logo on a halo of their color. Wallpaper: the one chosen below behind every app. Black: plain dark behind every app, artwork included."),
                         function () { if (APL.restyleArt) APL.restyleArt(); }),
+                    /* One picture or gradient behind every app (genart.js APL.wallpapers): choosing one turns
+                       Otherwise to Wallpaper */
+                    choice(APL.t("Wallpaper"), "shelfWall",
+                        (APL.wallpapers ? APL.wallpapers.list() : []).map(function (w) { return [w.id, w.name]; }),
+                        APL.t("Behind every app, instead of their pictures: a drawn backdrop, your own pictures (added with install-via-vetro.py --backdrops) or a colour gradient."),
+                        function () { APL.sys.setPref("shelfArt", "wall"); if (APL.restyleArt) APL.restyleArt(); }),
                     menu(APL.t("Online Services"), "globe", [
                         info(APL.t("TMDB Key"), function () { return APL.live && APL.live.keys().tmdb ? APL.t("Configured") : APL.t("Missing"); },
                             APL.t("Films and series in What's Popular. Set it in APL Launcher Setup.")),
@@ -100,7 +106,14 @@
                 toggle(APL.t("Visual Effects"), "visualEffects", APL.t("Blur and glass. Prettier but slower: off by default so the screen stays smooth.")),
                 toggle(APL.t("Trailers in Full Screen"), "trailers",
                     APL.t("A muted trailer of the title on the wall, two seconds after ▲, in full screen. Needs a TMDB key. Nothing is fetched while you browse.")),
-                toggle(APL.t("Slow Background Motion"), "bgMotion", APL.t("A slow camera move over the Home Screen images. Pretty, but it keeps the screen very busy and slows everything else down."))
+                toggle(APL.t("Slow Background Motion"), "bgMotion", APL.t("A slow camera move over the Home Screen images. Pretty, but it keeps the screen very busy and slows everything else down.")),
+                /* The weather in the clock pill (weather.js), for a city typed with the screen's keyboard */
+                menu(APL.t("Weather"), "sun", [
+                    toggle(APL.t("Show the Weather"), "weather", APL.t("The temperature and the sky next to the clock, from Open-Meteo (no key, no account).")),
+                    info(APL.t("City"), function () { var p = APL.weather && APL.weather.place(); return p ? p.name + (p.region ? ", " + p.region : "") : APL.t("No city yet"); }),
+                    action(APL.t("Choose the City"), function () { if (APL.weather) APL.weather.pickCity(); },
+                        APL.t("Type the city with the screen's keyboard, then pick it in the list."), "search")
+                ], APL.t("The weather next to the clock."))
             ], APL.t("Theme, Top Shelf, visual effects.")),
 
             /* -------- Home Screen -------- */
@@ -132,6 +145,8 @@
                     APL.t("What the play/pause button does while an app is in front: open the Control Center over it, or play and pause in the app. On the Home Screen it always opens the Control Center, and holding Home opens it everywhere.")),
                 vetro(action(APL.t("Set Up the Remote Buttons"), function () { APL.overlay.setUpButtons(); },
                     APL.t("Sends Home and ⏯ to APL Launcher in Vetro, as APL Launcher Setup does. For a launcher installed from a phone with Apps2Samsung, or when Home opens Samsung's home again."), "remote")),
+                vetro(action(APL.t("Give Home Back to Samsung"), function () { APL.overlay.giveHomeBack(); },
+                    APL.t("Home opens Samsung's home again and the screen starts as before. APL Launcher stays installed, and Set Up the Remote Buttons brings it back."), "reset")),
                 vetro(action(APL.t("Alexa on the Microphone Button"), function () { APL.settings.close(); APL.services.alexaMic(); },
                     APL.t("Do this once: in the Voice menu, choose Amazon Alexa and sign in to your Amazon account. Then hold the microphone button on the remote and talk to Alexa."), "mic")),
                 toggle("Alexa (Echo Dot)", "alexaBridge", APL.t("Say “Alexa, discover my devices” once. Then: “Alexa, turn on TizenTube”, “Alexa, turn off the screen”, “Alexa, turn on the AirPods”, “Alexa, turn on game mode”.")),

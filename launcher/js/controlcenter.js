@@ -138,10 +138,16 @@
         bt.busy = true;
         APL.toast(APL.t("Connecting to “{name}”…", { name: dev.name }), true);
         // replace_current_bluetooth_speaker returns 0 but does nothing when no device is already connected
-        sys.exec(BT_MGR + "org.tizen.btapp.ApiInterface.buds_switching_connect " + dev.address + " 2>&1").catch(function () {}).then(function () {
-            return btWait(dev.address, true, 10);
+        var failed = null;
+        sys.exec(BT_MGR + "org.tizen.btapp.ApiInterface.buds_switching_connect " + dev.address + " 2>&1").catch(function (e) { failed = e; }).then(function () {
+            // The order never reached the screen (Vetro, its bridge): waiting for the device would only blame it
+            return failed ? null : btWait(dev.address, true, 10);
         }).then(function (now) {
             if (now && now.connected) APL.toast(APL.t("Sound on “{name}”", { name: now.name }), true);
+            /* A soundbar on HDMI (ARC, eARC) already plays the sound without Bluetooth: "isn't responding" read like an
+               error while the sound came out of it (Reddit, a Q soundbar on Tizen 6.0) */
+            else if (failed) APL.toast(APL.t("Couldn't switch the sound: {error}", { error: failed.message || "?" }));
+            else if (dev.kind === "speaker") APL.toast(APL.t("“{name}” didn't connect over Bluetooth. A soundbar on HDMI (ARC) plays the sound without it: check the TV's Sound Output.", { name: dev.name }));
             else APL.toast(APL.t("“{name}” isn't responding: open the case or turn on the headphones, then try again.", { name: dev.name }));
             btDone();
         });
@@ -289,6 +295,39 @@
         });
     }
 
+    /* ---------- Adaptive Picture (Samsung's "Intelligent Mode" brightness) ----------
+       The screen dims or brightens the picture with the light in the room. Asked on Reddit: too bright in the
+       morning, so it went on in Samsung's menus every day, then off later. The same AV service setting as
+       Settings › Picture › Adaptive Picture (system.js NATIVE.adaptive), read back after each change. */
+    var adaptState = { on: false, known: false, busy: false };
+    function adaptRefresh() {
+        if (!sys.native) return Promise.resolve();
+        return sys.native.get("adaptive").then(function (v) {
+            adaptState.on = v === 1;
+            adaptState.known = true;
+            if (isOpen && view === "main") refresh();
+        }, function () { adaptState.known = false; });
+    }
+    function adaptToggle() {
+        if (adaptState.busy) return;
+        adaptState.busy = true;
+        var want = adaptState.on ? 0 : 1;
+        sys.native.set("adaptive", want).then(function (v) {
+            adaptState.busy = false;
+            adaptState.on = v === 1;
+            adaptState.known = true;
+            APL.toast(adaptState.on ? APL.t("Adaptive Picture on") : APL.t("Adaptive Picture off"), true);
+            if (isOpen) refresh();
+            // The brightness follows the room now: the slider shows what the screen chose
+            nav.tiles.forEach(function (t) {
+                if (t._item.type === "backlight") sys.tvItem(SLIDER.id).then(function (m) { if (m) drawBacklight(t, m.value, m); }, function () {});
+            });
+        }, function (e) {
+            adaptState.busy = false;
+            APL.toast(e.message);
+        });
+    }
+
     function speakersToTv() {
         var on = (bt.list || []).filter(function (d) { return d.connected; });
         if (!on.length) { APL.toast(APL.t("Sound is already coming from the screen"), true); return; }
@@ -341,7 +380,12 @@
               select: openSettings() },
             { cls: "round", icon: "search", title: APL.t("Search"), start: true,
               select: inLauncher("search", function () { if (APL.search) APL.search.open(); }) }
-        ];
+        ].concat(P ? [] : [
+            // Samsung only (the AV service), next to Search: the four circles above are a full row
+            { cls: "round", icon: "eye", title: APL.t("Adaptive Picture"), tint: "#ffd60a",
+              sub: function () { return !adaptState.known ? APL.t("Unavailable") : adaptState.on ? APL.t("On") : APL.t("Off"); },
+              on: function () { return adaptState.on; }, select: adaptToggle }
+        ]);
     }
 
     function audioItems() {
@@ -690,6 +734,7 @@
         isOpen = true;
         btRefresh(false).then(function () { if (isOpen && view === "main") refresh(); });
         gameRefresh();
+        if (!P) adaptRefresh();
         sys.readSleepTimer().then(function () { if (isOpen && view === "main") refresh(); });
     }
 

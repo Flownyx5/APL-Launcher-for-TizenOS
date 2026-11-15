@@ -43,7 +43,8 @@
             APL.widgets.cardsFor(app.id).then(function (cards) {
                 if (!cards.length) return;
                 var w = el("div", "sw__widgets");
-                cards.forEach(function (x) { w.appendChild(APL.widgets.cardEl(x)); });
+                // Two small cards fit under an app here; the Home Screen's row takes up to six and slides
+                cards.slice(0, 2).forEach(function (x) { w.appendChild(APL.widgets.cardEl(x)); });
                 pic.appendChild(w);
             });
         }

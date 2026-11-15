@@ -49,7 +49,8 @@
         autoArt: true,              // logos, backgrounds and content found automatically (App Store, TMDB)
         appsPerRow: 6,              // dock and grid: 5, 6 or 7 (launcher.js sizes())
         searchHidden: false,        // Search also finds the hidden apps (search.js)
-        shelfArt: "sheets",         // Top Shelf of apps without artwork: "sheets" | "logo" | "black" (genart.js, launcher.js)
+        shelfArt: "sheets",         // Top Shelf of apps without artwork: "sheets" | "logo" | "wall" | "black" (genart.js, launcher.js)
+        shelfWall: "pic:dusk",      //   with "wall": the wallpaper behind every app (genart.js APL.wallpapers)
         smartHubTileSet: false,     // the Smart Hub tile was hidden once in this profile (it starts hidden)
         hubShelf: true,             // Top Shelf: the apps' own Smart Hub rows first (liveshelf.js)
         liveShelf: true,            //   then the content of the moment (TMDB / YouTube…), then shelfArt

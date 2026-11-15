@@ -615,3 +615,51 @@
 
     APL.genArt = { make: make, applyCached: applyCached, missing: missing, clear: clear, undo: undo, retheme: retheme };
 })(window);
+
+/* ---------- Wallpapers: Settings › Appearance › Top Shelf › Wallpaper ----------
+   One picture or colour gradient behind every app (launcher.js walled()). The pictures are the Home app's
+   drawn backdrops (images/backdrops, tools/make-backdrops.py) and the ones install-via-vetro.py --backdrops
+   adds (APL_KEYS.ha.backdrops, the same list home-app.js offers). The gradients run top to bottom, as the
+   glass draws a gradient (glass.js gradImage), so the dock reads the same colours. */
+(function (global) {
+    "use strict";
+
+    var APL = global.APL = global.APL || {};
+    var PICTURES = [["dusk", "Dusk"], ["linen", "Linen"], ["forest", "Forest"], ["night", "Night"]];
+    var GRADIENTS = [
+        ["blue", "Blue Gradient", ["#2a5cb8", "#0b1a3d"]],
+        ["sunset", "Sunset Gradient", ["#f0965a", "#8e3b74", "#221338"]],
+        ["mint", "Mint Gradient", ["#2f8f78", "#0c2f2c"]],
+        ["purple", "Purple Gradient", ["#7a4fc4", "#1c1238"]],
+        ["graphite", "Graphite Gradient", ["#4a4a52", "#121215"]]
+    ];
+    var DEFAULT = "pic:dusk";
+
+    function t(s) { return APL.t ? APL.t(s) : s; }
+
+    function list() {
+        var out = [], i, b, extra = ((global.APL_KEYS && global.APL_KEYS.ha) || {}).backdrops;
+        for (i = 0; i < PICTURES.length; i++) {
+            out.push({ id: "pic:" + PICTURES[i][0], name: t(PICTURES[i][1]), url: "images/backdrops/" + PICTURES[i][0] + ".jpg" });
+        }
+        if (extra && typeof extra.length === "number") {
+            for (i = 0; i < extra.length; i++) {
+                b = extra[i] || {};
+                if (b.id && b.file) out.push({ id: "pic:" + String(b.id), name: String(b.name || b.id), url: String(b.file) });
+            }
+        }
+        for (i = 0; i < GRADIENTS.length; i++) {
+            out.push({ id: "grad:" + GRADIENTS[i][0], name: t(GRADIENTS[i][1]),
+                       css: "linear-gradient(180deg, " + GRADIENTS[i][2].join(", ") + ")" });
+        }
+        return out;
+    }
+
+    function current() {
+        var want = (APL.sys && APL.sys.pref("shelfWall")) || DEFAULT, all = list(), i;
+        for (i = 0; i < all.length; i++) if (all[i].id === want) return all[i];
+        return all[0];
+    }
+
+    APL.wallpapers = { list: list, current: current };
+})(window);

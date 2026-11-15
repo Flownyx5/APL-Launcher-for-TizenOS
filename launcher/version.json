@@ -2,7 +2,7 @@
  "version": "1.2.0",
  "loader": 1,
  "reinstall": "1.0.0",
- "notes": "",
+ "notes": "Home Assistant in its own Home app, Change Icon (TizenTube with YouTube's logo), Search with the TV's keyboard, TizenTube Cobalt, Polish, a tidier Control Center",
  "scripts": [
   "js/diag.js",
   "js/webos.js",
@@ -37,6 +37,7 @@
   "js/folders.js",
   "js/switcher.js",
   "js/widgets.js",
+  "js/weather.js",
   "js/overlay.js",
   "js/updater.js",
   "js/ha.js",

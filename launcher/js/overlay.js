@@ -167,6 +167,50 @@
             });
         });
     }
+    /* Settings › Remote and Devices › Give Home Back to Samsung (asked on Reddit): what Restore in APL Launcher
+       Setup does first, from the screen. The Vetro rules that open APL Launcher or APL Overlay go (Home, ⏯, Multi
+       View…; the other rules stay), Start on APL Launcher goes off and Return to the Launcher too, so the screen
+       starts and goes home the Samsung way again. The launcher stays installed, in Samsung's Apps, and Set Up the
+       Remote Buttons brings it all back. Vetro keeps the remote: a key with no rule reaches the screen as before. */
+    function giveHomeBack() {
+        if (sys.PREVIEW) return Promise.resolve({ removed: 0 });
+        return sys.vetroGet("/remap").then(function (r) {
+            var rules = (r && r.rules) || [];
+            var keep = rules.filter(function (rule) {
+                return !(rule.actions || []).some(function (a) {
+                    return a.type === "launch" && (a.appId === LAUNCHER || OVERLAY_IDS.indexOf(a.appId) !== -1);
+                });
+            });
+            var removed = rules.length - keep.length;
+            var saved = removed ? sys.vetroPost("/remap", { rules: keep }).then(function (x) {
+                if (!x || x.sent || !x.ok) throw new Error(APL.t("Vetro did not save the buttons"));
+            }) : Promise.resolve();
+            return saved.then(function () {
+                sys.setPref("homeReturn", false);
+                send();                                     // APL Overlay stops bringing the launcher back
+                return sys.native.get("homeApp").then(function (on) { return on === 1 ? sys.native.set("homeApp", 0) : 0; },
+                                                      function () { return 0; });
+            }).then(function () { return { removed: removed }; });
+        });
+    }
+    function giveHomeBackNow() {
+        APL.alert({
+            title: APL.t("Give Home Back to Samsung?"),
+            message: APL.t("Home and the other buttons open Samsung's own screens again, and the screen starts as before. APL Launcher stays in Samsung's Apps. Set Up the Remote Buttons brings it all back."),
+            focus: 0,
+            buttons: [{ label: APL.t("Cancel") }, { label: APL.t("Give It Back"), destructive: true, run: function () {
+                APL.toast(APL.t("Giving Home back to Samsung…"), true);
+                giveHomeBack().then(function (r) {
+                    APL.alert({ title: APL.t("Home Is Samsung's Again"),
+                                message: APL.t("{n} Vetro rule(s) removed. To come back, open APL Launcher from Samsung's Apps, then Settings › Remote and Devices › Set Up the Remote Buttons.", { n: r.removed }),
+                                buttons: [{ label: APL.t("OK") }] });
+                }, function (e) {
+                    APL.alert({ title: APL.t("Remote Buttons"), message: (e && e.message) || APL.t("Vetro is not responding"), buttons: [{ label: APL.t("OK") }] });
+                });
+            } }]
+        });
+    }
+
     function setUpButtonsNow() {
         APL.toast(APL.t("Setting up the buttons in Vetro…"), true);
         setUpButtons().then(function (r) {
@@ -210,6 +254,7 @@
         refresh: send,
         openSamsungHome: openSamsungHome,
         setUpButtons: setUpButtonsNow,
+        giveHomeBack: giveHomeBackNow,
         isInstalled: function () { return installed; }
     };
 })(window);
