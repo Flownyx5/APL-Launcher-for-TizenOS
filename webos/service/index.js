@@ -389,18 +389,8 @@ function watchApps() {
    page, live TV, the inputs, AirPlay, nor an app playing sound or video. The TV keeps its memory, and the
    launcher stays smooth. Settings › Apps › Close Unused Apps turns it off (service "idle"). */
 var idleOn = true, bgSince = {}, hidden = {}, frontApp = "";
-var NEVER_CLOSE = /^(com\.knikt\.apllauncher|com\.webos\.app\.(home|livetv|hdmi\d*|inputcommon|livemenu|firstuse-overlay|.*systemui.*|airplay|tvhotkey)|airplay)$/;
+var NEVER_CLOSE = /^(com\.knikt\.apllauncher|com\.webos\.app\.(home|livetv|hdmi\d*|inputcommon|livemenu|firstuse-overlay|.*systemui.*|airplay|screensaver|tvhotkey)|airplay)$/;
 var PRELOADED = { "com.webos.app.lgchannels": 1 };
-/* LG's screen saver stays open after it has gone, 131 MB on a G5, the biggest app the TV kept. Closed a minute
-   after it stops showing, never while the TV says it is on screen ("Screen Saver"); the TV opens it again when
-   it is next needed. */
-var AFTER_USE = { "com.webos.app.screensaver": 1 };
-function saverShowing(cb) {
-    service.call("luna://com.webos.service.tvpower/power/getPowerState", {}, function (m) {
-        var st = m && m.payload && m.payload.state;
-        cb(!st || /saver/i.test(String(st)));        // no answer: counted as showing, so never closed
-    });
-}
 function idleLife(id, ev) {
     if (!id) return;
     if (ev === "foreground") { frontApp = id; delete bgSince[id]; delete hidden[id]; }
@@ -423,20 +413,19 @@ function idleTick() {
     if (!idleOn || fs.existsSync(ROOT_DIR + "/OFF-idleclose")) return;
     service.call("luna://com.webos.applicationManager/running", {}, function (m) {
         var apps = (m && m.payload && m.payload.running) || [];
-        playing(function (busy) { saverShowing(function (saver) {
+        playing(function (busy) {
             var now = Date.now();
             apps.forEach(function (a) {
                 var id = String(a.id || "");
                 if (!id || id === frontApp || NEVER_CLOSE.test(id) || busy[id]) return;
-                if (AFTER_USE[id] && saver) { delete bgSince[id]; return; }                      // on screen: never
-                if (!(id in bgSince)) { bgSince[id] = now; if (PRELOADED[id] || AFTER_USE[id]) hidden[id] = true; return; }   // first seen behind: counted from now
+                if (!(id in bgSince)) { bgSince[id] = now; if (PRELOADED[id]) hidden[id] = true; return; }   // first seen behind: counted from now
                 var limit = hidden[id] ? 60000 : 10 * 60000;
                 if (now - bgSince[id] < limit) return;
                 service.call("luna://com.webos.applicationManager/closeByAppId", { id: id }, function () {});
-                ssap.note("closed " + id + (AFTER_USE[id] ? " (1 min after it stopped showing)" : hidden[id] ? " (opened by the TV, never used)" : " (10 min in the background)"));
+                ssap.note("closed " + id + (hidden[id] ? " (opened by the TV, never used)" : " (10 min in the background)"));
                 delete bgSince[id]; delete hidden[id];
             });
-        }); });
+        });
     });
 }
 service.register("idle", guard(function (message) {

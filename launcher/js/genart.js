@@ -67,7 +67,12 @@
             i.src = src;
         });
     }
-    function slug(name) { return String(name || "").toLowerCase().replace(/\+/g, "-plus").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
+    /* The icon sets name their files without accents: "Lecteur multimédia" was looked up as lecteur-multim-dia */
+    function slug(name) {
+        var s = String(name || "").toLowerCase();
+        if (s.normalize) s = s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+        return s.replace(/\+/g, "-plus").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    }
 
     function firstGood(list, minSize) {
         return list.reduce(function (chain, src) {
