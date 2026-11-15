@@ -453,5 +453,11 @@
         isOpen = false;
     }
 
-    APL.settings = { open: open, close: close, isOpen: function () { return isOpen; } };
+    /* The values on screen read again (weather.js after a city is picked: City and Show the Weather changed
+       behind the open page) */
+    function refreshAll() {
+        if (!isOpen || !listEl) return;
+        [].forEach.call(listEl.querySelectorAll(".srow"), function (row) { if (row._item) refreshRow(row); });
+    }
+    APL.settings = { open: open, close: close, isOpen: function () { return isOpen; }, refresh: refreshAll };
 })(window);

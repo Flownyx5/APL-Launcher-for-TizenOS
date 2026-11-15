@@ -18,7 +18,7 @@
     var APL = global.APL, sys = APL.sys;
     var GEO = "https://geocoding-api.open-meteo.com/v1/search", API = "https://api.open-meteo.com/v1/forecast";
     var EVERY = 30 * 60000, STORE = "apl.weather";
-    var IME_DONE = 65376, IME_CANCEL = 65385, BACK = 10009, ESC = 27, ENTER = 13, DOWN = 40;
+    var IME_DONE = 65376, IME_CANCEL = 65385, BACK = 10009, ESC = 27, ENTER = 13;
     var pill = null, timer = null, started = false;
 
     function place() {
@@ -124,7 +124,8 @@
 
         field.addEventListener("keydown", function (e) {
             var c = e.keyCode;
-            if (c === ENTER || c === IME_DONE || c === DOWN) { e.preventDefault(); e.stopPropagation(); typed(); }
+            // Not ▼: on the screen's keyboard the arrows move between its keys (seen on the M8)
+            if (c === ENTER || c === IME_DONE) { e.preventDefault(); e.stopPropagation(); typed(); }
             else if (c === IME_CANCEL || c === BACK || c === ESC) { e.preventDefault(); e.stopPropagation(); field.blur(); nav.focus(0); }
         });
 

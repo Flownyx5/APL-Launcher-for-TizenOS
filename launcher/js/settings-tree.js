@@ -110,7 +110,7 @@
                 /* The weather in the clock pill (weather.js), for a city typed with the screen's keyboard */
                 menu(APL.t("Weather"), "sun", [
                     toggle(APL.t("Show the Weather"), "weather", APL.t("The temperature and the sky next to the clock, from Open-Meteo (no key, no account).")),
-                    info(APL.t("City"), function () { var p = APL.weather && APL.weather.place(); return p ? p.name + (p.region ? ", " + p.region : "") : APL.t("No city yet"); }),
+                    info(APL.t("City"), function () { var p = APL.weather && APL.weather.place(); return p ? p.name + (p.region ? ", " + p.region.split(", ").pop() : "") : APL.t("No city yet"); }),   // the city and its country: the region did not fit (M8)
                     action(APL.t("Choose the City"), function () { if (APL.weather) APL.weather.pickCity(); },
                         APL.t("Type the city with the screen's keyboard, then pick it in the list."), "search")
                 ], APL.t("The weather next to the clock."))

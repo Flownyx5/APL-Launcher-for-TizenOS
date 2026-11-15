@@ -667,6 +667,8 @@
         // A blurred logo shows nothing: for a channel, the colours of the app's background
         paintBlur(video ? video.image : (shownApp && shownApp.bg) || (cards[0] && cards[0].image), !video);
         setShown(cards.length > 0);
+        row.style.transform = "";
+        markOut(0);
     }
 
     /* On the Home Screen: the cards of the selected app, and of it alone. We wait for the focus to
@@ -705,6 +707,7 @@
         trendCard().then(function (c) {
             if (!c || painted !== text || document.hidden) return;
             addCard(c);
+            markOut(0);
             // The background follows the movie, unless the app has its own movie picture to show
             if (!cards.some(function (x) { return x.kind === "video" && x.image && !x.appArt; })) paintBlur(c.image);
         });
@@ -756,6 +759,16 @@
         if (!item || !row) return;
         var right = 90 + item.offsetLeft + item.offsetWidth, shift = Math.max(0, right - SAFE_RIGHT);
         row.style.transform = shift ? "translateX(" + (-shift) + "px)" : "";
+        markOut(shift);
+    }
+    /* A card cut by the edge of the screen keeps its picture, not its heading: at the right edge the heading
+       ran under the clock pill (seen on the M8 with Stremio). */
+    function markOut(shift) {
+        if (!row) return;
+        [].forEach.call(row.children, function (item) {
+            var left = 90 + item.offsetLeft - shift, right = left + item.offsetWidth;
+            item.classList.toggle("is-out", left < 0 || right > SAFE_RIGHT + 1);
+        });
     }
     function leaveCards() {
         if (!focused) return false;

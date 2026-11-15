@@ -87,6 +87,8 @@
         var bg = artOf(app);
         if (bg) return "#000 center / cover no-repeat url('" + bg + "')";
         if (plain(app)) { var w = wallpaper(); return (w && w.css) || "#07080c"; }
+        // A card of its own (Settings, Sources, a pinned input) stands on the gradient wallpaper too
+        if (walled()) { var g = wallpaper(); if (g && g.css) return g.css; }
         // No artwork yet (genart.js draws it once): a glow in the app's colour on a dark background.
         var a = brandColour(app);
         return "radial-gradient(60% 70% at 50% 44%, " + rgba(a, 0.42) + ", rgba(0,0,0,0) 70%)," +
