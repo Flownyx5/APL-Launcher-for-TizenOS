@@ -16,12 +16,15 @@ namespace APL
     internal static class RemoteKeys
     {
         public const int Home = 63, Pause = 244, TvPlus = 560, Prime = 221;     // evdev codes
+        /// <summary>Multi View (XF86MultiView) on the remotes that have it, captured in Vetro by a user (#47).
+        /// Not 28: that one is OK.</summary>
+        public const int MultiView = 497;
         public const int LongPressMs = 450;
         public const int NextPressMs = 90;
 
         public static bool IsWatched(int code)
         {
-            return code == Home || code == Pause || code == TvPlus || code == Prime;
+            return code == Home || code == Pause || code == TvPlus || code == Prime || code == MultiView;
         }
 
         /// <summary>The latest press of a key this app handles, or -1.</summary>

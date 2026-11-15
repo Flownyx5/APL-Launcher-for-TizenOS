@@ -52,8 +52,9 @@ foreach ($rule in $rules) {
     }
 }
 # Pause (244) = Control Center. Samsung TV Plus (560) = AquaPlay and Prime Video (221) = TizenTube, only if
-# the app is installed: otherwise the button keeps its Samsung role. Restore removes them.
-$codes = @(244)
+# the app is installed: otherwise the button keeps its Samsung role. Multi View (497, the remotes that have it,
+# #47) = Control Center: Sources is there. Not 28, which is OK. Restore removes them.
+$codes = @(244, 497)
 try {
     $installed = Invoke-VetroExec $Base "app_launcher -l 2>/dev/null | grep -o -E 'AquaPlay02.AquaPlay|xvvl3S1bvH.TizenBrewStandalone' | sort -u"
     if ($installed -match 'AquaPlay02') { $codes += 560 }

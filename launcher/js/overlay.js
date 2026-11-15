@@ -76,7 +76,7 @@
     /* Keys handed to the overlay while it is not there: Home goes back to the launcher, the others to
        Samsung. Only the rules that launch the overlay change (the ones APL Launcher Setup made), and
        the person at the screen is told what changed: nothing happens behind their back. */
-    var KEY_NAMES = { "63": "Home", "244": "⏯", "560": "Samsung TV Plus", "221": "Prime Video" };
+    var KEY_NAMES = { "63": "Home", "244": "⏯", "560": "Samsung TV Plus", "221": "Prime Video", "497": "Multi View" };
     function keyName(rule) {
         var code = rule.trigger && String(rule.trigger.value);
         return KEY_NAMES[code] || APL.t("key {code}", { code: code });
@@ -117,6 +117,7 @@
        are installed and no rule uses those buttons yet. Other rules stay as they are. Then: is Vetro
        intercepting the remote at all? That switch needs the remote to be picked, so it stays in Vetro. */
     var EXTRA_KEYS = [["560", "AquaPlay02.AquaPlay"], ["221", "xvvl3S1bvH.TizenBrewStandalone"]];
+    var MULTI_VIEW = "497";          // Multi View opens the Control Center (overlay/RemoteKeys.cs); not 28, which is OK
     var REMAP_FILE = "/opt/usr/home/owner/share/vetro-remap.json";     // where Vetro keeps its rules and the remote it intercepts
     function setUpButtons() {
         if (sys.PREVIEW) return Promise.resolve({ preview: true });
@@ -148,6 +149,7 @@
             point("63", true);
             if (installed) {
                 point("244", true);
+                point(MULTI_VIEW, false);       // the remotes that have it (#47); a rule already on it stays
                 if (got[1]) point(EXTRA_KEYS[0][0], false);
                 if (got[2]) point(EXTRA_KEYS[1][0], false);
             }

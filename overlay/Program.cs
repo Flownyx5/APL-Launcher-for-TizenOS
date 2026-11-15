@@ -318,6 +318,11 @@ namespace APL
                         else if (pauseInApps && key.Foreground != Launcher && !IsSamsungHome(key.Foreground)) await PlayPause(key);
                         else OpenControlCenter(key);
                         break;
+                    case RemoteKeys.MultiView:
+                        // The Control Center, always: it has Sources, which is what Multi View was for (#47)
+                        if (panel.IsOpen) panel.Close();
+                        else OpenControlCenter(key);
+                        break;
                     case RemoteKeys.TvPlus:
                         if (panel.IsOpen) panel.Close();
                         await ResumeApp(AquaPlay);
