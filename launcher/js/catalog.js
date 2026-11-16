@@ -500,6 +500,44 @@ window.APL_CATALOG = [
     "live": "gamepass"
   },
   {
+    "key": "playstation",
+    "name": "PlayStation",
+    "eyebrow": "GAMES",
+    "accent": "#0070d1",
+    "match": [
+      "^ps remote play",
+      "^playstation",
+      "^ps plus"
+    ],
+    "ids": [],
+    "tile": "images/apps/playstation-tile.png",
+    "live": "console:ps5"
+  },
+  {
+    "key": "boosteroid",
+    "name": "Boosteroid",
+    "eyebrow": "GAMES",
+    "accent": "#5b3df5",
+    "match": [
+      "^boosteroid"
+    ],
+    "ids": [],
+    "tile": "images/apps/boosteroid-tile.png",
+    "live": "games"
+  },
+  {
+    "key": "shadow",
+    "name": "Shadow",
+    "eyebrow": "GAMES",
+    "accent": "#0a0a0a",
+    "match": [
+      "^shadow"
+    ],
+    "ids": [],
+    "tile": "images/apps/shadow-tile.png",
+    "live": "games"
+  },
+  {
     "key": "geforcenow",
     "name": "GeForce NOW",
     "eyebrow": "GAMES",

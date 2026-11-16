@@ -9,6 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.media.AudioManager
+import android.media.tv.TvContract
+import android.media.tv.TvInputInfo
+import android.media.tv.TvInputManager
 import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.NetworkCapabilities
@@ -310,6 +313,56 @@ class Bridge(private val ctx: Context, private val host: Host) {
         }
         return o.toString()
     }
+
+    /* ---------- the TV's inputs: Sources (android.js) ----------
+       A Google TV or Android TV television lists its HDMI ports through TvInputManager: one passthrough input per
+       port, plus one per HDMI-CEC device found on a port (its parent is that port). A box (Shield, Chromecast, the
+       emulator) has none, or no TvInputManager at all: "[]". Listing and opening them need no permission.
+       [{ id, number, label }]: number = the one in the port's own name ("HDMI 2"), else its place in the list;
+       label = the name given in Android's Inputs settings, else the CEC device's (PlayStation 5…), else the port's. */
+    @JavascriptInterface
+    fun tvInputs(): String = try {
+        val tm = app.getSystemService(Context.TV_INPUT_SERVICE) as? TvInputManager
+        // Inputs hidden in Android's Inputs settings stay hidden here too
+        val all = tm?.tvInputList.orEmpty().filter { it.type == TvInputInfo.TYPE_HDMI && it.isPassthroughInput && !hidden(it) }
+        val ports = all.filter { it.parentId == null }
+        val taken = HashSet<Int>()
+        val named = ports.map { p ->
+            val n = portNumber(text { p.loadLabel(app) }) ?: portNumber(p.id)
+            if (n != null && taken.add(n)) n else null          // two ports named alike: the second one is counted below
+        }
+        val out = JSONArray()
+        ports.forEachIndexed { i, p ->
+            var n = named[i]
+            if (n == null) { n = i + 1; while (!taken.add(n)) n++ }
+            val own = text { p.loadCustomLabel(app) }
+            val cec = all.firstOrNull { it.parentId == p.id }?.let { d -> text { d.loadCustomLabel(app) }.ifEmpty { text { d.loadLabel(app) } } } ?: ""
+            out.put(JSONObject().put("id", p.id).put("number", n).put("label", own.ifEmpty { cec }.ifEmpty { text { p.loadLabel(app) } }))
+        }
+        out.toString()
+    } catch (e: Exception) { Log.w(Web.TAG, "inputs: $e"); "[]" }
+
+    /* Shows one of those inputs: the TV's own app for its inputs opens on it, as from Android's Inputs menu. Only an
+       input the TV lists: the page never hands Android an address of its own. */
+    @JavascriptInterface
+    fun openInput(id: String): Boolean = try {
+        val tm = app.getSystemService(Context.TV_INPUT_SERVICE) as? TvInputManager
+        val input = tm?.getTvInputInfo(id)
+        if (input == null || !input.isPassthroughInput) false
+        else {
+            val uri = TvContract.buildChannelUriForPassthroughInput(id)
+            start(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) ||
+                // Android finds the TV app from the address's type (TvProvider's): a TV that doesn't give it, the type written out
+                start(Intent(Intent.ACTION_VIEW).setDataAndType(uri, TvContract.Channels.CONTENT_ITEM_TYPE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    } catch (e: Exception) { Log.w(Web.TAG, "input: $e"); false }
+
+    /* "HDMI 3", "HDMI3 (eARC)", or a service named so (…/.Hdmi2InputService/HW5); one digit only, so that an id like
+       "HDMI100004" doesn't read as port 1 */
+    private fun portNumber(s: String): Int? = Regex("(?i)hdmi[\\s_-]*(\\d)(?!\\d)").find(s)?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it > 0 }
+    private fun text(f: () -> CharSequence?): String = try { f()?.toString()?.trim() ?: "" } catch (e: Exception) { "" }
+    // Android 12+ lets an app read only some of Android's settings: if the hidden list is refused, the input is shown
+    private fun hidden(i: TvInputInfo): Boolean = try { i.isHidden(app) } catch (e: Exception) { false }
 
     /* ---------- Android's own screens ---------- */
     @JavascriptInterface

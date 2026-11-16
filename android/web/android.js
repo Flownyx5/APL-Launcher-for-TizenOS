@@ -7,6 +7,7 @@
    the launcher's Samsung calls into Android ones:
      the apps (names, icons, TV banners), opening them, deleting them;
      sound, network, device, storage, picture size;
+     the TV's HDMI inputs, for Sources (Google TV and Android TV televisions);
      the remote (Samsung's key codes, sent by Android), Home, typing;
      sleep and the Sleep Timer (accessibility service, KeyService.kt);
      Settings and the Control Center: what Android can't do without root
@@ -47,7 +48,9 @@
                 "Le Centre de contrôle par-dessus l'app au premier plan demande « superposition sur d'autres applis ». Sans elle, un appui long sur Accueil ouvre le launcher avec son Centre de contrôle. Depuis un PC : adb shell appops set com.knikt.apllauncher SYSTEM_ALERT_WINDOW allow",
             "Allow Over Other Apps": "Autoriser la superposition",
             "Not allowed": "Non autorisé",
-            "Sources are not available on Android yet.": "Les sources ne sont pas encore disponibles sur Android.",
+            "This device has no HDMI inputs.": "Cet appareil n'a pas d'entrée HDMI.",
+            "This TV has no {port} input.": "Ce téléviseur n'a pas d'entrée {port}.",
+            "Android couldn't open {port}.": "Android n'a pas pu ouvrir l'entrée {port}.",
             "Not used on Android": "Pas utilisé sur Android",
             "Android TV": "Android TV",
             "Google TV": "Google TV",
@@ -157,7 +160,9 @@
                 "Centrum sterowania nad aplikacją na pierwszym planie wymaga uprawnienia „Wyświetlanie nad innymi aplikacjami”. Bez niego przytrzymanie Home otwiera launcher z jego Centrum sterowania. Z komputera: adb shell appops set com.knikt.apllauncher SYSTEM_ALERT_WINDOW allow",
             "Allow Over Other Apps": "Zezwól na wyświetlanie nad innymi aplikacjami",
             "Not allowed": "Niedozwolone",
-            "Sources are not available on Android yet.": "Źródła nie są jeszcze dostępne na Androidzie.",
+            "This device has no HDMI inputs.": "To urządzenie nie ma wejść HDMI.",
+            "This TV has no {port} input.": "Ten telewizor nie ma wejścia {port}.",
+            "Android couldn't open {port}.": "Android nie mógł otworzyć wejścia {port}.",
             "Not used on Android": "Nieużywane na Androidzie",
             "Android TV": "Android TV",
             "Google TV": "Google TV",
@@ -397,8 +402,44 @@
     };
     sys.sleepNow = function () { return B.sleep() ? Promise.resolve() : fail(needsService()); };
     sys.openSamsungSettings = function (path) { B.openSettings("settings"); return Promise.resolve(path); };
-    sys.switchSource = function () { return fail(T("Sources are not available on Android yet.")); };
     sys.registerKeys = function () {};
+
+    /* ---------- Sources: the TV's HDMI inputs (Bridge.tvInputs) ----------
+       A Google TV or Android TV television lists its HDMI ports: the number in each one's name (HDMI 1 to 4), and
+       the name given in Android's Inputs settings or by the HDMI-CEC device on it. A box (Shield, Chromecast) or
+       the emulator has none: Sources then stays out of the Home Screen, the Control Center and Settings, as before.
+       Asked of Android at most every 5 s (the Control Center asks at each opening); Sources itself and switching
+       ask again. */
+    var tvIn = null, tvInAt = 0;
+    function tvInputs(now) {
+        if (!B.tvInputs) return [];
+        if (!now && tvIn && Date.now() - tvInAt < 5000) return tvIn;
+        var list = json(B.tvInputs(), []);
+        tvIn = (Array.isArray(list) ? list : []).filter(function (p) { return p && p.id && p.number > 0; })
+            .sort(function (a, b) { return a.number - b.number; });
+        tvInAt = Date.now();
+        return tvIn;
+    }
+    function hasInputs() { return tvInputs().length > 0; }
+    /* "HDMI 2", "HDMI 3 (eARC)": only the port's own name, which sources.js shows anyway: "" then, as on LG */
+    function portOnly(label) { return !String(label || "").replace(/hdmi|e?arc|mhl|\d|[\s\/()\[\]\-_.:,]/gi, ""); }
+    /* Samsung's numbers, as sources.js gives them: HDMI 1 to 4 = 13 to 16 (12 + the port's number) */
+    sys.switchSource = function (sourceType) {
+        var n = sourceType - 12, port = "HDMI " + n;
+        // Live TV (0): the TV's tuner is another kind of input, not offered here
+        if (n < 1) return fail(T("This input isn't supported on this screen"));
+        var all = tvInputs(true);
+        if (!all.length) return fail(T("This device has no HDMI inputs."));
+        var input = all.filter(function (p) { return p.number === n; })[0];
+        if (!input) return fail(T("This TV has no {port} input.", { port: port }));
+        return B.openInput(String(input.id)) ? Promise.resolve() : fail(T("Android couldn't open {port}.", { port: port }));
+    };
+    /* The Home Screen made its list with the answer of then (the Sources tile, the pinned inputs): right after
+       start-up a TV can list its inputs late, so the list is made again once they show up (or go) */
+    var homeSawInputs = null;
+    function inputsChanged() {
+        if (homeSawInputs !== null && homeSawInputs !== hasInputs() && APL.refreshHome) setTimeout(APL.refreshHome, 0);
+    }
 
     /* Vetro and the screen's root commands: none on Android. Deleting an app (launcher.js asks Vetro) is
        Android's own "Uninstall?" instead. */
@@ -568,19 +609,34 @@
         },
         /* Delete App: Android's own Uninstall? question (B.uninstall, through the launcher's /components/action) */
         canDelete: function () { return !!B.uninstall; },
-        /* The launcher's own tiles: no Sources yet; Smart Hub becomes the device's own home */
+        /* Sources (sources.js): the TV's HDMI ports, null without any */
+        readPorts: function () {
+            var ports = tvInputs(true).map(function (p) {
+                return { type: "HDMI", number: p.number, label: portOnly(p.label) ? "" : String(p.label) };
+            });
+            inputsChanged();           // sources.js asks 20 s after start-up: late inputs show up on the Home Screen then
+            return Promise.resolve(ports.length ? ports : null);
+        },
+        /* The launcher's own tiles: Sources on a TV with HDMI inputs only; Smart Hub becomes the device's own home */
         virtualApps: function (list) {
-            return list.filter(function (v) { return v.id !== "apl.sources"; }).map(function (v) {
+            return list.map(function (v) {
+                if (v.id === "apl.sources") {
+                    // Asked again each time the list is made (launcher.js buildList)
+                    v.when = function () { homeSawInputs = hasInputs(); return homeSawInputs; };
+                    return v;
+                }
                 if (v.id !== "apl.samsunghome") return v;
                 v.name = homeName;
                 v.run = function () { if (!B.openSystemHome()) toast(T("Can't launch the app")); };
                 return v;
             });
         },
-        /* The Control Center's tiles: no Game Mode, AirPlay, Sources or brightness; Audio is Android's Bluetooth */
+        /* The Control Center's tiles: no Game Mode, AirPlay or brightness, Sources on a TV with HDMI inputs only;
+           Audio is Android's Bluetooth */
         ccItems: function (items) {
+            var sources = hasInputs();
             return items.filter(function (it) {
-                return it.type !== "backlight" && it.icon !== "gamepad" && it.icon !== "airplay" && it.icon !== "source";
+                return it.type !== "backlight" && it.icon !== "gamepad" && it.icon !== "airplay" && (it.icon !== "source" || sources);
             }).map(function (it) {
                 if (it.icon === "airplayAudio") {
                     it.sub = function () { return T("Remotes and Accessories"); };
@@ -719,7 +775,7 @@
     APL.settingsTree = function () {
         var root = baseTree();
         var top = strip(root.children);
-        top = without(top, ["Gaming", "Sources"]);
+        top = without(top, hasInputs() ? ["Gaming"] : ["Gaming", "Sources"]);
 
         var appearance = find(top, "Appearance"), shelf = appearance && find(appearance.children, "Top Shelf");
         // Samsung's home rows there; on Android 11+, the apps' Watch Next row instead (WatchNext.kt)
@@ -818,7 +874,7 @@
                          close: function () {}, isOpen: function () { return false; } };
         APL.search = { open: stub("search"), isOpen: function () { return false; } };
         APL.screensaver = { start: stub("screensaver"), isActive: function () { return false; } };
-        APL.openSources = function () {};
+        APL.openSources = stub("sources");          // the launcher's Sources page, as Settings and Search
         if (APL.profilesUI) APL.profilesUI.open = stub("profiles");
         APL.alert = function (o) { toast((o && (o.title || o.message)) || ""); };
         APL.toast = function (msg, quiet) {
@@ -877,11 +933,19 @@
         else if (a === "settings") APL.settings.open();
         else if (a.indexOf("settings:") === 0) APL.settings.open(a.substr(9));
         else if (a === "search") { if (APL.search) APL.search.open(); }
+        else if (a === "sources") { if (APL.openSources) APL.openSources(); }
         else if (a === "screensaver") { if (APL.screensaver) APL.screensaver.start(); }
         else if (a === "profiles") { if (APL.profilesUI) APL.profilesUI.open(); }
         else if (a === "switcher") { if (APL.switcher && !APL.switcher.isOpen()) APL.switcher.open(); }
     }
     listen("action", function (a) { setTimeout(function () { runAction(String(a || "")); }, 50); });
+
+    /* Inputs pinned to the Home Screen: none on a device without HDMI inputs, even when the settings were copied
+       from a TV that had them */
+    if (APL.sources && APL.sources.homeTiles) {
+        var pinnedTiles = APL.sources.homeTiles;
+        APL.sources.homeTiles = function () { return hasInputs() ? pinnedTiles() : []; };
+    }
     listen("homeRole", function () { fresh(); });
     listen("accessibility", function () { fresh(); });
 
@@ -890,6 +954,7 @@
         if (document.hidden) return;
         fresh();
         sys.readSleepTimer();
+        inputsChanged();
         try {
             var p = JSON.parse(global.localStorage.getItem("apl.profiles") || "{}");
             var mine = JSON.parse(global.localStorage.getItem("apl.prefs." + p.current) || "{}");

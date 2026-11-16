@@ -250,6 +250,7 @@
         return inputs().filter(function (c) { return ids.indexOf(c.id) !== -1; }).map(function (c) {
             return { id: "apl.source." + c.id, name: c.name, virtual: true, accent: "#2c5cc5", eyebrow: "SOURCE",
                      tile: c.device ? asset(c.device.tile) : null,
+                     consoleKey: c.device ? c.device.key : null,         // a console: its trending games on the Top Shelf (liveshelf.js)
                      tileHtml: c.device ? null : '<div class="vtile vtile--sources">' + APL.icon(c.icon, 92, 1.6) + '</div>',
                      shelfHtml: '<div class="brandcard__glyph vtile--sources">' + APL.icon(c.icon, 180, 1.3) + '</div>',
                      run: function () { switchTo(c); } };

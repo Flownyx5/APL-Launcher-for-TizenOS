@@ -817,4 +817,7 @@ window.APL_LANG_PL = {
     "ISF Expert (Dark Room)": "Ekspert ISF (ciemne pomieszczenie)",
     "Personalized Picture": "Spersonalizowany obraz",
     "LG deletes the apps installed in Developer Mode when its 1000 hours run out, this launcher included. The launcher renews them on its own, once a day, as the Developer Mode app's Extend button does.": "LG usuwa aplikacje zainstalowane w trybie Developer Mode, gdy skończy się jego limit 1000 godzin – także ten launcher. Launcher sam go odnawia raz dziennie, tak jak przycisk Extend w aplikacji Developer Mode.",
+    "Trending on {console}": "Popularne na {console}",
+    "Out {date}": "Premiera {date}",
+    "Retro Console": "Konsola retro"
 };

@@ -694,5 +694,8 @@ window.APL_LANG_MS = {
     "ISF Expert (Bright Room)": "Pakar ISF (Bilik Cerah)",
     "ISF Expert (Dark Room)": "Pakar ISF (Bilik Gelap)",
     "Personalized Picture": "Gambar Peribadi",
-    "LG deletes the apps installed in Developer Mode when its 1000 hours run out, this launcher included. The launcher renews them on its own, once a day, as the Developer Mode app's Extend button does.": "LG memadam aplikasi yang dipasang dalam Mod Pembangun apabila 1000 jamnya tamat, termasuk pelancar ini. Pelancar memperbaharuinya sendiri, sekali sehari, seperti butang Extend aplikasi Developer Mode."
+    "LG deletes the apps installed in Developer Mode when its 1000 hours run out, this launcher included. The launcher renews them on its own, once a day, as the Developer Mode app's Extend button does.": "LG memadam aplikasi yang dipasang dalam Mod Pembangun apabila 1000 jamnya tamat, termasuk pelancar ini. Pelancar memperbaharuinya sendiri, sekali sehari, seperti butang Extend aplikasi Developer Mode.",
+    "Trending on {console}": "Sohor kini di {console}",
+    "Out {date}": "Keluar {date}",
+    "Retro Console": "Konsol retro"
 };

@@ -495,6 +495,126 @@
         });
     }
 
+    /* Consoles: a Home tile for an input with its device chosen (Switch 2, PS5, Xbox, Steam Deck…) shows the games
+       of the moment on that console, from each maker's own store, with no key and no account:
+         PS5, PS4          the PlayStation Store's best sellers of the last 30 days, in the screen's country, with
+                           each game's wide background art (else a screenshot) and its logo
+         Switch 2, Switch  Nintendo's European eShop sorted by popularity (games out, or out within 45 days)
+         Xbox (Series, One) Game Pass's most popular games (gamepass above)
+         Steam Deck, Steam Machine, ROG Ally, Legion Go, PC: Steam's top sellers (games above)
+       The older and retro consoles (PS3, PS2, Wii U, Wii, Xbox 360, Sega, Atari…) have no store left to ask:
+       their tile keeps its own picture. The PlayStation app (Remote Play, PS Plus) shows the PS5's.
+       The store's own web requests: one that changes gives no list, and then a few big games of the Switch 2 and
+       the PS5 chosen by hand, with their official store pictures, stand in. */
+    var CONSOLES = {
+        switch2: { name: "Nintendo Switch 2", eshop: "BEE" }, "switch": { name: "Nintendo Switch", eshop: "HAC" },
+        ps5: { name: "PS5", store: "PS5" }, ps4: { name: "PS4", store: "PS4" },
+        xbox: { name: "Xbox", gamepass: 1 }, xboxseries: { name: "Xbox Series X|S", gamepass: 1 }, xboxone: { name: "Xbox One", gamepass: 1 },
+        steamdeck: { name: "Steam Deck" }, steammachine: { name: "Steam Machine" }, rogally: { name: "ROG Ally" }, legiongo: { name: "Legion Go" },
+        pc: { name: "PC" }
+    };
+    var NINTENDO = "https://assets.nintendo.com/image/upload/", PLAYSTATION = "https://gmedia.playstation.com/is/image/SIEPDC/";
+    var PICKED = {
+        switch2: [
+            ["The Legend of Zelda: Ocarina of Time", "70010000130792/9fb8faf644291a8398e43eadab602842d21c6b80537f71be0462685f52605c51"],
+            ["Pokémon Pokopia", "70010000107421/2045c3f67f865d333b1995562ad6b2894473b8a869e4c8efa01572539ec86019"],
+            ["Mario Kart World", "70010000095431/b8ca3bbb06f7a4149bea701e6764ed302b9ec0b41b3d7137d52eddb6ed05d704"],
+            ["Donkey Kong Bananza", "70010000096809/c111819ae2b07f446ab92d64c8d37e9ef8e541e30b687121fa6d5976096b61f9"],
+            ["Metroid Prime 4: Beyond", "70010000104849/89135935439ee6c3125ed070b578dbf11d352afa8af0f1efec0f9fb150e856e8"],
+            ["Kirby Air Riders", "70010000103775/23e7a16efe6b022a2e7b3922dc9648759ca6d2a47fbc4ee8c65b4b396564524a"],
+            ["Pokémon Legends: Z-A", "70010000099365/5d23a0f34b2c8f5a9c22724692d58360e6313671a949663caf10017b59cb3a05"],
+            ["Hyrule Warriors: Age of Imprisonment", "70010000103459/6c233749c2311251c1df347f5e46016b95c293d1568e1196b44d6712dcfae308"],
+            ["The Legend of Zelda: Ocarina of Time", "70010000130792/2e76ea7cb3eb833a0cbe8c9b016b28b3a7ef95838b66c1eaced1c0db7747dd37"]
+        ],
+        ps5: [
+            ["Grand Theft Auto VI", "grand-theft-auto-vi-screenshot-10-en-06may25"],
+            ["Ghost of Yōtei", "ghost-of-yotei-screenshot-02-en-04sep26"],
+            ["Marvel's Wolverine", "marvels-wolverine-overview-background-desktop-01-en-14aug26"],
+            ["Death Stranding 2: On the Beach", "death-stranding-2-screenshot-05-en-10mar25"],
+            ["Ghost of Tsushima", "ghost-of-tsushima-directors-cut-screenshot-05-en-22jun21"],
+            ["Saros", "saros-screenshot-04-en-14feb25"],
+            ["Astro Bot", "Astro-Bot-key-features-screenshot-02-en-24may24"],
+            ["Grand Theft Auto VI", "grand-theft-auto-vi-screenshot-08-en-06may25"],
+            ["Ghost of Tsushima", "ghost-of-tsushima-directors-cut-screenshot-01-en-22jun21"]
+        ]
+    };
+    function picked(key) {
+        var c = CONSOLES[key], wide = global.APL_HIRES ? 3840 : 1920;
+        if (!PICKED[key]) return null;
+        return PICKED[key].map(function (g) {
+            var bg = key === "ps5" ? PLAYSTATION + g[1] + "?wid=" + wide + "&hei=" + wide * 9 / 16 + "&fit=crop" : NINTENDO + "c_fill,w_" + wide + ",ar_16:9/f_auto/q_auto/store/software/switch2/" + g[1];
+            var small = key === "ps5" ? PLAYSTATION + g[1] + "?wid=320&hei=180&fit=crop" : NINTENDO + "c_fill,w_320,ar_16:9/f_auto/q_auto/store/software/switch2/" + g[1];
+            return { bg: bg, bgSmall: small, logo: null, title: g[0], sub: c.name };
+        });
+    }
+    function outOn(day) {
+        var d = new Date(String(day).slice(0, 10) + "T12:00:00Z");
+        return isNaN(d.getTime()) ? "" : APL.t("Out {date}", { date: d.getUTCDate() + " " + APL.t(MONTHS[d.getUTCMonth()]) });
+    }
+
+    /* PlayStation Store: the request its own pages make for "All games" sorted by Best Selling, one console. The
+       store of the screen's language and country (fr-FR), else the English one of that country, else the US one. */
+    var PS_GRID = "https://web.np.playstation.com/api/graphql/v1/op?operationName=categoryGridRetrieve";
+    var PS_QUERY = "88c0b9a1273c6d320c51cd73e390924e21ae28bf09f01cde8b84b1034b16cd03", PS_ALL_GAMES = "28c9c2b2-cecc-415c-9a08-482a605cb104";
+    function psStore(c) {
+        var vars = { id: PS_ALL_GAMES, pageArgs: { size: 16, offset: 0 }, sortBy: { name: "sales30", isAscending: false }, filterBy: ["targetPlatforms:" + c.store], facetOptions: [] };
+        var url = PS_GRID + "&variables=" + encodeURIComponent(JSON.stringify(vars)) + "&extensions=" + encodeURIComponent(JSON.stringify({ persistedQuery: { version: 1, sha256Hash: PS_QUERY } }));
+        var wide = global.APL_HIRES ? 3840 : 1920;
+        var locales = [String(APL.lang || "en").slice(0, 2) + "-" + REGION, "en-" + REGION, "en-US"].filter(function (l, i, a) { return a.indexOf(l) === i; });
+        function ask(i) {
+            if (i >= locales.length) return Promise.reject(new Error("no list"));
+            return global.fetch(url, { headers: { "x-psn-store-locale-override": locales[i], "content-type": "application/json" } }).then(function (r) {
+                if (!r.ok) throw new Error("HTTP " + r.status);
+                return r.json();
+            }).then(function (j) {
+                var list = (j && j.data && j.data.categoryGridRetrieve && j.data.categoryGridRetrieve.concepts) || [];
+                if (list.length < 3) throw new Error("too few");
+                return list;
+            }).catch(function () { return ask(i + 1); });
+        }
+        return ask(0).then(function (list) {
+            return list.map(function (g) {
+                var media = g.media || [];
+                function pick(role) { for (var i = 0; i < media.length; i++) if (media[i].role === role && media[i].type === "IMAGE" && media[i].url) return media[i].url; return ""; }
+                var art = pick("BACKGROUND_LAYER_ART") || pick("SCREENSHOT"), logo = pick("LOGO");
+                if (!art || !g.name) return null;
+                return { bg: art + "?w=" + wide, bgSmall: art + "?w=320", logo: logo ? logo + "?w=" + (global.APL_HIRES ? 1200 : 640) : null,
+                         title: g.name, sub: APL.t("Trending on {console}", { console: c.name }) };
+            }).filter(Boolean);
+        });
+    }
+
+    /* Nintendo's European eShop: its own search, sorted by popularity. Its 16:9 pictures come 500 pixels wide;
+       the same picture is there at 1600 (a size it lacks is skipped by the Top Shelf, launcher.js). */
+    var ESHOP_LANGS = { fr: "fr", de: "de", es: "es", it: "it", nl: "nl", pt: "pt" };
+    function eshop(c) {
+        var lang = ESHOP_LANGS[String(APL.lang || "").slice(0, 2)] || "en";
+        var q = "type:GAME AND playable_on_txt:" + c.eshop + " AND date_from:[* TO NOW+45DAYS]";
+        return getJson("https://searching.nintendo-europe.com/" + lang + "/select?q=*&fq=" + encodeURIComponent(q) +
+                       "&sort=" + encodeURIComponent("popularity asc") + "&rows=16&wt=json&fl=title,image_url_h16x9_s,date_from").then(function (j) {
+            var now = Date.now(), wide = global.APL_HIRES ? 1920 : 1600;
+            var list = ((j && j.response && j.response.docs) || []).map(function (g) {
+                var pic = g.image_url_h16x9_s || "";
+                if (!pic || !g.title) return null;
+                var big = pic.replace(/_image500w\.(png|jpe?g)$/i, "_image1600w.$1").replace(/\/w_500\//, "/w_" + wide + "/");
+                var out = g.date_from && Date.parse(g.date_from) > now;
+                return { bg: big, bgSmall: pic, logo: null, title: String(g.title).trim(),
+                         sub: out ? outOn(g.date_from) + " · " + c.name : APL.t("Trending on {console}", { console: c.name }) };
+            }).filter(Boolean);
+            if (list.length < 3) throw new Error("too few");
+            return list;
+        });
+    }
+
+    function consoleGames(key) {
+        var c = CONSOLES[key];
+        var live = c.store ? psStore(c) : c.eshop ? eshop(c) : c.gamepass ? gamepass() : games();
+        return Promise.resolve(live).then(function (items) {
+            if (!items || items.length < 3) throw new Error("too few");
+            return items;
+        }).catch(function () { return picked(key); });
+    }
+
     /* Sport: next Ligue 1 and Champions League matches (TheSportsDB,
        free public key). Background = the match's picture, else a picture of the competition. */
     var SPORTSDB = "https://www.thesportsdb.com/api/v1/json/123/";
@@ -653,6 +773,9 @@
                                                               : { id: "music-" + REGION, load: appleCharts };
         if (app.live === "games") return { id: "games-steam", load: games };
         if (app.live === "gamepass") return { id: "gamepass", load: gamepass };
+        // a console: an input's tile with its device chosen (sources.js), or a game app shown as one (live: "console:ps5")
+        var ck = app.consoleKey || (/^console:/.test(app.live || "") ? app.live.slice(8) : "");
+        if (ck && CONSOLES[ck]) return { id: "console-" + ck, load: function () { return consoleGames(ck); } };
         if (app.live === "sports") return { id: "sports", load: sports };
         if (app.live === "dailymotion") return { id: "dailymotion", load: dailymotion };
         if (app.live === "trending") return KEYS.tmdb ? { id: "trending", load: trending } : null;

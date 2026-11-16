@@ -859,4 +859,7 @@ window.APL_LANG_FR = {
     "10 minutes": "10 minutes",
     "15 minutes": "15 minutes",
     "30 minutes": "30 minutes",
+    "Trending on {console}": "Tendance sur {console}",
+    "Out {date}": "Sortie le {date}",
+    "Retro Console": "Console rétro",
 };

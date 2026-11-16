@@ -17,6 +17,28 @@ window.APL_DEVICES = [
     "tile": "images/devices/switch2-tile.png"
   },
   {
+    "key": "wiiu",
+    "name": "Wii U",
+    "eyebrow": "DEVICE",
+    "accent": "#009ac7",
+    "match": [
+      "wii ?u"
+    ],
+    "ids": [],
+    "tile": "images/devices/wiiu-tile.png"
+  },
+  {
+    "key": "wii",
+    "name": "Wii",
+    "eyebrow": "DEVICE",
+    "accent": "#8f9ba6",
+    "match": [
+      "wii(?! ?u)"
+    ],
+    "ids": [],
+    "tile": "images/devices/wii-tile.png"
+  },
+  {
     "key": "switch",
     "name": "Nintendo Switch",
     "eyebrow": "DEVICE",
@@ -27,6 +49,17 @@ window.APL_DEVICES = [
     ],
     "ids": [],
     "tile": "images/devices/switch-tile.png"
+  },
+  {
+    "key": "steammachine",
+    "name": "Steam Machine",
+    "eyebrow": "DEVICE",
+    "accent": "#1a9fff",
+    "match": [
+      "steam ?machine"
+    ],
+    "ids": [],
+    "tile": "images/devices/steammachine-tile.png"
   },
   {
     "key": "steamdeck",
@@ -41,6 +74,30 @@ window.APL_DEVICES = [
     "tile": "images/devices/steamdeck-tile.png"
   },
   {
+    "key": "rogally",
+    "name": "ROG Ally",
+    "eyebrow": "DEVICE",
+    "accent": "#ff0029",
+    "match": [
+      "rog ?(xbox ?)?ally",
+      "(^| )ally"
+    ],
+    "ids": [],
+    "tile": "images/devices/rogally-tile.png"
+  },
+  {
+    "key": "legiongo",
+    "name": "Legion Go",
+    "eyebrow": "DEVICE",
+    "accent": "#e2231a",
+    "match": [
+      "legion ?go",
+      "legion"
+    ],
+    "ids": [],
+    "tile": "images/devices/legiongo-tile.png"
+  },
+  {
     "key": "ps5",
     "name": "PlayStation 5",
     "eyebrow": "DEVICE",
@@ -51,6 +108,30 @@ window.APL_DEVICES = [
     ],
     "ids": [],
     "tile": "images/devices/ps5-tile.png"
+  },
+  {
+    "key": "ps3",
+    "name": "PlayStation 3",
+    "eyebrow": "DEVICE",
+    "accent": "#2b2b2b",
+    "match": [
+      "ps ?3",
+      "playstation ?3"
+    ],
+    "ids": [],
+    "tile": "images/devices/ps3-tile.png"
+  },
+  {
+    "key": "ps2",
+    "name": "PlayStation 2",
+    "eyebrow": "DEVICE",
+    "accent": "#1b2a6b",
+    "match": [
+      "ps ?2",
+      "playstation ?2"
+    ],
+    "ids": [],
+    "tile": "images/devices/ps2-tile.png"
   },
   {
     "key": "ps4",
@@ -65,6 +146,40 @@ window.APL_DEVICES = [
     "tile": "images/devices/ps4-tile.png"
   },
   {
+    "key": "xboxseries",
+    "name": "Xbox Series X|S",
+    "eyebrow": "DEVICE",
+    "accent": "#107c10",
+    "match": [
+      "xbox ?series",
+      "series ?[xs]( |$)"
+    ],
+    "ids": [],
+    "tile": "images/devices/xboxseries-tile.png"
+  },
+  {
+    "key": "xboxone",
+    "name": "Xbox One",
+    "eyebrow": "DEVICE",
+    "accent": "#107c10",
+    "match": [
+      "xbox ?one"
+    ],
+    "ids": [],
+    "tile": "images/devices/xboxone-tile.png"
+  },
+  {
+    "key": "xbox360",
+    "name": "Xbox 360",
+    "eyebrow": "DEVICE",
+    "accent": "#5dc21e",
+    "match": [
+      "xbox ?360"
+    ],
+    "ids": [],
+    "tile": "images/devices/xbox360-tile.png"
+  },
+  {
     "key": "xbox",
     "name": "Xbox",
     "eyebrow": "DEVICE",
@@ -74,6 +189,48 @@ window.APL_DEVICES = [
     ],
     "ids": [],
     "tile": "images/devices/xbox-tile.png"
+  },
+  {
+    "key": "retro",
+    "name": "Retro Console",
+    "eyebrow": "DEVICE",
+    "accent": "#8a5cf6",
+    "match": [
+      "retro",
+      "recalbox",
+      "batocera",
+      "lakka",
+      "emulat",
+      "raspberry"
+    ],
+    "ids": [],
+    "tile": "images/devices/retro-tile.png"
+  },
+  {
+    "key": "sega",
+    "name": "Sega",
+    "eyebrow": "DEVICE",
+    "accent": "#1760a5",
+    "match": [
+      "sega",
+      "mega ?drive",
+      "genesis",
+      "dreamcast",
+      "saturn"
+    ],
+    "ids": [],
+    "tile": "images/devices/sega-tile.png"
+  },
+  {
+    "key": "atari",
+    "name": "Atari",
+    "eyebrow": "DEVICE",
+    "accent": "#e4202e",
+    "match": [
+      "atari"
+    ],
+    "ids": [],
+    "tile": "images/devices/atari-tile.png"
   },
   {
     "key": "pc",
@@ -91,6 +248,17 @@ window.APL_DEVICES = [
     "tile": "images/devices/pc-tile.png"
   },
   {
+    "key": "appletv",
+    "name": "Apple TV",
+    "eyebrow": "DEVICE",
+    "accent": "#000000",
+    "match": [
+      "apple ?tv"
+    ],
+    "ids": [],
+    "tile": "images/devices/appletv-tile.png"
+  },
+  {
     "key": "mac",
     "name": "Mac",
     "eyebrow": "DEVICE",
@@ -101,17 +269,6 @@ window.APL_DEVICES = [
     ],
     "ids": [],
     "tile": "images/devices/mac-tile.png"
-  },
-  {
-    "key": "appletv",
-    "name": "Apple TV",
-    "eyebrow": "DEVICE",
-    "accent": "#000000",
-    "match": [
-      "apple ?tv"
-    ],
-    "ids": [],
-    "tile": "images/devices/appletv-tile.png"
   },
   {
     "key": "shield",

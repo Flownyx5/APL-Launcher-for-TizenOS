@@ -23,6 +23,42 @@
       }
     },
     {
+      "key": "wiiu",
+      "name": "Wii U",
+      "eyebrow": "DEVICE",
+      "accent": "#009ac7",
+      "match": [
+        "wii ?u"
+      ],
+      "ids": [],
+      "logo": {
+        "src": "file:blank.svg",
+        "suffix": "Wii U"
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#16b4e8 0%,#0079a8 100%)",
+        "h": 0.42
+      }
+    },
+    {
+      "key": "wii",
+      "name": "Wii",
+      "eyebrow": "DEVICE",
+      "accent": "#8f9ba6",
+      "match": [
+        "wii(?! ?u)"
+      ],
+      "ids": [],
+      "logo": {
+        "src": "file:blank.svg",
+        "suffix": "Wii"
+      },
+      "tile": {
+        "bg": "#eef1f4",
+        "h": 0.46
+      }
+    },
+    {
       "key": "switch",
       "name": "Nintendo Switch",
       "eyebrow": "DEVICE",
@@ -41,6 +77,25 @@
       "tile": {
         "bg": "linear-gradient(160deg,#ff1a2b 0%,#c4000f 100%)",
         "h": 0.56
+      }
+    },
+    {
+      "key": "steammachine",
+      "name": "Steam Machine",
+      "eyebrow": "DEVICE",
+      "accent": "#1a9fff",
+      "match": [
+        "steam ?machine"
+      ],
+      "ids": [],
+      "logo": {
+        "src": "si:steam",
+        "white": true,
+        "suffix": "Machine"
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#1b2838 0%,#0b121b 100%)",
+        "h": 0.3
       }
     },
     {
@@ -63,6 +118,45 @@
       }
     },
     {
+      "key": "rogally",
+      "name": "ROG Ally",
+      "eyebrow": "DEVICE",
+      "accent": "#ff0029",
+      "match": [
+        "rog ?(xbox ?)?ally",
+        "(^| )ally"
+      ],
+      "ids": [],
+      "logo": {
+        "src": "si:republicofgamers",
+        "white": true,
+        "suffix": "Ally"
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#2a2a2e 0%,#0d0d0f 100%)",
+        "h": 0.3
+      }
+    },
+    {
+      "key": "legiongo",
+      "name": "Legion Go",
+      "eyebrow": "DEVICE",
+      "accent": "#e2231a",
+      "match": [
+        "legion ?go",
+        "legion"
+      ],
+      "ids": [],
+      "logo": {
+        "src": "file:blank.svg",
+        "suffix": "Legion Go"
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#3a3d44 0%,#16181c 100%)",
+        "h": 0.3
+      }
+    },
+    {
       "key": "ps5",
       "name": "PlayStation 5",
       "eyebrow": "DEVICE",
@@ -78,6 +172,44 @@
       },
       "tile": {
         "bg": "linear-gradient(160deg,#0a5bd6 0%,#00307a 100%)",
+        "w": 0.62
+      }
+    },
+    {
+      "key": "ps3",
+      "name": "PlayStation 3",
+      "eyebrow": "DEVICE",
+      "accent": "#2b2b2b",
+      "match": [
+        "ps ?3",
+        "playstation ?3"
+      ],
+      "ids": [],
+      "logo": {
+        "src": "si:playstation3",
+        "white": true
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#3a3a3a 0%,#0f0f0f 100%)",
+        "w": 0.62
+      }
+    },
+    {
+      "key": "ps2",
+      "name": "PlayStation 2",
+      "eyebrow": "DEVICE",
+      "accent": "#1b2a6b",
+      "match": [
+        "ps ?2",
+        "playstation ?2"
+      ],
+      "ids": [],
+      "logo": {
+        "src": "si:playstation2",
+        "white": true
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#25398c 0%,#0c1440 100%)",
         "w": 0.62
       }
     },
@@ -101,6 +233,67 @@
       }
     },
     {
+      "key": "xboxseries",
+      "name": "Xbox Series X|S",
+      "eyebrow": "DEVICE",
+      "accent": "#107c10",
+      "match": [
+        "xbox ?series",
+        "series ?[xs]( |$)"
+      ],
+      "ids": [],
+      "logo": {
+        "src": "di:xbox",
+        "knockout": "#ffffff",
+        "white": true,
+        "suffix": "Series X|S"
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#16911a 0%,#0b5a0b 100%)",
+        "h": 0.26
+      }
+    },
+    {
+      "key": "xboxone",
+      "name": "Xbox One",
+      "eyebrow": "DEVICE",
+      "accent": "#107c10",
+      "match": [
+        "xbox ?one"
+      ],
+      "ids": [],
+      "logo": {
+        "src": "di:xbox",
+        "knockout": "#ffffff",
+        "white": true,
+        "suffix": "One"
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#16911a 0%,#0b5a0b 100%)",
+        "h": 0.4
+      }
+    },
+    {
+      "key": "xbox360",
+      "name": "Xbox 360",
+      "eyebrow": "DEVICE",
+      "accent": "#5dc21e",
+      "match": [
+        "xbox ?360"
+      ],
+      "ids": [],
+      "logo": {
+        "src": "di:xbox",
+        "knockout": "#ffffff",
+        "white": true,
+        "suffix": "360"
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#7ad12c 0%,#3d8a12 100%)",
+        "h": 0.4
+      }
+    },
+    {
       "key": "xbox",
       "name": "Xbox",
       "eyebrow": "DEVICE",
@@ -117,6 +310,69 @@
       "tile": {
         "bg": "linear-gradient(160deg,#16911a 0%,#0b5a0b 100%)",
         "h": 0.6
+      }
+    },
+    {
+      "key": "retro",
+      "name": "Retro Console",
+      "eyebrow": "DEVICE",
+      "accent": "#8a5cf6",
+      "match": [
+        "retro",
+        "recalbox",
+        "batocera",
+        "lakka",
+        "emulat",
+        "raspberry"
+      ],
+      "ids": [],
+      "logo": {
+        "src": "si:retroarch",
+        "white": true
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#7b4fe0 0%,#3a1f8a 100%)",
+        "h": 0.62
+      }
+    },
+    {
+      "key": "sega",
+      "name": "Sega",
+      "eyebrow": "DEVICE",
+      "accent": "#1760a5",
+      "match": [
+        "sega",
+        "mega ?drive",
+        "genesis",
+        "dreamcast",
+        "saturn"
+      ],
+      "ids": [],
+      "logo": {
+        "src": "si:sega",
+        "white": true
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#1f74c4 0%,#0b3f75 100%)",
+        "w": 0.62
+      }
+    },
+    {
+      "key": "atari",
+      "name": "Atari",
+      "eyebrow": "DEVICE",
+      "accent": "#e4202e",
+      "match": [
+        "atari"
+      ],
+      "ids": [],
+      "logo": {
+        "src": "si:atari",
+        "white": true
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#2b2b2b 0%,#0e0e0e 100%)",
+        "h": 0.5
       }
     },
     {
@@ -143,6 +399,24 @@
       }
     },
     {
+      "key": "appletv",
+      "name": "Apple TV",
+      "eyebrow": "DEVICE",
+      "accent": "#000000",
+      "match": [
+        "apple ?tv"
+      ],
+      "ids": [],
+      "logo": {
+        "src": "si:appletv",
+        "white": true
+      },
+      "tile": {
+        "bg": "linear-gradient(160deg,#2a2a2e 0%,#000 100%)",
+        "w": 0.56
+      }
+    },
+    {
       "key": "mac",
       "name": "Mac",
       "eyebrow": "DEVICE",
@@ -159,24 +433,6 @@
       "tile": {
         "bg": "linear-gradient(160deg,#3a3a3f 0%,#121214 100%)",
         "h": 0.5
-      }
-    },
-    {
-      "key": "appletv",
-      "name": "Apple TV",
-      "eyebrow": "DEVICE",
-      "accent": "#000000",
-      "match": [
-        "apple ?tv"
-      ],
-      "ids": [],
-      "logo": {
-        "src": "si:appletv",
-        "white": true
-      },
-      "tile": {
-        "bg": "linear-gradient(160deg,#2a2a2e 0%,#000 100%)",
-        "w": 0.56
       }
     },
     {
