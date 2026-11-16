@@ -514,6 +514,73 @@ service.register("devmode", guard(function (message) {
     });
 }));
 
+/* ---------- the page's resolution (rooted TV) ----------
+   LG reads an app's resolution (appinfo.json) when it is installed, never again. The launcher comes in 1920 x 1080
+   (smooth: in 4K a G5 spends about 10 ms of each frame handing the picture to the screen); 3840 x 2160 is sharper.
+   {} reads it; {set: "1920x1080"|"3840x2160"} rebuilds this very package from the installed files (keys, fonts and
+   avatars included), the resolution changed, and installs it with LG's own installer, as an update would: the
+   launcher closes, then opens again by itself about half a minute later. No PC, no download. Log: /tmp/apl-res.log */
+var RES_OK = { "1920x1080": 1, "3840x2160": 1 };
+var REBUILD = [
+    "#!/bin/sh",
+    "A='@APP@'; S='@SVC@'; RES='@RES@'; W=/tmp/apl-res",
+    "exec > /tmp/apl-res.log 2>&1",
+    "echo \"rebuilding in $RES\"",
+    "rm -rf \"$W\" && mkdir -p \"$W/data/usr/palm/applications\" \"$W/data/usr/palm/services\" \"$W/data/usr/palm/packages/" + APP + "\" \"$W/ctl\" || exit 1",
+    "cp -a \"$A\" \"$W/data/usr/palm/applications/" + APP + "\" && cp -a \"$S\" \"$W/data/usr/palm/services/" + ID + "\" || exit 1",
+    "J=\"$W/data/usr/palm/applications/" + APP + "/appinfo.json\"",
+    "sed -i 's/\"resolution\": *\"[0-9x]*\"/\"resolution\": \"'\"$RES\"'\"/' \"$J\"",
+    "grep -q \"\\\"resolution\\\": \\\"$RES\\\"\" \"$J\" || { echo 'appinfo.json not changed'; exit 1; }",
+    "VER=$(sed -n 's/.*\"version\": *\"\\([^\"]*\\)\".*/\\1/p' \"$J\" | head -1)",
+    "printf '{\"id\":\"" + APP + "\",\"version\":\"%s\",\"app\":\"" + APP + "\",\"services\":[\"" + ID + "\"]}\n' \"$VER\" > \"$W/data/usr/palm/packages/" + APP + "/packageinfo.json\"",
+    "SIZE=$(( $(du -sk \"$W/data\" | cut -f1) * 1024 ))",
+    "printf 'Package: " + APP + "\nVersion: %s\nSection: misc\nPriority: optional\nArchitecture: all\nInstalled-Size: %s\nMaintainer: N/A <nobody@example.com>\nDescription: This is a webOS application.\nwebOS-Package-Format-Version: 2\nwebOS-Packager-Version: x.y.x\n' \"$VER\" \"$SIZE\" > \"$W/ctl/control\"",
+    "cd \"$W/ctl\" && tar -czf ../control.tar.gz control || exit 1",
+    "cd \"$W/data\" && tar -czf ../data.tar.gz usr || exit 1",
+    "cd \"$W\" && printf '2.0\n' > debian-binary && T=$(date +%s)",
+    // busybox ar only reads archives: the ar container (an .ipk) is written here, as ares-package writes it
+    "{ printf '!<arch>\n'; for f in debian-binary control.tar.gz data.tar.gz; do n=$(wc -c < \"$f\"); n=$((n + 0)); printf '%-16s%-12s%-6s%-6s%-8s%-10s`\n' \"$f\" \"$T\" 0 0 100644 \"$n\"; cat \"$f\"; [ $((n % 2)) -eq 1 ] && printf '\n'; done; } > \"$W/apl.ipk\"",
+    "rm -rf \"$W/data\" \"$W/ctl\"",
+    "echo \"package $(wc -c < \"$W/apl.ipk\") bytes, installing\"",
+    "luna-send -i luna://com.webos.appInstallService/dev/install '{\"id\":\"com.ares.defaultName\",\"ipkUrl\":\"'\"$W/apl.ipk\"'\",\"subscribe\":true}' > \"$W/install.log\" 2>&1 &",
+    "P=$!; i=0; ok=0",
+    "while [ $i -lt 180 ]; do sleep 1; i=$((i + 1)); if grep -q '\"installed\"' \"$W/install.log\"; then ok=1; break; fi; if grep -qiE 'install failed|\"returnValue\": *false|errorText' \"$W/install.log\"; then break; fi; done",
+    "kill $P 2>/dev/null; cat \"$W/install.log\"; rm -rf \"$W\"",          // /tmp is memory: nothing left there
+    "[ $ok = 1 ] || { echo 'install failed'; exit 1; }",
+    "echo \"installed in $i s\"; sleep 2",
+    "luna-send -n 1 luna://com.webos.applicationManager/launch '{\"id\":\"" + APP + "\"}'"
+].join("\n") + "\n";
+function appFolder(cb) {
+    service.call("luna://com.webos.applicationManager/getAppInfo", { id: APP }, function (m) {
+        var a = m && m.payload && m.payload.appInfo;
+        cb(a && a.folderPath ? String(a.folderPath) : "", a && a.resolution ? String(a.resolution) : "");
+    });
+}
+service.register("resolution", guard(function (message) {
+    var want = String((message.payload || {}).set || "");
+    appFolder(function (dir, now) {
+        if (!want) { message.respond({ returnValue: true, resolution: now, root: ROOT }); return; }
+        if (!ROOT) { message.respond({ returnValue: false, errorText: "not rooted", notRooted: true }); return; }
+        if (!RES_OK[want]) { message.respond({ returnValue: false, errorText: "unknown resolution" }); return; }
+        if (want === now) { message.respond({ returnValue: true, resolution: now, unchanged: true }); return; }
+        var svcDir = dir.replace(/\/applications\/[^\/]+\/?$/, "/services/" + ID);
+        if (!/^\/media\/developer\/apps\/usr\/palm\/applications\//.test(dir) || !fs.existsSync(svcDir)) {
+            message.respond({ returnValue: false, errorText: "not installed in Developer Mode's folder" });
+            return;
+        }
+        try {
+            fs.writeFileSync("/tmp/apl-res.sh", REBUILD.replace(/@APP@/g, dir).replace(/@SVC@/g, svcDir).replace(/@RES@/g, want), { mode: 493 });
+        } catch (e) { message.respond({ returnValue: false, errorText: e.code || String(e) }); return; }
+        ssap.note("rebuilding the launcher in " + want);
+        message.respond({ returnValue: true, resolution: want, rebuilding: true });
+        // Its own session: the install stops this service, and the script must live on to open the launcher again
+        setTimeout(function () {
+            require("child_process").spawn("sh", ["-c", "setsid sh /tmp/apl-res.sh </dev/null >/dev/null 2>&1 &"],
+                                           { detached: true, stdio: "ignore" }).unref();
+        }, 400);
+    });
+}));
+
 /* ---------- the apps' icons and backgrounds ----------
    The TV gives its apps' icons on https://127.0.0.1:3001 (its own certificate, which the launcher's page
    refuses) and their backgrounds as files of the apps (which the page can't read). Both are served here,

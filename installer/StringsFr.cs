@@ -474,6 +474,8 @@ namespace APL.Setup
             { "The TV also starts on it, and Guide opens the Control Center. Settings › General & Privacy switches back to LG's Home.",
               "La TV démarre aussi dessus, et Guide ouvre le centre de contrôle. Réglages › Général et confidentialité remet l'accueil LG." },
             { "Debloat the TV", "Debloat de la TV" },
+            { "Interface in 4K", "Interface en 4K" },
+            { "Sharper text and glass, but less smooth: in 4K the TV spends about 10 ms of each frame on the picture alone. Off: 1920 x 1080, enlarged by the TV, smooth everywhere. On a rooted TV it can be changed later in Settings › Appearance.", "Texte et verre plus nets, mais moins fluide : en 4K la TV passe environ 10 ms de chaque image rien que pour l'afficher. Désactivée : 1920 x 1080, agrandi par la TV, fluide partout. Sur une TV rootée, ça se change ensuite dans Réglages › Apparence." },
             { "Stops LG's ads, viewing tracking, telemetry and extra services (about 390 MB of memory freed on a G5). The TV's software updates stay blocked either way: they would remove the root.",
               "Arrête les pubs, le pistage de ce que tu regardes, la télémétrie et les services en trop de LG (environ 390 Mo de mémoire libérés sur une G5). Les mises à jour du logiciel de la TV restent bloquées dans tous les cas : elles enlèveraient le root." },
             { "Turns on APL Launcher's remote buttons service (Accessibility). Twice Home: the App Switcher; held: the Control Center.",

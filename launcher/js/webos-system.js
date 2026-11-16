@@ -453,5 +453,54 @@
         };
         P.sys = sys;
         if (P.home && P.home.installed) sys.setPref("lgHomeApl", !!P.home.replaced);
+        if (D) D.webosRes = resNow();                   // shown when nothing was chosen: what is installed
+        keepResolution(sys);
     };
+
+    /* ---------- the page's resolution ----------
+       LG takes an app's resolution only when it is installed (appinfo.json). The launcher comes in 1920 x 1080
+       (smooth); Settings › Appearance › Interface Resolution has the launcher's service rebuild the installed
+       package in 3840 x 2160 or back (rooted TV, webos/service "resolution"). */
+    function resNow() { return (global.innerWidth || 1920) > 2500 ? "3840x2160" : "1920x1080"; }
+    P.setResolution = function (want) {
+        var sys = P.sys, now = resNow();
+        if (!sys) return;
+        sys.setPref("webosRes", now);                   // what is on screen, until the switch is under way
+        if (want === now) return;
+        if (!P.rooted) {
+            APL.alert({ title: t("Interface Resolution"),
+                message: t("Without root, the TV takes another resolution only with a new install: run APL Launcher Setup again, with Interface in 4K on or off."),
+                buttons: [{ label: t("OK") }] });
+            return;
+        }
+        APL.alert({ title: want === "3840x2160" ? t("Switch to 4K?") : t("Switch to 1080p?"),
+            message: t("The launcher rebuilds itself and opens again by itself, in about half a minute. Your settings, keys and apps stay."),
+            focus: 1,
+            buttons: [{ label: t("Cancel") }, { label: t("Switch"), run: function () {
+                P.service("resolution", { set: want }).then(function () {
+                    sys.setPref("webosRes", want);          // kept: it comes back after an update (keepResolution)
+                    APL.toast(t("Rebuilding the launcher…"), true);
+                }, function (e) { APL.toast((e && e.message) || t("The TV refused")); });
+            } }] });
+    };
+    /* The Homebrew Channel installs the package as it is published (1080p): a resolution chosen here comes back
+       on its own after an update, once per version, on a rooted TV */
+    function keepResolution(sys) {
+        var want = null, now = resNow(), ver = (global.APL_BUILD && global.APL_BUILD.version) || "", key = "apl.webos.resTried";
+        try { want = (JSON.parse(global.localStorage.getItem("apl.prefs") || "{}") || {}).webosRes || null; } catch (e) {}
+        if (!want || want === now || APL.ccOverlay) return;
+        try { if (global.localStorage.getItem(key) === ver + ":" + want) return; } catch (e) {}
+        var asked = false;
+        P.onRoot(function (on) {
+            if (!on || asked) return;
+            asked = true;
+            setTimeout(function () {
+                if (document.hidden) { asked = false; return; }
+                P.service("resolution", { set: want }).then(function (m) {
+                    if (m && (m.rebuilding || m.unchanged)) try { global.localStorage.setItem(key, ver + ":" + want); } catch (e) {}
+                    if (m && m.rebuilding) APL.toast(t("Rebuilding the launcher…"), true);
+                }, function () { asked = false; });
+            }, 20000);
+        });
+    }
 })(window);

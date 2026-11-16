@@ -25,6 +25,7 @@ param(
     [switch]$NoHome,          # rooted: Home keeps LG's Home
     [switch]$NoDebloat,       # rooted: LG's ads, tracking and extra services are left running
     [switch]$AplTv,           # also installs APL TV (the latest release of Knikt/APL-TV, its LG package)
+    [switch]$FourK,           # the page drawn in 3840 x 2160 (sharper, less smooth) instead of 1920 x 1080
     [string]$AplTvRepo = "Knikt/APL-TV",
     [switch]$Unattended,
     [switch]$CheckOnly,
@@ -448,7 +449,7 @@ try {
 $appinfo = [ordered]@{
     id = $AppId; version = $version; vendor = "Knikt (Gero Corp.)"; type = "web"; main = "index.html"; title = "APL Launcher"
     icon = "icon-80.png"; largeIcon = "icon-130.png"; splashBackground = "splash.png"; bgColor = "#000000"; iconColor = "#1c1c1e"
-    resolution = "3840x2160"; disableBackHistoryAPI = $true; handlesRelaunch = $true; transparent = $false; appDescription = "Apple TV style Home Screen"
+    resolution = $(if ($FourK) { "3840x2160" } else { "1920x1080" }); disableBackHistoryAPI = $true; handlesRelaunch = $true; transparent = $false; appDescription = "Apple TV style Home Screen"
 }
 Add-Bytes "$appBase/appinfo.json" $utf8.GetBytes(($appinfo | ConvertTo-Json))
 

@@ -39,7 +39,7 @@ namespace APL.Setup
 
         // the form
         private TextBox ipBox, passwordBox, passphraseBox, pairPortBox, pairCodeBox, tmdbBox, youTubeBox, fanartBox;
-        private CheckBox homeToggle, debloatToggle, homeServiceToggle, aplTvToggle;
+        private CheckBox homeToggle, debloatToggle, homeServiceToggle, aplTvToggle, fourKToggle;
         private bool withAplTv;     // what the running install was asked for (its list of steps)
 
         private static string AplTvHelp()
@@ -223,6 +223,8 @@ namespace APL.Setup
                     opts.Children.Add(Ui.Separator(new Thickness(0)));
                     opts.Children.Add(ToggleRow(T("Debloat the TV"), T("Stops LG's ads, viewing tracking, telemetry and extra services (about 390 MB of memory freed on a G5). The TV's software updates stay blocked either way: they would remove the root."), out debloatToggle, true));
                 }
+                opts.Children.Add(Ui.Separator(new Thickness(0)));
+                opts.Children.Add(ToggleRow(T("Interface in 4K"), T("Sharper text and glass, but less smooth: in 4K the TV spends about 10 ms of each frame on the picture alone. Off: 1920 x 1080, enlarged by the TV, smooth everywhere. On a rooted TV it can be changed later in Settings › Appearance."), out fourKToggle, false));
                 opts.Children.Add(Ui.Separator(new Thickness(0)));
                 opts.Children.Add(ToggleRow(T("Also install APL TV"), AplTvHelp(), out aplTvToggle, true));
                 if (!rooted) opts.Children.Add(Ui.Text(T("The debloat (LG's ads and tracking stopped) needs a rooted TV."), "Secondary", new Thickness(2, 4, 0, 4)));
@@ -652,6 +654,7 @@ namespace APL.Setup
             {
                 string sitesJson = "[" + string.Join(",", sites.Select(s => "{\"name\":" + Json.Quote(s.Name) + ",\"url\":" + Json.Quote(s.Url) + "}")) + "]";
                 args.AddRange(new[] { "-Tmdb", tm, "-YouTube", yt, "-Fanart", fa, "-Sites", Convert.ToBase64String(Encoding.UTF8.GetBytes(sitesJson)) });
+                if (fourKToggle != null && fourKToggle.IsChecked == true) args.Add("-FourK");
                 if (rooted)
                 {
                     string pw = passwordBox.Text.Length > 0 ? passwordBox.Text : "alpine";

@@ -133,6 +133,11 @@
                 options: [[true, t("On")], [false, t("Off")]],
                 desc: t("The Home button opens APL Launcher, and the TV starts on it. Off: LG's own Home, right away and at each start. The screen goes black a few seconds when it changes."),
                 apply: function (v) { P.setHome(v); } });
+        } else if (node.label === t("Appearance")) {
+            node.children.push({ type: "choice", label: t("Interface Resolution"), key: "webosRes",
+                options: [["1920x1080", t("1080p (Smooth)")], ["3840x2160", t("4K (Sharp)")]],
+                desc: t("4K: sharper text and glass, less smooth (the TV spends about 10 ms of each frame on the picture alone). The launcher rebuilds itself in the other one and opens again by itself, in about half a minute. Needs a rooted TV; otherwise run APL Launcher Setup again with Interface in 4K on or off."),
+                apply: function (v) { P.setResolution(v); } });
         } else if (node.label === t("About This Screen") && P.rooted) {
             node.children.push({ type: "info", label: t("Root Access"), get: function () { return t("On (Homebrew Channel)"); },
                                  desc: t("The launcher's helper runs as root: picture settings, the apps left open, Free Up Memory. Given by webos/root/install.sh, again at each start.") });

@@ -4,7 +4,7 @@
     python tools/make-webos.py --release          no personal file (apl-launcher-vX.Y.Z-lg-webos.ipk + SHA256)
     python tools/make-webos.py --personal DIR     take the personal files from another launcher/ folder
                                                   (a git worktree has none of its own)
-    python tools/make-webos.py --hd               drawn in 1920 x 1080 instead of 4K (older or slower TVs)
+    python tools/make-webos.py --4k               drawn in 3840 x 2160 instead of 1920 x 1080 (sharper, less smooth)
 
 Then, with LG's webOS CLI (npm install -g @webos-tools/cli) and the TV in Developer Mode:
     ares-install -d <tv> dist/com.knikt.apllauncher_<version>_all.ipk
@@ -25,10 +25,13 @@ APP_ID = "com.knikt.apllauncher"
 SERVICE_ID = APP_ID + ".service"
 
 release = "--release" in sys.argv
-# The page LG draws: 3840 x 2160, the launcher's 1920 x 1080 layout zoomed twice (js/webos.js), so text,
-# icons and glass are as sharp as the panel. Measured on a G5 (OLED55G56LS): 59 images a second moving
-# through the dock and 57 in the grid, against 53 and 50 at 1920 x 1080. --hd keeps LG's 1920 x 1080.
-RESOLUTION = "1920x1080" if "--hd" in sys.argv else "3840x2160"
+# The page LG draws: 1920 x 1080 by default, enlarged by the TV. In 3840 x 2160 (--4k: the launcher's layout
+# zoomed twice, js/webos.js) text and glass are as sharp as the panel, but a G5 then spends about 10 ms of each
+# frame handing the picture to the screen, whatever the page draws (measured with the inspector, 2026-11-16):
+# 76 to 93 % of frames on time, against 83 to 98 % and 58 to 60 images a second everywhere in 1920 x 1080.
+# On a rooted TV, Settings › Appearance › Interface Resolution rebuilds the installed package in the other one
+# (webos/service, "resolution"). --hd is still accepted: it is the default.
+RESOLUTION = "3840x2160" if "--4k" in sys.argv else "1920x1080"
 out = os.path.join(ROOT, "dist")
 if "--out" in sys.argv:
     out = os.path.abspath(sys.argv[sys.argv.index("--out") + 1])
