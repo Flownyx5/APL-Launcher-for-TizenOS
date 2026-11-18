@@ -1,8 +1,8 @@
 {
- "version": "1.3.2",
+ "version": "1.3.3",
  "loader": 1,
  "reinstall": "1.0.0",
- "notes": "Settings that survive a cut at the wall more surely, a start-up screen, and Tizen 6.5 trailers and backdrops",
+ "notes": "A faster Home Screen after a full start, a Ko-fi reminder once per start, and Sheets of Light without online artwork",
  "scripts": [
   "js/diag.js",
   "js/webos.js",
