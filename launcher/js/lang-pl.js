@@ -819,5 +819,11 @@ window.APL_LANG_PL = {
     "LG deletes the apps installed in Developer Mode when its 1000 hours run out, this launcher included. The launcher renews them on its own, once a day, as the Developer Mode app's Extend button does.": "LG usuwa aplikacje zainstalowane w trybie Developer Mode, gdy skończy się jego limit 1000 godzin – także ten launcher. Launcher sam go odnawia raz dziennie, tak jak przycisk Extend w aplikacji Developer Mode.",
     "Trending on {console}": "Popularne na {console}",
     "Out {date}": "Premiera {date}",
-    "Retro Console": "Konsola retro"
+    "Retro Console": "Konsola retro",
+    "Close": "Zamknij",
+    "Don't Show at Start-Up": "Nie pokazuj przy starcie",
+    "Settings › Support brings it back": "Ustawienia › Wsparcie przywraca to okno",
+    "APL Launcher is free and made by one person. If you like it and want it to keep going, you can buy me a coffee on Ko-fi: scan the code with your phone's camera. Thank you!": "APL Launcher jest bezpłatny i tworzony przez jedną osobę. Jeśli Ci się podoba i chcesz, żeby był dalej rozwijany, możesz postawić mi kawę na Ko-fi: zeskanuj kod aparatem telefonu. Dziękuję!",
+    "Reminder at Start-Up": "Przypomnienie przy starcie",
+    "After each full start of the screen, the Ko-fi code shows once over the Home Screen. Back or OK closes it.": "Po każdym pełnym uruchomieniu ekranu kod Ko-fi pojawia się raz na ekranie głównym. Wstecz lub OK go zamyka."
 };

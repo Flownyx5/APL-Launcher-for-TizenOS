@@ -1494,6 +1494,47 @@
         });
     }
 
+    /* Settings › Support › Support APL Launcher: the Ko-fi page as a code to scan with a phone. */
+    var SUPPORT_PAGE = "https://ko-fi.com/knikt";
+    function showSupport(fromStart) {
+        var qr = document.createElement("div"), url = document.createElement("div");
+        qr.className = "aplalert__qr";
+        if (APL.qr) qr.appendChild(APL.qr.canvas(SUPPORT_PAGE, 360));
+        url.className = "aplalert__qrurl";
+        url.textContent = SUPPORT_PAGE.replace(/^https?:\/\//, "");
+        qr.appendChild(url);
+        APL.alert({ title: APL.t("Support APL Launcher"),
+                    message: fromStart ? APL.t("APL Launcher is free and made by one person. If you like it and want it to keep going, you can buy me a coffee on Ko-fi: scan the code with your phone's camera. Thank you!")
+                                       : APL.t("Scan the code with your phone's camera. Thank you!"),
+                    node: qr,
+                    buttons: fromStart ? [{ label: APL.t("Close") },
+                                          { label: APL.t("Don't Show at Start-Up"), run: function () { APL.sys.setPref("supportReminder", false); toast(APL.t("Settings › Support brings it back")); } }]
+                                       : [{ label: APL.t("OK") }] });
+    }
+    APL.showSupport = showSupport;
+
+    /* Once per full start of the screen (Settings › Support › Reminder at Start-Up): the Ko-fi code over the
+       Home Screen. The mark in /tmp, like bootCleanup's, goes when the screen restarts, so a reload of the
+       page (an update, a crash) shows nothing. Only with the launcher in front and nothing open over it,
+       or it waits: never over an app, a panel or the screen saver. Vetro answers up to 90 s after a start. */
+    var SUPPORT_MARK = "/tmp/apl-support-shown";
+    function supportReminder(tries) {
+        if (APL.sys.PREVIEW || APL.platform || !APL.sys.pref("supportReminder")) return;
+        function later() { if (tries > 0) setTimeout(function () { supportReminder(tries - 1); }, 20000); }
+        var busy = document.hidden || (APL.alert.isOpen && APL.alert.isOpen()) ||
+                   [APL.settings, APL.controlCenter, APL.search, APL.profilesUI, APL.contextMenu, APL.folders]
+                       .some(function (p) { return p && p.isOpen && p.isOpen(); }) ||
+                   (APL.screensaver && APL.screensaver.isActive && APL.screensaver.isActive());
+        if (busy) { later(); return; }
+        APL.sys.exec("[ -f " + SUPPORT_MARK + " ] && echo seen || echo new").then(function (r) {
+            if (r && r.ok === false) throw new Error("Vetro not ready");
+            if (!/new/.test(String((r && r.output) || ""))) return;          // already shown since this start
+            if (document.hidden) { later(); return; }
+            showSupport(true);
+            APL.sys.exec("touch " + SUPPORT_MARK).catch(function () {});
+        }).catch(later);
+    }
+
     /* After a full start (power cut, restart) the screen can come back on the TV input or Samsung TV Plus, with
        the launcher, its home app, already loaded behind it. That happens when Autorun Smart Hub is off at that
        start: Vetro's Custom launcher switches it off, and APL Overlay keeps it off during a standby that the
@@ -1694,6 +1735,7 @@
             if (APL.overlay) APL.overlay.start();
             slowKeyRepeat(8);
             setTimeout(function () { bootCleanup(8); }, 25000);
+            setTimeout(function () { supportReminder(15); }, 8000);
             global.APL_BOOT_OK = true;          // the version (installed or updated) starts fine
             if (requestedAction()) runAction(requestedAction());   // opened for a specific reason: TizenTube, App Switcher…
             hideBoot();

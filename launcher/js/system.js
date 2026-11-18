@@ -65,6 +65,7 @@
         alexaBridge: true,          // the Echo Dot can open apps (overlay/Alexa.cs)
         servicesCut: {},            // blocked Samsung services and their original settings (services.js)
         bootCleanup: true,          // once per power-on: closes what Samsung opens on its own
+        supportReminder: true,      // once per power-on: the Ko-fi code over the Home Screen (launcher.js supportReminder)
         homeAppSaved: null,         // { home, autostart } before "Start on APL Launcher", put back when it is turned off
         idleClose: true,            // an app left in the background for 10 min is closed (overlay/IdleApps.cs)
         pauseKey: "controlcenter",  // ⏯ in an app: "controlcenter" | "playpause", the app's own (overlay/Program.cs)

@@ -316,17 +316,10 @@
                     action(APL.t("Go Back to the Installed Version"), function () { if (APL.updater) APL.updater.reset(); },
                         APL.t("Forgets the downloaded updates and goes back to the version installed by APL Launcher Setup."), "reset")
                 ], APL.t("Automatic updates from GitHub.")),
-                action(APL.t("Support APL Launcher"), function () {
-                    var page = "https://ko-fi.com/knikt", qr = document.createElement("div");
-                    qr.className = "aplalert__qr";
-                    if (APL.qr) qr.appendChild(APL.qr.canvas(page, 360));
-                    var url = document.createElement("div");
-                    url.className = "aplalert__qrurl";
-                    url.textContent = page.replace(/^https?:\/\//, "");
-                    qr.appendChild(url);
-                    APL.alert({ title: APL.t("Support APL Launcher"), message: APL.t("Scan the code with your phone's camera. Thank you!"),
-                                node: qr, buttons: [{ label: APL.t("OK") }] });
-                }, APL.t("APL Launcher is free and made by one person. If you like it, you can buy me a coffee on Ko-fi: OK shows a code to scan with your phone."), "sparkle"),
+                action(APL.t("Support APL Launcher"), function () { APL.showSupport(); },
+                    APL.t("APL Launcher is free and made by one person. If you like it, you can buy me a coffee on Ko-fi: OK shows a code to scan with your phone."), "sparkle"),
+                toggle(APL.t("Reminder at Start-Up"), "supportReminder",
+                    APL.t("After each full start of the screen, the Ko-fi code shows once over the Home Screen. Back or OK closes it.")),
                 menu(APL.t("About This Screen"), "info", [
                     info(APL.t("Name"), function () { return sys.product().name; }),
                     info(APL.t("Model"), function () { return sys.product().model; }),
