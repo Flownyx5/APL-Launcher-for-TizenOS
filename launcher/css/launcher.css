@@ -392,9 +392,50 @@ html, body {
     top: 0; right: 0; bottom: 0; left: 0;
     background: #000;
     z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: opacity 500ms ease;
 }
 .boot.is-hidden { opacity: 0; pointer-events: none; }
+/* The mark and a thin line: the start-up has something to show while the
+   settings, the profiles and the apps are read (and while a screen puts its
+   settings back). One transform on a small element - nothing else moves. */
+.boot__mark { display: flex; flex-direction: column; align-items: center; gap: 34px; opacity: 0.92; }
+.boot__a {
+    font-size: 62px;
+    font-weight: 600;
+    letter-spacing: 10px;
+    margin-right: -10px;
+    color: rgba(255, 255, 255, 0.92);
+}
+.boot__bar {
+    position: relative;
+    display: block;
+    width: 184px;
+    height: 3px;
+    border-radius: 2px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.14);
+}
+.boot__bar i {
+    position: absolute;
+    top: 0; left: 0;
+    display: block;
+    width: 38%;
+    height: 100%;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.86);
+    animation: bootLine 1.2s ease-in-out infinite;
+}
+@keyframes bootLine {
+    from { transform: translateX(-110%); }
+    to   { transform: translateX(280%); }
+}
+.reduce-motion .boot__bar i { animation: none; width: 100%; opacity: 0.6; }
+/* A start-up that is still going after twenty seconds (launcher.js): the line sits
+   still instead of sweeping, so it reads as slow rather than as loading. */
+.boot--slow .boot__bar i { animation: none; width: 100%; opacity: 0.3; }
 
 /* ===================== BUILT-IN APPS (Settings, Sources) ===================== */
 .vtile {
@@ -1437,7 +1478,10 @@ html.is-webos, .is-webos body { background: transparent; }
    draws over the app in front, see-through, with nothing but the panel. The app's own picture stays under it. */
 html.is-cc-overlay, html.is-cc-overlay body { background: transparent; }
 .is-cc-overlay .bg, .is-cc-overlay .bgblur, .is-cc-overlay .scrim, .is-cc-overlay .status, .is-cc-overlay .shelfinfo,
-.is-cc-overlay .hint, .is-cc-overlay .home, .is-cc-overlay .boot { display: none; }
+.is-cc-overlay .hint, .is-cc-overlay .home { display: none; }
+/* And the start-up screen: LG opens this window as a page of its own over the app in front, so the
+   launcher's boot runs again in it and would cover what is playing with a black plate and the mark. */
+.is-cc-overlay .boot { display: none; }
 
 /* ---------- Trailer over the full-screen artwork ----------
    A layer of its own, between the pictures and the scrim: the picture under it
@@ -1470,3 +1514,13 @@ html.is-cc-overlay, html.is-cc-overlay body { background: transparent; }
     height: 118%;
     border: 0;
 }
+
+/* ===================== NOTHING DRIFTS UNDER A PANEL ===================== */
+/* Nothing drifts while a panel is over the wall: the artwork's slow move was
+   costing a full-screen transform every frame behind the Control Center. */
+.has-cc .bg.is-motion,
+.has-sources .bg.is-motion,
+.has-search .bg.is-motion,
+.has-settings .bg.is-motion,
+.has-profiles .bg.is-motion,
+.has-wdg .bg.is-motion { animation-play-state: paused; }

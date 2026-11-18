@@ -191,21 +191,29 @@
             };
         });
     }
-    /* A picture that has just been fetched for the wall is kept for next time. */
+    /* A picture that has just been fetched for the wall is kept for next time,
+       as the host sent it: full resolution, one copy. A fetch that fails (the
+       network is not up yet at a start, a timeout) is asked for again the next
+       time the title comes round, rather than that host being written off. */
     function artKeep(url) {
         if (!url || !/^https?:/i.test(url) || artUrls["!" + url]) return;
         artUrls["!" + url] = true;
         artOpenDb(function (db) {
             if (!db) return;
-            global.fetch(url).then(function (r) { return r.ok ? r.blob() : null; }).then(function (b) {
-                if (!b) return;
+            /* Not from the HTTP cache: the wall has just shown this picture as an
+               <img>, and that copy is cached without the headers a read needs, so a
+               plain fetch of the same address is refused by the browser itself - which
+               is what made it look as if the host refused to be read. */
+            global.fetch(url, { cache: "no-store" }).then(function (r) { return r.ok ? r.blob() : null; }).then(function (b) {
+                if (!b) throw new Error("no picture");
                 try { db.transaction(ART_STORE, "readwrite").objectStore(ART_STORE).put({ blob: b, t: Date.now() }, url); } catch (e) {}
-            })["catch"](function () {});
+                /* Drawn from the store from now on, without asking the host again. */
+                if (!artUrls[url]) { try { artUrls[url] = global.URL.createObjectURL(b); } catch (e) {} }
+            })["catch"](function () { delete artUrls["!" + url]; });
         });
     }
     /* The picture to draw: the one on the screen if it is there, its address otherwise. */
     function artLook(url) { return (url && artUrls[url]) || ""; }
-
     /* One picture per app, and its name kept: an app's first backdrop is written
        down here, so the wall can have it the moment that app takes the focus -
        before its shelf has even been asked for. */

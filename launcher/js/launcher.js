@@ -49,6 +49,11 @@
         dom.clock = $("clock");
         dom.toast = $("toast");
         dom.boot = $("boot");
+        /* Still up after twenty seconds: the line stops sweeping and sits still, so
+           a screen that is stuck reads as stuck rather than as loading forever. */
+        if (dom.boot) global.setTimeout(function () {
+            if (dom.boot && dom.boot.className.indexOf("is-hidden") < 0) dom.boot.classList.add("boot--slow");
+        }, 20000);
         bgActive = dom.bgA;
     }
 
@@ -272,6 +277,7 @@
             if (painted) return;
             painted = true;
             if (token !== blurToken) return;              // another image was requested in the meantime
+            if (!img.naturalWidth || !img.naturalHeight) return;   // not decoded yet: nothing to draw
             var c = blurLayer(), ctx = c.getContext("2d"), w = c.width, h = c.height;
             var m = c._filters ? 14 : 0;                  // margin: no dark edge from the blur
             ctx.clearRect(0, 0, w, h);
@@ -362,19 +368,69 @@
        time the row was scrolled, not only on the first pass. An <img> whose
        decode has finished is painted whole. The layer keeps its own colour
        underneath and the glass reads the picture from the element (glass.js). */
-    function showPicture(layer, url, then) {
+    /* place: the app's own artwork, drawn in the layer while its backdrop is
+       decoded. A 1280 JPEG takes a while to decode on a Tizen 6.5 panel, and until
+       it was ready the layer stayed on the last app's picture: stepping showed the
+       app before. The app's artwork is bundled and local, so it is there in the
+       frame the layer is, and the picture takes its place once it is decoded -
+       neither a smaller copy of the picture nor the one before it. */
+    var seenPics = {}, preloads = {}, preloadOrder = [];
+    /* A picture held decoded, out of sight, before it is asked for: the next title
+       of a shelf, usually. Its bitmap is then in memory and the element that shows
+       it paints in the frame it is added. */
+    function preload(url) {
+        if (!url || preloads[url]) return;
+        var im = new global.Image();
+        im.decoding = "sync";
+        preloads[url] = im;
+        preloadOrder.push(url);
+        /* Three at most: a decoded 1920 picture is a few megabytes each, and a
+           television is not a workstation. Three is what a step needs - the title
+           on the wall and the app either side of it. */
+        while (preloadOrder.length > 3) { var old = preloadOrder.shift(); if (old !== url) delete preloads[old]; }
+        if (im.decode) im.decode().then(function () { im._ok = true; }, function () {});
+        else im.onload = function () { im._ok = true; };
+        im.src = url;
+    }
+
+    function showPicture(layer, url, then, place, revealNow) {
         var pic = layer.querySelector("img:not(.brandcard__icon)");   // the brand card's logo is not the backdrop
         if (pic && pic.getAttribute("src") === url && pic.complete && pic.naturalWidth) {
             if (then) then(pic);                                 // the same picture, already decoded
             return;
         }
         if (pic) pic.parentNode.removeChild(pic);
+        var quick = (place && place !== url) ? place : url;
         pic = document.createElement("img");
         pic.alt = "";
         pic.decoding = "sync";
-        pic.src = url;
+        pic.src = quick;
         layer.appendChild(pic);
-        function done() { if (then) then(pic); }
+        var called = false;
+        function done() { if (called) return; called = true; if (pic.naturalWidth) seenPics[quick] = true; if (then) then(pic); }
+        /* A bitmap that has already been decoded once (preloaded for the title
+           that comes next, or painted a moment ago) is on screen at once: asking
+           for its decode again was a frame of the old picture. One frame later, so
+           the layer never fades in on an element that has not drawn its bitmap yet
+           (that is what a blank wall on a focus looked like). */
+        if (quick === url && (seenPics[url] || (preloads[url] && preloads[url]._ok))) {
+            if (global.requestAnimationFrame) global.requestAnimationFrame(function () { global.setTimeout(done, 0); });
+            else global.setTimeout(done, 0);
+            return;
+        }
+        /* Nothing to lay under it (no artwork of its own, and the picture not drawn
+           yet): the layer goes up at once on its own backdrop, instead of the
+           previous app's picture staying there and reading as the wrong show. */
+        if (revealNow) global.setTimeout(done, 0);
+        if (quick !== url) {
+            /* The full picture is decoded off screen, then takes the element's
+               place: setting a source whose bitmap is ready swaps in one frame. */
+            var full = new global.Image();
+            var swap = function () { if (pic && pic.getAttribute("src") !== url) pic.src = url; };
+            full.src = url;
+            if (full.decode) full.decode().then(swap, function () {});
+            else full.onload = swap;
+        }
         if (pic.decode) pic.decode().then(done, done);
         else { pic.onload = done; pic.onerror = done; }
     }
@@ -590,6 +646,10 @@
        otherwise the last poster painted - the rotated one, not the first pick. */
     function pickOnWall(app) {
         if (!app) return null;
+        /* The title actually on the wall wins. The rotation moves the picture on
+           by itself, and the trailer used to be armed with the number kept from
+           the last step: ▲ on the third show played the first one's trailer. */
+        if (liveShown && liveShown.app === app && liveShown.item) return liveShown.item;
         if (app._liveItems && app._liveItems.length) return app._liveItems[app._liveN || 0];
         if (lastPicks[app.id]) return lastPicks[app.id];
         return null;
@@ -1059,6 +1119,16 @@
         wantBlur(item.bgSmall || item.bg || null, app, null);
         /* The picture from TMDB, Plex or YouTube is an <img> revealed once its
            decode is done, so it can never be painted a band at a time. */
+        /* What fills the wall while a picture that is not drawn yet is decoded: the
+           app's own artwork (bundled, local, instant), else the item's 300 px
+           address. Without it the previous app's picture stayed on screen until the
+           1280 JPEG had decoded, which read as the wrong show.
+           Not when the picture is already decoded: rotating the wall inside one app
+           comes through here with item.ok, and standing the app's artwork under it
+           faded the wall to that artwork between two titles and then cut to the
+           picture - and the drawer's blur was drawn from the artwork, because the
+           picture was not on its element yet when the blur was baked. */
+        var place = item.ok ? "" : (artOf(app) || item.bgSmall || "");
         showPicture(next, srcOf(item), function (pic) {
             /* Two quick ◀ presses reuse the same layer: an answer for the title
                before this one must not fade it in, or its picture lands under
@@ -1067,6 +1137,12 @@
             /* Drawn here, before anything can return: the drawer's background must
                be ready by the time the user opens it, whatever the wall did. */
             flushBlur(pic);
+            /* The title, its logo and its rating follow the picture on the wall,
+               including when that picture was already there: leaving this to the
+               branch below left the title empty until the focus moved away and
+               back (a panel, or full screen and back, was what brought it). */
+            shelfInfo(item);
+            retryIfBlank(next, app, item, n, tag);
             if (bgActive === next) return;                 // already on screen
             /* The pane is ready before the picture is faded in, so the dock,
                the pill and the Control Center change with the backdrop instead
@@ -1092,7 +1168,29 @@
                     refreshGlass();
                 }, pic);
             }
-        });
+        }, place, !item.ok && !place);
+    }
+
+    /* An image that fails (a network answer that never comes, a file that cannot
+       be decoded on this panel) left its layer on screen and empty: the wall
+       stayed blank until the focus moved away and came back, which asked for the
+       picture again. It asks again by itself, twice, then lets the app's own
+       artwork take over. */
+    function retryIfBlank(layer, app, item, n, tag) {
+        global.setTimeout(function () {
+            if (!liveShown || liveShown.tag !== tag) return;
+            var im = layer.querySelector("img:not(.brandcard__icon)");
+            if (im && im.complete && im.naturalWidth) return;
+            item._tries = (item._tries || 0) + 1;
+            if (item._tries > 2) { item.bad = true; setBackdrop(app, true); return; }
+            delete item.ok;
+            delete item.bad;
+            /* The layer keeps the name of what it shows, and that name is what
+               told the next attempt it was already there. It is cleared so the
+               picture is asked for again. */
+            layer.dataset.app = "";
+            setLiveBackdrop(app, item, n, (app._liveItems && app._liveItems.length) ? app._liveItems : [item], 0);
+        }, 1600);
     }
 
     /* Title and rating of the Top Shelf film or series (videos and games have none). */
@@ -1131,9 +1229,15 @@
        screen: the twenty-second change then lands on a slice that is already
        made, instead of the dock finishing a bake after the picture changed. */
     function warmNext(items, i) {
-        if (!APL.glass || !APL.glass.prefetch || !items || !items.length) return;
+        if (!items || !items.length) return;
         var item = items[i % items.length];
-        if (item && item.bg) APL.glass.prefetch(item.bg);
+        if (!item || !item.bg) return;
+        /* The whole picture of the title that is coming, decoded before it is
+           asked for: the step then paints a bitmap instead of decoding a 1280 JPEG
+           on the panel. One picture at a time, not the row's: a decoded one is a
+           few megabytes, and the list here moves on with the rotation. */
+        preload(item.bg);
+        if (APL.glass && APL.glass.prefetch) APL.glass.prefetch(item.bg);
     }
 
     /* A new full-screen image costs 100 ms: as rarely as possible, and never while navigating. */
@@ -1153,12 +1257,15 @@
        stepping along the row never waits for one, which was the last place a
        pane could still arrive a moment after the picture it belongs to. */
     function warmNear(i) {
-        if (!APL.glass || !APL.glass.prefetch) return;
         [-1, 1].forEach(function (d) {
             var app = apps[i + d];
             if (!app) return;
             var art = artOf(app);
-            if (art) APL.glass.prefetch(art);
+            if (!art) return;
+            /* Decoded before the arrow is pressed, so a step paints a bitmap: this
+               is what a smaller copy used to buy, at the picture's own size. */
+            preload(art);
+            if (APL.glass && APL.glass.prefetch) APL.glass.prefetch(art);
         });
     }
 
@@ -1191,6 +1298,7 @@
                     if (document.hidden) return;                     // and behind an app: nobody sees it
                     if (apps[nav.index] !== app) { stopLive(); return; }
                     n = (n + 1) % items.length;
+                    app._liveN = n;                     // the wall moved: the trailer follows it
                     setLiveBackdrop(app, items[n], n, items, 0);
                     warmNext(items, n + 1);
                 }, LIVE_ROTATE_MS);
@@ -1588,8 +1696,19 @@
             setTimeout(function () { bootCleanup(8); }, 25000);
             global.APL_BOOT_OK = true;          // the version (installed or updated) starts fine
             if (requestedAction()) runAction(requestedAction());   // opened for a specific reason: TizenTube, App Switcher…
-            setTimeout(function () { dom.boot.classList.add("is-hidden"); }, 120);
+            hideBoot();
         });
+    }
+
+    /* The start-up screen leaves once the Home Screen is really there - and not
+       before it has been up for a moment: a black frame that appears and goes in
+       a flash reads as a fault, a mark that stays a second reads as a start. The
+       time is counted from the navigation, so a slow load keeps it up for as long
+       as it is needed and a fast one still shows it for a second. */
+    function hideBoot() {
+        var nav = (global.performance && global.performance.now) ? global.performance.now() : 900;
+        var wait = Math.max(0, 900 - nav);
+        global.setTimeout(function () { if (dom.boot) dom.boot.classList.add("is-hidden"); }, wait + 120);
     }
 
     /* The Control Center over the apps (LG's Guide button, webos.js): nothing of the Home Screen, no app
@@ -1600,7 +1719,7 @@
         applyPerf();
         applyTheme();
         global.APL_BOOT_OK = true;
-        dom.boot.classList.add("is-hidden");
+        hideBoot();
         if (APL.controlCenter) APL.controlCenter.open();
     }
 

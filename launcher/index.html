@@ -49,7 +49,15 @@
     <div id="homeApp" class="home-app" hidden></div>
 
     <div id="toast" class="toast" aria-live="polite"></div>
-    <div id="boot" class="boot"></div>
+    <!-- Start-up: the mark and a thin line while the settings, the profiles and
+         the apps are read. Plain black before, which read as a fault - and a
+         screen that has to put its settings back shows this while it does. -->
+    <div id="boot" class="boot" aria-hidden="true">
+        <div class="boot__mark">
+            <span class="boot__a">APL</span>
+            <span class="boot__bar"><i></i></span>
+        </div>
+    </div>
 
     <!-- Samsung API (productinfo, network, avinfo): provided by the screen -->
     <script src="$WEBAPIS/webapis/webapis.js"></script>
