@@ -192,7 +192,9 @@
         return apps.filter(function (a) { return !STORE_ID.test(a.id) || a === keep; });
     }
 
-    function loadApps() {
+    /* fresh: asks the screen again (a package installed or removed, an input pinned); otherwise the start-up's
+       answer is shared with Vetro's check (system.js appsInfo). */
+    function loadApps(fresh) {
         var P = platform();
         if (P && P.loadApps) return P.loadApps(decorate, order);
         return new Promise(function (resolve) {
@@ -201,7 +203,7 @@
                 return;
             }
             try {
-                global.tizen.application.getAppsInfo(function (list) {
+                global.APL.sys.appsInfo(!!fresh).then(function (list) {
                     var apps = [];
                     for (var i = 0; i < list.length; i++) {
                         var a = list[i];
@@ -217,7 +219,7 @@
                     overscanInstalled = apps.some(function (a) { return a.id === OVERSCAN; });
                     if (overscanInstalled) apps = apps.filter(function (a) { return !/^org\.tizen\.browser/.test(a.id); });
                     resolve(order(dedupe(apps)));
-                }, function () {
+                }).catch(function () {
                     resolve(order(DEMO_APPS.map(decorate)));
                 });
             } catch (e) {
@@ -352,7 +354,7 @@
         return new Promise(function (resolve) {
             if (!hasTizen()) { resolve(false); return; }
             try {
-                global.tizen.application.getAppsInfo(function (list) {
+                global.APL.sys.appsInfo(true).then(function (list) {
                     for (var i = 0; i < list.length; i++) if (list[i].id === id) { resolve(true); return; }
                     resolve(false);
                 }, function () { resolve(true); });

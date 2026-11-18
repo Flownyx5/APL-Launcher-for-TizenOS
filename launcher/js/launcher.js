@@ -1799,7 +1799,7 @@
         function again() {
             clearTimeout(pkgTimer);
             pkgTimer = setTimeout(function () {
-                APL.loadApps().then(function (list) {
+                APL.loadApps(true).then(function (list) {
                     var focused = apps[nav.index] && apps[nav.index].id;
                     buildList(list);
                     render();
@@ -2136,7 +2136,7 @@
 
     /* The list again, the focus kept: an input pinned or unpinned in Sources. */
     APL.refreshHome = function () {
-        APL.loadApps().then(function (list) {
+        APL.loadApps(true).then(function (list) {
             var focused = apps[nav.index] && apps[nav.index].id;
             buildList(list);
             render();

@@ -371,6 +371,29 @@
         DEFAULTS.homeReturn = false;
         if (pref("homeReturn") !== before) (listeners.homeReturn || []).forEach(function (fn) { fn(false); });
     }
+    /* The screen's list of apps (about 500 entries with the services), asked once for everyone at start-up.
+       Vetro's check below asked first and the Home Screen a moment later, each on its own, and the Home
+       Screen waits for its answer: after a full start the screen answers slowly. One request in flight is
+       shared, and an answer serves for a few seconds; fresh: true always asks again (an install, an uninstall). */
+    var appsInfoAsk = null, appsInfoAt = 0, appsInfoList = null, APPS_INFO_KEEP = 5000;
+    function appsInfo(fresh) {
+        if (!tz || !tz.application || typeof tz.application.getAppsInfo !== "function") return Promise.reject(new Error("unavailable"));
+        if (!fresh && appsInfoList && Date.now() - appsInfoAt < APPS_INFO_KEEP) return Promise.resolve(appsInfoList);
+        if (!fresh && appsInfoAsk) return appsInfoAsk;
+        var ask = new Promise(function (resolve, reject) {
+            try {
+                tz.application.getAppsInfo(function (list) {
+                    appsInfoList = list; appsInfoAt = Date.now();
+                    resolve(list);
+                }, reject);
+            } catch (e) { reject(e); }
+        });
+        appsInfoAsk = ask;
+        function done() { if (appsInfoAsk === ask) appsInfoAsk = null; }
+        ask.then(done, done);
+        return ask;
+    }
+
     function detectVetro() {
         if (P) return;                     // not a Samsung screen: no Vetro to look for
         if (PREVIEW) {
@@ -378,12 +401,10 @@
             if (global.location && /[?&]novetro\b/.test(global.location.search)) markNoVetro();
             return;
         }
-        try {
-            tz.application.getAppsInfo(function (list) {
-                for (var i = 0; i < list.length; i++) if (/^vetrotvapp\./.test(list[i].id)) return;
-                markNoVetro();
-            }, function () {});
-        } catch (e) {}
+        appsInfo().then(function (list) {
+            for (var i = 0; i < list.length; i++) if (/^vetrotvapp\./.test(list[i].id)) return;
+            markNoVetro();
+        }, function () {});
     }
     detectVetro();
 
@@ -1222,7 +1243,7 @@
         vetroUrl: vetroUrl, vetroPort: function () { return vetroPortNum; },
         noVetro: function () { return noVetro; },
         registerKeys: registerKeys, armSleepTimer: armSleepTimer, readSleepTimer: readSleepTimer,
-        vetroGet: vetroGet, vetroPost: vetroPost, exec: tvExec, game: game, runningApps: runningApps,
+        vetroGet: vetroGet, vetroPost: vetroPost, exec: tvExec, appsInfo: appsInfo, game: game, runningApps: runningApps,
         native: { get: nativeGet, set: nativeSet, reset: nativeReset, info: function (id) { return NATIVE[id]; } },
         isOled: function () { return OLED; },
         PICTURE_MODES: PICTURE_MODES, pictureModeName: pictureModeName, setPictureMode: setPictureMode,
