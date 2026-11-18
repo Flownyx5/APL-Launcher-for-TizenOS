@@ -1,5 +1,8 @@
 # Changelog
 
+## Next version (not released yet)
+- **Sheets of Light and Large Logo without online artwork** (#66). With *Settings › Apps › Find Logos and Artwork Online* off, the launcher painted nothing at all: every app without artwork of its own kept its icon and name on a glow, whatever *Top Shelf › Otherwise* said (an S95D). It now paints them from the catalog's tile or the app's own icon, as the setting says, and still searches nothing online. Tried in the PC preview.
+
 ## 1.3.2
 - **Settings survive a cut at the wall more surely** (#60). The copy of the settings was only put back when the screen came back with nothing. A screen can also come back with an older copy, or with only part of it. Now the copy is put back in those cases too. It also keeps the Home Screen order, hidden apps, folders, Change Icon pictures and the Home Assistant connection, not only the preferences and profiles. It is written a quarter of a second after a change, and when an app opens, only what changed. Tried on a Samsung M8: a profile's settings taken away came back at the next start, exactly as they were.
 - **A start-up screen instead of a black frame.** While the launcher reads your settings and apps, it shows its name and a thin moving line. It stays a moment so a fast start doesn't flash.

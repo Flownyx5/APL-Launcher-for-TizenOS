@@ -82,14 +82,15 @@
             });
         }, Promise.resolve(null));
     }
-    function findLogo(app, art) {
+    /* offline: Find Logos and Artwork Online is off, only the app's own icon on the screen (no icon sets) */
+    function findLogo(app, art, offline) {
         var own = app.icon && !/^https?:/.test(app.icon) ? app.icon : null;
         var name = slug(app.name);
-        var sets = name.length >= 4 ? ICON_SETS.map(function (s) { return s + name + ".png"; }) : [];
+        var sets = name.length >= 4 && !offline ? ICON_SETS.map(function (s) { return s + name + ".png"; }) : [];
         return firstGood([own], GOOD_ICON).then(function (i) {
             return i || firstGood([art && art.exact && art.icon, art && art.providerLogo].concat(sets), 96);
         }).then(function (i) {
-            return i || firstGood([own, app.icon], 32);
+            return i || firstGood(offline ? [own] : [own, app.icon], 32);
         });
     }
 
@@ -586,7 +587,7 @@
     }
 
     /* One app: find its logo and paint, only once. */
-    function make(app, art) {
+    function make(app, art, offline) {
         if (!missing(app)) return Promise.resolve(false);
         // Tile and color known (catalog): the sheets need no logo, nothing to search
         // (its tile is still read, for the logo's second color)
@@ -596,7 +597,7 @@
         if (sys.PREVIEW && !tileOnly && !ownTile) return Promise.resolve(false);      // the preview searches nothing online
         var r = stored(app);
         if (r) return Promise.resolve(use(app, r));
-        var logoP = tileOnly ? Promise.resolve(null) : ownTile ? load(app.tile) : findLogo(app, art);
+        var logoP = tileOnly ? Promise.resolve(null) : ownTile ? load(app.tile) : findLogo(app, art, offline);
         var tileP = tileOnly && app.tile ? load(app.tile) : Promise.resolve(null);
         return Promise.all([logoP, tileP]).then(function (got) {
             var out = paint(app, got[0], got[1]);
