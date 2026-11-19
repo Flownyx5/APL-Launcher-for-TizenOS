@@ -164,7 +164,10 @@
         if (DIRECT) quick(data);
         while (order.length > CACHE_MAX) {
             var old = order.shift();
-            if (cache[old] !== baked) delete lums[cache[old]];      // the pane on screen keeps its measure
+            if (cache[old] !== baked) {
+                delete lums[cache[old]];      // the pane on screen keeps its measure
+                if (!DIRECT && /^blob:/.test(cache[old])) { try { global.URL.revokeObjectURL(cache[old]); } catch (e) {} }
+            }
             delete cache[old];
         }
     }
@@ -273,7 +276,11 @@
 
     /* LG: the same pane, made for the direct panes (see DIRECT_W). The brightness is put on the 1,296 pixels of
        the sample, not filtered over the bigger canvas; the luminances are read before, as draw() does. */
-    function drawDirect(img, cb) {
+    /* Samsung and Android TV too since 1.3.5, at their own size: draw() put a canvas filter over the 480 x 270
+       picture and encoded it as a JPEG on the spot while the focus moved. In the PC preview slowed six times,
+       that was 100 ms of every step along the dock: the 38 to 40 ms frames of a Google TV (#67). */
+    function drawDirect(img, cb, w, h) {
+        w = w || DIRECT_W; h = h || DIRECT_H;
         var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
         var sw = iw / ZOOM, sh = ih / ZOOM;
         var tiny = document.createElement("canvas");
@@ -288,12 +295,12 @@
             t.putImageData(px, 0, 0);
         } catch (e) {}
         var out = document.createElement("canvas");
-        out.width = DIRECT_W;
-        out.height = DIRECT_H;
+        out.width = w;
+        out.height = h;
         var c = out.getContext("2d", READ);
         c.imageSmoothingEnabled = true;
         if ("imageSmoothingQuality" in c) c.imageSmoothingQuality = "high";
-        c.drawImage(tiny, 0, 0, DIRECT_W, DIRECT_H);
+        c.drawImage(tiny, 0, 0, w, h);
         var answered = false;
         function answer(data) {
             if (answered) return;
@@ -347,13 +354,24 @@
         function paintSource() {
             if (painted) return;
             painted = true;
-            if (DIRECT) {
-                try { drawDirect(img, withPane); } catch (e) { withPane(""); }
+            function bake(from) {
+                try {
+                    if (DIRECT) drawDirect(from, withPane);
+                    else drawDirect(from, withPane, BAKE_W, BAKE_H);
+                } catch (e) { withPane(""); }
+            }
+            /* Reading the 1080p picture into the sample decoded it again on the page's own thread, the one
+               that moves the focus: 1 s in 20 steps along the dock, PC preview slowed six times. Given the
+               file itself (not the <img>, which it decodes on that thread too), the screen decodes and shrinks
+               it away from the page (createImageBitmap), and the sample is drawn from that. */
+            var file = img.currentSrc || img.src || "";
+            if (global.createImageBitmap && global.fetch && file && (/^(data:|blob:)/i.test(file) || !img.crossOrigin)) {
+                global.fetch(file).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.blob(); })
+                    .then(function (blob) { return global.createImageBitmap(blob, { resizeWidth: TINY_W * 5, resizeHeight: TINY_H * 5, resizeQuality: "medium" }); })
+                    .then(function (bmp) { bake(bmp); if (bmp.close) bmp.close(); }, function () { bake(img); });
                 return;
             }
-            var data = "";
-            try { data = draw(img); } catch (e) { data = ""; }
-            withPane(data);
+            bake(img);
         }
         function withPane(data) {
             if (objectUrl) { try { global.URL.revokeObjectURL(objectUrl); } catch (e) {} objectUrl = ""; }
