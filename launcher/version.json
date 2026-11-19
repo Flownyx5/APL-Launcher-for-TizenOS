@@ -1,8 +1,8 @@
 {
- "version": "1.3.4",
+ "version": "1.3.5",
  "loader": 1,
  "reinstall": "1.0.0",
- "notes": "The Home Screen 10 s sooner after a full start, and Turkish",
+ "notes": "Smoother moves along the dock on every screen",
  "scripts": [
   "js/diag.js",
   "js/webos.js",
