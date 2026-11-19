@@ -192,8 +192,41 @@
         return apps.filter(function (a) { return !STORE_ID.test(a.id) || a === keep; });
     }
 
+    /* The screen's apps, as they come from its list: [{ id, name, icon }], Overscan in place of Samsung Internet. */
+    function realApps(list) {
+        var apps = [];
+        for (var i = 0; i < list.length; i++) {
+            var a = list[i];
+            // `show:true` == meant to appear in the real Samsung menu.
+            // This is what strips the ~250 internal services.
+            if (!a.show) continue;
+            if (BLOCKLIST[a.id]) continue;
+            if (!isRealApp(a.id, a.name)) continue;
+            apps.push({ id: a.id, name: a.name, icon: a.iconPath });
+        }
+        // Overscan takes the place of Samsung Internet
+        overscanInstalled = apps.some(function (a) { return a.id === OVERSCAN; });
+        if (overscanInstalled) apps = apps.filter(function (a) { return !/^org\.tizen\.browser/.test(a.id); });
+        return apps;
+    }
+    function shown(raw) { return order(dedupe(raw.map(decorate))); }
+
+    /* After a full start the screen takes 8 to 9 s to give its list of apps (measured on an M8: asked at
+       0.9 s, answered at 9.4 s; 0.3 s otherwise), and the Home Screen waited for it on a black screen. So
+       the list is kept, and the Home Screen starts from the last one at once; when the screen answers and
+       its list differs (an app installed or removed meanwhile), the Home Screen is built again. */
+    var APPS_KEPT = "apl.appsKept";
+    function keptApps() {
+        try { var k = JSON.parse(global.localStorage.getItem(APPS_KEPT) || "null"); return k && k.length ? k : null; } catch (e) { return null; }
+    }
+    function keepApps(raw) {
+        var text = JSON.stringify(raw);
+        try { if (global.localStorage.getItem(APPS_KEPT) !== text) global.localStorage.setItem(APPS_KEPT, text); } catch (e) {}
+        return text;
+    }
+
     /* fresh: asks the screen again (a package installed or removed, an input pinned); otherwise the start-up's
-       answer is shared with Vetro's check (system.js appsInfo). */
+       answer is shared with Vetro's check (system.js appsInfo), and the kept list serves while it comes. */
     function loadApps(fresh) {
         var P = platform();
         if (P && P.loadApps) return P.loadApps(decorate, order);
@@ -202,28 +235,24 @@
                 resolve(order(DEMO_APPS.map(decorate)));
                 return;
             }
+            var kept = fresh ? null : keptApps(), keptText = kept ? JSON.stringify(kept) : null;
+            if (kept) {
+                overscanInstalled = kept.some(function (a) { return a.id === OVERSCAN; });
+                resolve(shown(kept));
+            }
             try {
                 global.APL.sys.appsInfo(!!fresh).then(function (list) {
-                    var apps = [];
-                    for (var i = 0; i < list.length; i++) {
-                        var a = list[i];
-                        // `show:true` == meant to appear in the real Samsung menu.
-                        // This is what strips the ~250 internal services.
-                        if (!a.show) continue;
-                        if (BLOCKLIST[a.id]) continue;
-                        if (!isRealApp(a.id, a.name)) continue;
-                        apps.push(decorate({ id: a.id, name: a.name, icon: a.iconPath }));
-                    }
-                    if (!apps.length) { resolve(order(DEMO_APPS.map(decorate))); return; }
-                    // Overscan takes the place of Samsung Internet
-                    overscanInstalled = apps.some(function (a) { return a.id === OVERSCAN; });
-                    if (overscanInstalled) apps = apps.filter(function (a) { return !/^org\.tizen\.browser/.test(a.id); });
-                    resolve(order(dedupe(apps)));
+                    var raw = realApps(list);
+                    if (!raw.length) { if (!kept) resolve(order(DEMO_APPS.map(decorate))); return; }
+                    var text = keepApps(raw);
+                    if (!kept) { resolve(shown(raw)); return; }
+                    // Started from the kept list: the screen's list, if it differs
+                    if (text !== keptText && global.APL.refreshHome) global.APL.refreshHome();
                 }).catch(function () {
-                    resolve(order(DEMO_APPS.map(decorate)));
+                    if (!kept) resolve(order(DEMO_APPS.map(decorate)));
                 });
             } catch (e) {
-                resolve(order(DEMO_APPS.map(decorate)));
+                if (!kept) resolve(order(DEMO_APPS.map(decorate)));
             }
         });
     }
