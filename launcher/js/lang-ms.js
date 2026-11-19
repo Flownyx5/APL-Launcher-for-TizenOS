@@ -703,5 +703,7 @@ window.APL_LANG_MS = {
     "Settings › Support brings it back": "Tetapan › Sokongan mengembalikannya",
     "APL Launcher is free and made by one person. If you like it and want it to keep going, you can buy me a coffee on Ko-fi: scan the code with your phone's camera. Thank you!": "APL Launcher percuma dan dibuat oleh seorang sahaja. Jika anda menyukainya dan mahu ia diteruskan, anda boleh belanja saya kopi di Ko-fi: imbas kod dengan kamera telefon anda. Terima kasih!",
     "Reminder at Start-Up": "Peringatan semasa permulaan",
-    "After each full start of the screen, the Ko-fi code shows once over the Home Screen. Back or OK closes it.": "Selepas setiap permulaan penuh skrin, kod Ko-fi dipaparkan sekali di atas Skrin Utama. Kembali atau OK menutupnya."
+    "After each full start of the screen, the Ko-fi code shows once over the Home Screen. Back or OK closes it.": "Selepas setiap permulaan penuh skrin, kod Ko-fi dipaparkan sekali di atas Skrin Utama. Kembali atau OK menutupnya.",
+    "Cards": "Kad",
+    "What you were watching in Stremio, Nuvio, APL TV and the IPTV apps: as cards over the Top Shelf, in full screen on the wall (◀ ▶ through them, OK to resume), or not at all.": "Apa yang anda tonton dalam Stremio, Nuvio, APL TV dan aplikasi IPTV: sebagai kad di atas Top Shelf, dalam skrin penuh pada latar (◀ ▶ untuk beralih, OK untuk menyambung), atau tidak langsung."
 };

@@ -326,6 +326,7 @@
                     bgSmall: fa.bg ? fa.bg.replace("/fanart/", "/preview/") : IMG + "w300" + r.backdrop_path,   // enlarged = blurred, for the grid
                     card: IMG + "w780" + r.backdrop_path,
                     title: r.title || r.name || "",
+                    overview: String(r.overview || "").slice(0, 400),   // shown under the title in full screen (#56)
                     rating: both[1].rating,
                     ratingFrom: both[1].ratingFrom,
                     year: String(r.release_date || r.first_air_date || "").substr(0, 4),
@@ -734,7 +735,29 @@
     /* Which source for this app? (null = no dynamic Top Shelf) */
     /* Settings › Appearance › Top Shelf, in this order: the app's own rows (What You're Watching, hubShelf), what
        is popular (liveShelf), then the app's artwork or the style chosen in Otherwise (launcher.js, genart.js). */
+    /* Settings › Appearance › Top Shelf › Continue Watching › Full Screen (#56): what the app's cards would show
+       (widgets.js) is the Top Shelf instead, one title at a time, ◀ ▶ through them in full screen, OK resumes it.
+       An app without any falls back to its usual Top Shelf. */
+    function wallItem(c) {
+        var img = c.image || "";
+        // A picture with the title already drawn on it (TMDB): not written a second time under it
+        return { bg: img, bgSmall: APL.artSize ? APL.artSize(img, "w300") : img, card: img, title: c.titled ? "" : c.title || "",
+                 logo: c.logo || "", meta: c.sub || "", cw: c };
+    }
+    function continueSource(app, other) {
+        if (APL.sys.pref("continueStyle") !== "wall" || !APL.widgets || !APL.widgets.hasCards || !APL.widgets.hasCards(app.id)) return null;
+        return { id: "cw-" + app.id, ttl: 1, load: function () {
+            return APL.widgets.cardsFor(app.id).then(function (cards) {
+                var items = (cards || []).filter(function (c) { return c.kind === "video" && c.image; }).map(wallItem);
+                return items.length ? items : other ? other.load() : null;
+            });
+        } };
+    }
     function sourceFor(app) {
+        var usual = usualSource(app);
+        return continueSource(app, usual) || usual;
+    }
+    function usualSource(app) {
         var pub = APL.sys.pref("liveShelf") ? publicSource(app) : null, pkg = hubPackage(app);
         if (!APL.sys.pref("hubShelf")) return pub;
         refreshHub();

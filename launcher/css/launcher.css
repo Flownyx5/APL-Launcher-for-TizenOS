@@ -263,6 +263,11 @@ html, body {
 .shelfinfo__logo.is-in { opacity: 1; }
 .shelfinfo__open { display: none; margin-top: 14px; font-size: 24px; font-weight: 600; color: rgba(255, 255, 255, 0.95); }
 .mode-full .shelfinfo.can-open .shelfinfo__open { display: block; }
+/* The description, in full screen only (#56): three lines at most, the title moves up to make room */
+.shelfinfo__desc { display: none; margin-top: 14px; max-width: 1100px; font-size: 26px; font-weight: 400; line-height: 1.35; color: rgba(255, 255, 255, 0.86);
+                   overflow: hidden; -webkit-line-clamp: 3; -webkit-box-orient: vertical; max-height: 106px; white-space: normal; }
+.mode-full .shelfinfo.has-desc .shelfinfo__desc { display: -webkit-box; }
+.mode-full .shelfinfo.has-desc { top: 780px; }
 .shelfinfo__meta { margin-top: 6px; font-size: 26px; font-weight: 500; color: rgba(255, 255, 255, 0.88); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ===================== HOME (dock + rows) ===================== */

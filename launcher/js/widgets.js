@@ -700,6 +700,7 @@
         clearTimeout(readTimer);
         if (!same) setShown(false);
         if (!readerOf(id) || sys.PREVIEW) return;
+        if ((sys.pref("continueStyle") || "cards") !== "cards") { setShown(false); return; }   // on the wall, or off (#56, #66)
         showTimer = setTimeout(function () {
             var last = lastKnown(id);
             if (last) paint(id, last);
@@ -817,8 +818,14 @@
         return true;
     }
 
+    /* OK on a Continue Watching title shown full screen on the wall (liveshelf.js continueSource) */
+    function resume(app, c) {
+        if (app && c && c.launch) launchWith(app, c.launch); else if (app) APL.openApp(app);
+    }
+
     APL.widgets = {
-        show: show, cardsFor: cardsFor, cardEl: cardEl, focusCards: focusCards, leaveCards: leaveCards,
+        show: show, cardsFor: cardsFor, cardEl: cardEl, focusCards: focusCards, leaveCards: leaveCards, resume: resume,
+        hasCards: function (id) { return !!readerOf(id); },
         isShowing: function () { return !!root && root.classList.contains("is-on"); }
     };
 })(window);

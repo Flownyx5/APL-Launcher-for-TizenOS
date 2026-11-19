@@ -851,5 +851,7 @@ window.APL_LANG_TR = {
     "STREAMING": "YAYIN",
     "LIVE": "CANLI",
     "DEVICE": "AYGIT",
-    "SOURCE": "KAYNAK"
+    "SOURCE": "KAYNAK",
+    "Cards": "Kartlar",
+    "What you were watching in Stremio, Nuvio, APL TV and the IPTV apps: as cards over the Top Shelf, in full screen on the wall (◀ ▶ through them, OK to resume), or not at all.": "Stremio, Nuvio, APL TV ve IPTV uygulamalarında izlediklerin: Üst Raf'ın üzerinde kartlar olarak, arka planda tam ekran (◀ ▶ ile aralarında geç, Tamam ile devam et) ya da hiç."
 };

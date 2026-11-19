@@ -82,6 +82,9 @@
                 menu(APL.t("Top Shelf"), "photo", [
                     toggle(APL.t("What You're Watching"), "hubShelf",
                         APL.t("Continue Watching from Plex, your Spotify mixes… for the apps that share them with Samsung's home screen.")),
+                    choice(APL.t("Continue Watching"), "continueStyle",
+                        [["cards", APL.t("Cards")], ["wall", APL.t("Full Screen")], ["off", APL.t("Off")]],
+                        APL.t("What you were watching in Stremio, Nuvio, APL TV and the IPTV apps: as cards over the Top Shelf, in full screen on the wall (◀ ▶ through them, OK to resume), or not at all.")),
                     toggle(APL.t("What's Popular"), "liveShelf",
                         APL.t("Trending films, series and videos on each service, top albums, games, sports. Films and series need a TMDB key, videos a YouTube key (see Online Services).")),
                     choice(APL.t("Otherwise"), "shelfArt",

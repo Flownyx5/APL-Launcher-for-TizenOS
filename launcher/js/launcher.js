@@ -42,6 +42,7 @@
         dom.shelfInfo = $("shelfInfo");
         dom.shelfTitle = $("shelfTitle");
         dom.shelfMeta = $("shelfMeta");
+        dom.shelfDesc = $("shelfDesc");
         var open = document.createElement("div");                          // "OK to open", in full screen (openHint)
         open.className = "shelfinfo__open";
         open.textContent = APL.t("OK to Open");
@@ -1098,7 +1099,7 @@
     var liveShown = null;                                 // the Top Shelf item on screen: in full screen, OK opens it if it can
     function openable(app) {
         var shown = mode === "full" && liveShown && liveShown.app === app && bgActive.dataset.app === liveShown.tag ? liveShown.item : null;
-        return shown && shown.link && APL.launchDeepLink ? shown : null;
+        return shown && ((shown.link && APL.launchDeepLink) || (shown.cw && APL.widgets)) ? shown : null;
     }
     /* Full screen on an item that opens directly: say so under its title. */
     function openHint() {
@@ -1199,7 +1200,7 @@
            comes from ("TizenTube", "Top albums"): that is what goes under the
            title, so What You're Watching names what it is showing on every app
            and not only on the film ones. */
-        var has = !!(item && (item.type || item.poster || (item.title && item.sub)));
+        var has = !!(item && (item.type || item.poster || item.cw || (item.title && item.sub)));
         dom.shelfInfo.classList.toggle("is-visible", has);
         if (!has) return;
         titleShow(item.title, item.logo);
@@ -1222,6 +1223,11 @@
         }
         dom.shelfMeta.textContent = item.meta !== undefined ? item.meta
             : (item.type ? APL.live.metaOf(item) : (item.sub || ""));
+        /* A short description under the title, in full screen only (#56): TMDB's overview of the film or series */
+        if (dom.shelfDesc) {
+            dom.shelfDesc.textContent = item.overview || "";
+            dom.shelfInfo.classList.toggle("has-desc", !!item.overview);
+        }
         openHint();
     }
 
@@ -1374,6 +1380,7 @@
         // Your own item, enlarged with ▲ (Plex's Continue Watching, a Spotify mix): straight to it.
         // From the dock, OK opens the app as usual.
         var shown = openable(apps[i]);
+        if (shown && shown.cw) { hideVeil(); APL.widgets.resume(apps[i], shown.cw); return; }
         if (shown) {
             APL.launchDeepLink(id, shown.link).catch(function () { APL.launchApp(id).catch(function (err) { hideVeil(); toast(err.message || APL.t("Couldn't open the app")); }); });
             return;

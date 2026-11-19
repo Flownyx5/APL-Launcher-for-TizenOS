@@ -867,5 +867,7 @@ window.APL_LANG_FR = {
     "Settings › Support brings it back": "Réglages › Assistance le remet",
     "APL Launcher is free and made by one person. If you like it and want it to keep going, you can buy me a coffee on Ko-fi: scan the code with your phone's camera. Thank you!": "APL Launcher est gratuit et fait par une seule personne. Si tu l'apprécies et veux qu'il continue, tu peux m'offrir un café sur Ko-fi : scanne le code avec l'appareil photo de ton téléphone. Merci !",
     "Reminder at Start-Up": "Rappel au démarrage",
-    "After each full start of the screen, the Ko-fi code shows once over the Home Screen. Back or OK closes it.": "Après chaque démarrage complet de l'écran, le code Ko-fi s'affiche une fois sur l'écran d'accueil. Retour ou OK le ferme."
+    "After each full start of the screen, the Ko-fi code shows once over the Home Screen. Back or OK closes it.": "Après chaque démarrage complet de l'écran, le code Ko-fi s'affiche une fois sur l'écran d'accueil. Retour ou OK le ferme.",
+    "Cards": "Cartes",
+    "What you were watching in Stremio, Nuvio, APL TV and the IPTV apps: as cards over the Top Shelf, in full screen on the wall (◀ ▶ through them, OK to resume), or not at all.": "Ce que tu regardais dans Stremio, Nuvio, APL TV et les apps IPTV : en cartes au-dessus du Top Shelf, en plein écran sur le fond (◀ ▶ pour passer de l'un à l'autre, OK pour reprendre), ou pas du tout."
 };
