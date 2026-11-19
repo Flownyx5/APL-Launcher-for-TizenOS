@@ -3,10 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<!-- The trailer's relay on Android (#56). The launcher runs from file://, which has no origin, and YouTube now
-     refuses an embedded player that can't say where it is (error 153, "video player configuration error").
-     The app serves this page at https://apl.app/yt.html (Web.kt), so the player gets a real https origin, and
-     the page passes the player's messages to the launcher and the launcher's to the player, nothing else. -->
+<!-- The trailer's relay (#56). The launcher runs from file://, which has no origin, and YouTube now refuses an
+     embedded player that can't say where it is (error 153, "video player configuration error"). This page has an
+     https address - on Android the app serves it at https://apl.app/yt.html (Web.kt), on Samsung and LG it is the
+     copy GitHub Pages publishes - so the player gets a real origin; the page passes the player's messages to the
+     launcher and the launcher's to the player, nothing else. -->
 <style>html, body { margin: 0; height: 100%; background: #000; overflow: hidden; } iframe { border: 0; width: 100%; height: 100%; }</style>
 </head>
 <body>

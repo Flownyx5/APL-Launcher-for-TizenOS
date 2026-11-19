@@ -177,17 +177,27 @@
     /* The picture is shown only once the player says it is playing. Before that
        the player is on its thumbnail with its own play button drawn across the
        middle of it, and no crop can take that out. */
+    /* As on Apple TV, the video comes in a moment after it starts: the player shows its title strip for its first
+       second, and the picture under it stays until the film itself is there. */
+    var REVEAL_AFTER = 900, revealTimer = 0;
     function revealTrailer() {
-        var host = document.getElementById("trailerLayer");
-        if (box && host) host.classList.add("is-on");
+        if (revealTimer) return;
+        var mine = frameToken;
+        revealTimer = global.setTimeout(function () {
+            revealTimer = 0;
+            var host = document.getElementById("trailerLayer");
+            if (mine === frameToken && box && host) host.classList.add("is-on");
+        }, REVEAL_AFTER);
     }
     /* The only pages allowed to say "playing": the player's own two hosts. The
        listener used to take a message with no source from anywhere, so any page
        loaded in this window could have spoken for the trailer. */
     var YT_ORIGINS = { "https://www.youtube.com": 1, "https://www.youtube-nocookie.com": 1 };
-    /* Android: the player is loaded through the app's own relay page (android/web/yt.html), which has an https
-       origin; its messages then come from that page (#56: YouTube's error 153 from file://). */
-    var RELAY = APL.platform && APL.platform.trailerRelay ? String(APL.platform.trailerRelay) : "";
+    /* The player is loaded through a relay page with an https origin (launcher/yt.html); its messages then come
+       from that page (#56: YouTube's error 153 from file://). */
+    /* Samsung and LG run from file:// too: the same page, as GitHub Pages publishes it with the launcher. */
+    var RELAY = APL.platform && APL.platform.trailerRelay ? String(APL.platform.trailerRelay)
+              : /^https?:/i.test(String(global.location.protocol || "")) ? "" : "https://knikt.github.io/APL-Launcher/yt.html";
     var RELAY_ORIGIN = (/^https:\/\/[^\/]+/.exec(RELAY) || [""])[0];
     if (RELAY_ORIGIN) YT_ORIGINS[RELAY_ORIGIN] = 1;
     if (global.addEventListener) {
@@ -232,7 +242,7 @@
        starts the video at its beginning, and that restart would be. */
     function embedUrl(id, api, hostname) {
         var q = "?autoplay=1&mute=1&playsinline=1&controls=0&modestbranding=1&rel=0" +
-                "&iv_load_policy=3&disablekb=1&fs=0&cc_load_policy=0&loop=0";
+                "&iv_load_policy=3&disablekb=1&fs=0&cc_load_policy=0&loop=0&vq=hd1080";     // full screen: ask for HD
         if (api) {
             q += "&enablejsapi=1";
             /* The player posts its answers back to the origin it is given, so it
@@ -336,17 +346,19 @@
         attempt = 0;
         startAttempt(id);
         if (secs) {
+            /* Out a moment before its last frame, as on Apple TV: at its end the player lays its own "more
+               videos" screen over the picture, which used to show for a second before the fade. */
             endTimer = global.setTimeout(function () {
-                /* The trailer is over: out, and the next title may slide in. */
                 fade();
                 var done = onEnd;
                 if (done) done();
-            }, (secs + 1) * 1000);
+            }, Math.max(4, secs - 1.5) * 1000);
         }
     }
 
     function hideNow() {
         frameToken++;                       // any attempt still waiting stops here
+        clearTimeout(revealTimer); revealTimer = 0;
         clearTimeout(attemptTimer);
         attemptTimer = 0;
         var host = document.getElementById("trailerLayer");
@@ -360,6 +372,7 @@
        only once it is invisible. */
     function fade() {
         frameToken++;
+        clearTimeout(revealTimer); revealTimer = 0;
         clearTimeout(attemptTimer);
         attemptTimer = 0;
         clearTimeout(endTimer);

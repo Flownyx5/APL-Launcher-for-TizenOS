@@ -738,8 +738,13 @@
     /* Settings › Appearance › Top Shelf › Continue Watching › Full Screen (#56): what the app's cards would show
        (widgets.js) is the Top Shelf instead, one title at a time, ◀ ▶ through them in full screen, OK resumes it.
        An app without any falls back to its usual Top Shelf. */
+    /* Full screen wants the big picture: a card's is 780 px wide, blurred on a 1080p wall (TMDB pictures only) */
+    function bigger(url) {
+        var m = /^(https?:\/\/image\.tmdb\.org\/t\/p\/)(w(?:300|342|500|780))(\/.+)$/.exec(String(url || ""));
+        return m ? m[1] + big("w1280") + m[3] : url;
+    }
     function wallItem(c) {
-        var img = c.image || "";
+        var img = bigger(c.image || "");
         // A picture with the title already drawn on it (TMDB): not written a second time under it
         return { bg: img, bgSmall: APL.artSize ? APL.artSize(img, "w300") : img, card: img, title: c.titled ? "" : c.title || "",
                  logo: c.logo || "", meta: c.sub || "", cw: c };
