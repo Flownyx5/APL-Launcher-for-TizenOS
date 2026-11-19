@@ -1,8 +1,8 @@
 {
- "version": "1.3.7",
+ "version": "1.3.8",
  "loader": 1,
  "reinstall": "1.0.0",
- "notes": "Trailers on Android TV and Google TV and as on Apple TV, Continue Watching then What's Popular, logos and descriptions",
+ "notes": "Trailers show as soon as they play",
  "scripts": [
   "js/diag.js",
   "js/webos.js",

@@ -1,6 +1,6 @@
 # Changelog
 
-## Next version (not released yet)
+## 1.3.8
 - **Trailers show as soon as they play.** The player says "playing" in two ways, and the launcher only understood one: on a Samsung M8 it only ever used the other, so the video played unseen behind the picture until the launcher gave up waiting and showed it anyway. Its relay page also passed the player's answers on only when the screen said which frame they came from, which the M8 doesn't. Tried on a Samsung M8 after reinstalling 1.3.7 with Setup: the trailer plays and comes in by itself.
 
 ## 1.3.7
