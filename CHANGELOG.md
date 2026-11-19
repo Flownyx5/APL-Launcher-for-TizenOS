@@ -1,6 +1,6 @@
 # Changelog
 
-## Next version (not released yet)
+## 1.3.4
 - **The Home Screen 10 s sooner after a full start** (#66). After a power cut or a full restart, the screen takes 8 to 9 s to give its list of apps, and the Home Screen waited for it on a black screen. The launcher now keeps the list and starts the Home Screen from the last one at once, then builds it again only if an app was installed or removed meanwhile. Measured on a Samsung M8 after a power cut: the Home Screen ready about 10 s after power-on, against 19 to 21 s before.
 - **Turkish** (#67). The whole interface, about 850 texts, in Turkish: it follows the screen's language, or *Settings › General & Privacy › Language › Türkçe*. A first translation, to be read again by a Turkish speaker. Tried in the PC preview.
 
