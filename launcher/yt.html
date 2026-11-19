@@ -21,10 +21,13 @@
     f.setAttribute("frameborder", "0");
     f.src = src;
     document.body.appendChild(f);
+    /* Told apart by where they come from: on a Samsung M8, e.source is empty, so the player's answers never
+       went up and the launcher took it for silent. */
+    var PLAYER = /^https:\/\/www\.youtube(-nocookie)?\.com$/;
     window.addEventListener("message", function (e) {
         try {
-            if (e.source === window.parent) f.contentWindow.postMessage(e.data, "*");
-            else if (e.source === f.contentWindow) window.parent.postMessage(e.data, "*");
+            if (PLAYER.test(String(e.origin || ""))) window.parent.postMessage(e.data, "*");
+            else f.contentWindow.postMessage(e.data, "*");
         } catch (x) {}
     });
 })();
