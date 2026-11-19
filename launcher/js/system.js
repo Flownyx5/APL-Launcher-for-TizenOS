@@ -69,7 +69,7 @@
         homeAppSaved: null,         // { home, autostart } before "Start on APL Launcher", put back when it is turned off
         idleClose: true,            // an app left in the background for 10 min is closed (overlay/IdleApps.cs)
         pauseKey: "controlcenter",  // ⏯ in an app: "controlcenter" | "playpause", the app's own (overlay/Program.cs)
-        language: "auto"            // "auto" (screen language) | "en" | "fr" | "ms" | "pl": read at start-up by i18n.js
+        language: "auto"            // "auto" (screen language) | "en" | "fr" | "ms" | "pl" | "tr": read at start-up by i18n.js
     };
     /* OLED panels, told by the model the screen reports: the S8x / S9x TVs from 2022 on, whatever the
        region letters (QE55S95BATXXU, QN65S90FAEXZA, KQ65SD95AFXKR…), and the Odyssey OLED monitors with
@@ -520,7 +520,7 @@
         });
     }
 
-    function gb(bytes) { var n = (bytes / 1e9).toFixed(1); return APL.t("{n} GB", { n: APL.lang === "fr" || APL.lang === "pl" ? n.replace(".", ",") : n }); }
+    function gb(bytes) { var n = (bytes / 1e9).toFixed(1); return APL.t("{n} GB", { n: APL.lang === "fr" || APL.lang === "pl" || APL.lang === "tr" ? n.replace(".", ",") : n }); }
     function storage() {
         return new Promise(function (resolve) {
             if (PREVIEW) return resolve(APL.t("4.1 GB free of 8.0 GB (preview)"));

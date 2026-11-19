@@ -386,7 +386,7 @@
         var d = screen();
         return Promise.resolve(d.panel && d.ui && d.panel !== d.ui ? T("{panel} (interface {ui})", { panel: d.panel, ui: d.ui }) : (d.panel || d.ui || "—"));
     };
-    function gb(bytes) { var n = (bytes / 1e9).toFixed(1); return T("{n} GB", { n: APL.lang === "fr" || APL.lang === "pl" ? n.replace(".", ",") : n }); }
+    function gb(bytes) { var n = (bytes / 1e9).toFixed(1); return T("{n} GB", { n: APL.lang === "fr" || APL.lang === "pl" || APL.lang === "tr" ? n.replace(".", ",") : n }); }
     sys.storage = function () {
         var s = json(B.storage(), {});
         return Promise.resolve(s.total ? T("{free} free of {total}", { free: gb(s.free), total: gb(s.total) }) : "—");

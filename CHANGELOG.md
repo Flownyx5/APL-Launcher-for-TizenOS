@@ -1,5 +1,8 @@
 # Changelog
 
+## Next version (not released yet)
+- **Turkish** (#67). The whole interface, about 850 texts, in Turkish: it follows the screen's language, or *Settings › General & Privacy › Language › Türkçe*. A first translation, to be read again by a Turkish speaker. Tried in the PC preview.
+
 ## 1.3.3
 - **Sheets of Light and Large Logo without online artwork** (#66). With *Settings › Apps › Find Logos and Artwork Online* off, the launcher painted nothing at all: every app without artwork of its own kept its icon and name on a glow, whatever *Top Shelf › Otherwise* said (an S95D). It now paints them from the catalog's tile or the app's own icon, as the setting says, and still searches nothing online. Tried in the PC preview.
 - **A faster Home Screen after a full start** (#66). The launcher asked the screen for its list of apps (about 500 with the services) twice in a row while starting, once to see if Vetro is installed and once for the Home Screen, and the Home Screen waited for the second answer. Measured on a Samsung M8 after a full start: the launcher's page was there 8.6 s after power-on but its Home Screen only at 21.3 s, against 1.4 s for the same step when only the launcher restarts. Now the Home Screen uses the first answer. Not measured after a full start yet.

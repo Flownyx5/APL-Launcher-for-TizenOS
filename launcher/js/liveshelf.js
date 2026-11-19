@@ -309,7 +309,7 @@
         }, function () { return other; });
     }
     /* "★ 7.8 IMDb" (with a decimal comma in French and Polish) */
-    function noteOf(item) { return item.rating ? "★ " + item.rating.toFixed(1).replace(".", APL.lang === "fr" || APL.lang === "pl" ? "," : ".") + " " + (item.ratingFrom || "TMDB") : ""; }
+    function noteOf(item) { return item.rating ? "★ " + item.rating.toFixed(1).replace(".", APL.lang === "fr" || APL.lang === "pl" || APL.lang === "tr" ? "," : ".") + " " + (item.ratingFrom || "TMDB") : ""; }
     /* "★ 7.8 IMDb · 2025 · TV Show" */
     function metaOf(item) {
         var type = item.type === "tv" ? APL.t("TV Show") : item.type === "movie" ? APL.t("content|Movie") : item.type;
@@ -455,7 +455,7 @@
     /* Games: Steam top sellers in the screen's country (no key). Background = a screenshot of the game at
        1920×1080, title = the game's official logo (else its name). */
     var STEAM_CDN = "https://cdn.akamai.steamstatic.com/steam/apps/";
-    var STEAM_LANG = APL.lang === "fr" ? "french" : APL.lang === "pl" ? "polish" : "english";       // language of the genres
+    var STEAM_LANG = APL.lang === "fr" ? "french" : APL.lang === "pl" ? "polish" : APL.lang === "tr" ? "turkish" : "english";       // language of the genres
     function games() {
         return getJson("https://store.steampowered.com/api/featuredcategories?cc=" + REGION + "&l=" + STEAM_LANG).then(function (j) {
             var seen = {}, list = [];

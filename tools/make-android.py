@@ -113,7 +113,7 @@ open(os.path.join(app_dir, "js", "build.js"), "w", encoding="utf-8", newline="\n
 # The Android layer, and the Control Center over the apps with the few modules it needs
 shutil.copy2(os.path.join(WEB, "android.js"), os.path.join(app_dir, "js", "android.js"))
 shutil.copy2(os.path.join(WEB, "android.css"), os.path.join(app_dir, "css", "android.css"))
-CC = ["js/lang-fr.js", "js/lang-ms.js", "js/lang-pl.js", "js/i18n.js", "js/system.js", "js/icons.js", "js/navigation.js"] + \
+CC = ["js/lang-fr.js", "js/lang-ms.js", "js/lang-pl.js", "js/lang-tr.js", "js/i18n.js", "js/system.js", "js/icons.js", "js/navigation.js"] + \
      (["js/avatars.local.js"] if have_avatars else []) + ["js/profiles.js", "js/controlcenter.js", "js/android.js"]
 for s in CC:
     if not os.path.exists(os.path.join(app_dir, s)):
