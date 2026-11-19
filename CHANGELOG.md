@@ -1,5 +1,8 @@
 # Changelog
 
+## Next version (not released yet)
+- **Turkish on Android TV too** (#67). The 85 texts only Android TV shows (its Settings tab, the Home Button, Play Next) were in a table of their own with French and Polish only: they are in Turkish now. Found by goldsnow3.
+
 ## 1.3.5
 - **Smoother moves along the dock** (#67, #55). At each step, the glass under the dock was made again from the new picture, and the whole dock was then drawn again by the screen's processor. Now the picture is decoded away from the launcher, and every screen uses the glass made for LG: the picture is a layer of its own that the graphics chip enlarges, so the dock is no longer drawn again. Measured on a Samsung M8 over 20 steps: half the frames took 50 ms or more, now 17 ms (60 frames a second), and the longest from 1.2 s to 0.45 s. A few slower frames remain when the big picture changes.
 
