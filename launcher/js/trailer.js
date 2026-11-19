@@ -213,7 +213,11 @@
             heard = true;
             /* 1 is playing, 3 is buffering: the player has left its thumbnail in
                both, so its play button is gone. */
-            var state = d.info !== undefined ? d.info : (d.infoDelivery && d.infoDelivery.playerState);
+            /* onStateChange gives the state as a number; infoDelivery as info.playerState (the M8 only ever
+               sent the second, so the video played unseen behind the picture until the fallback) */
+            var state = typeof d.info === "number" ? d.info
+                      : (d.info && typeof d.info === "object" && d.info.playerState !== undefined) ? d.info.playerState
+                      : (d.infoDelivery && d.infoDelivery.playerState);
             if ((state === 1 || state === 3) && (d.event === "onStateChange" || d.event === "infoDelivery")) revealTrailer();
         });
     }

@@ -1,5 +1,8 @@
 # Changelog
 
+## Next version (not released yet)
+- **Trailers show as soon as they play.** The player says "playing" in two ways, and the launcher only understood one: on a Samsung M8 it only ever used the other, so the video played unseen behind the picture until the launcher gave up waiting and showed it anyway. Its relay page also passed the player's answers on only when the screen said which frame they came from, which the M8 doesn't. Tried on a Samsung M8 after reinstalling 1.3.7 with Setup: the trailer plays and comes in by itself.
+
 ## 1.3.7
 - **Trailers on Android TV and Google TV** (#56). YouTube's player answered with its error 153 ("video player configuration error"): the launcher runs from a file inside the app, which gives the player no address to say where it is, and YouTube now refuses that. The player now goes through a small relay page with an https address (served by the app on Android, by GitHub Pages for Samsung and LG). Tried in the Android TV emulator: error 153 before, the trailer playing after. Needs the new APK.
 - **Trailers on Samsung: the reason they never played.** The screen left every frame from another site empty, YouTube's own player included: the package lacked Tizen's permission for it (allow-navigation). It is in the package now, and takes effect once APL Launcher Setup installs it again. Not tried on a screen yet.
