@@ -185,6 +185,11 @@
        listener used to take a message with no source from anywhere, so any page
        loaded in this window could have spoken for the trailer. */
     var YT_ORIGINS = { "https://www.youtube.com": 1, "https://www.youtube-nocookie.com": 1 };
+    /* Android: the player is loaded through the app's own relay page (android/web/yt.html), which has an https
+       origin; its messages then come from that page (#56: YouTube's error 153 from file://). */
+    var RELAY = APL.platform && APL.platform.trailerRelay ? String(APL.platform.trailerRelay) : "";
+    var RELAY_ORIGIN = (/^https:\/\/[^\/]+/.exec(RELAY) || [""])[0];
+    if (RELAY_ORIGIN) YT_ORIGINS[RELAY_ORIGIN] = 1;
     if (global.addEventListener) {
         global.addEventListener("message", function (e) {
             if (!box || !e) return;
@@ -237,10 +242,11 @@
                which is what the handshake needs. Given one it cannot reach (that
                file://, or a fallback of www.youtube.com), every trailer sat here
                until this attempt timed out before the plain frame came. */
-            var origin = String(global.location.origin || "");
+            var origin = RELAY_ORIGIN || String(global.location.origin || "");
             if (/^https?:/i.test(origin)) q += "&origin=" + encodeURIComponent(origin);
         }
-        return "https://" + hostname + "/embed/" + encodeURIComponent(id) + q;
+        var url = "https://" + hostname + "/embed/" + encodeURIComponent(id) + q;
+        return RELAY ? RELAY + "?u=" + encodeURIComponent(url) : url;
     }
 
     function frameOf() {

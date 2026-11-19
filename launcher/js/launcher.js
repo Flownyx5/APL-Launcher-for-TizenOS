@@ -1211,7 +1211,7 @@
            fetched. While the arrows move the line stays empty; it fills once
            they rest, on the title that is actually on the wall. */
         clearTimeout(shelfInfo._logo);
-        if (!item.logo && item.title && item.type) {
+        if (!item.logo && item.title && (item.type || item.cw)) {      // Continue Watching too (#56)
             var want = item.title, wantYear = item.year || "";
             shelfInfo._logo = setTimeout(function () { logoOf(want, wantYear); },
                 (Date.now() - stepAt) < 1500 ? 420 : 0);

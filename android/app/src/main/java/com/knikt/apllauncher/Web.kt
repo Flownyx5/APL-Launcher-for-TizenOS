@@ -95,6 +95,9 @@ object Web {
             // The apps' icons and banners (AppList.kt), from the app's own folder
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val u = request.url
+                // The trailer's relay page (android/web/yt.html), at an https address so YouTube's player has an origin (#56)
+                if (u.host == "apl.app" && u.path == "/yt.html")
+                    return WebResourceResponse("text/html", "utf-8", 200, "OK", mapOf("Cache-Control" to "no-cache"), ctx.assets.open("app/yt.html"))
                 if (u.host != "apl.apps") return null
                 val name = u.lastPathSegment ?: return null
                 val f = File(File(ctx.filesDir, "apps"), name)

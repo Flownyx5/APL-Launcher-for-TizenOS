@@ -43,7 +43,7 @@
     })();
     var KEYS = global.APL_KEYS;
     var TTL = 6 * 3600 * 1000;
-    var CACHE_VERSION = 6;              // 3: movies and series carry their title and their rating; 4: Smart Hub items their deep link; 5: "tv" / "movie", translated when shown; 6: all audiences only on LG
+    var CACHE_VERSION = 7;              // 7: films and series carry their overview (#56: kept 6 h, it never showed after 1.3.6); 3: movies and series carry their title and their rating; 4: Smart Hub items their deep link; 5: "tv" / "movie", translated when shown; 6: all audiences only on LG
     var MIN_VOTES = 20;                 // below that, a rating doesn't mean anything yet
 
     /* The screen's country, for trending videos, charts, prices and what each service streams there.
@@ -749,7 +749,12 @@
         return { id: "cw-" + app.id, ttl: 1, load: function () {
             return APL.widgets.cardsFor(app.id).then(function (cards) {
                 var items = (cards || []).filter(function (c) { return c.kind === "video" && c.image; }).map(wallItem);
-                return items.length ? items : other ? other.load() : null;
+                if (!other) return items.length ? items : null;
+                /* Then the app's usual Top Shelf (What's Popular), ◀ ▶ going on from one to the other (#56) */
+                return Promise.resolve(other.load()).catch(function () { return null; }).then(function (rest) {
+                    var all = items.concat(rest || []);
+                    return all.length ? all : null;
+                });
             });
         } };
     }

@@ -678,6 +678,7 @@
     var homeName = String(B.systemHomeName() || "") || T("Home Screen of the device");
     APL.platform = {
         name: "android",
+        trailerRelay: "https://apl.app/yt.html",     // the trailer through a page with an https origin (yt.html, Web.kt; #56)
         /* An app opened with one piece of data (APL TV from the Top Shelf: resume / channel), as an Intent extra */
         launch: function (id, params) {
             var key = Object.keys(params || {})[0];
