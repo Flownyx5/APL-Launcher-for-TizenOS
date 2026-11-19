@@ -56,7 +56,10 @@
        GPU), and the shade over it is a plain layer whose opacity is the shade. A pane made again for each
        picture had the whole surface repainted with it: on a G5 drawing in 4K the clock pill alone took
        25 ms of GPU each time (blurred shadows, masked rim), the dock 12. */
-    var DIRECT = !!(APL.platform && APL.platform.directGlass);
+    /* Every screen since 1.3.5. On a Samsung M8 the old pane had the whole dock (1836 x 225) rastered again at
+       each step, 0.47 s of the screen's processor a step (a trace of 10 steps: 4.65 s); with the direct panes the
+       median frame went from 33 to 17 ms. Google TV (#67) and an LG C2 (#55) reported the same slowness. */
+    var DIRECT = true;
     /* Its picture is made at half the size, 240 x 135, without a canvas filter, and encoded away from the
        animation (toBlob): the 480 x 270 JPEG of toDataURL took 20 ms at rest on a G5, and 110 to 140 ms
        each while the focus moved along the dock, six times in a first pass. The picture is a 48 x 27
@@ -357,7 +360,7 @@
             function bake(from) {
                 try {
                     if (DIRECT) drawDirect(from, withPane);
-                    else drawDirect(from, withPane, BAKE_W, BAKE_H);
+                    else drawDirect(from, withPane, DIRECT_W, DIRECT_H);      // 240 x 135: the toBlob of 480 x 270 still took 35 ms a step on an M8
                 } catch (e) { withPane(""); }
             }
             /* Reading the 1080p picture into the sample decoded it again on the page's own thread, the one

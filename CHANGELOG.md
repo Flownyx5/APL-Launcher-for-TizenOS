@@ -1,7 +1,7 @@
 # Changelog
 
 ## Next version (not released yet)
-- **Smoother moves along the dock** (#67, #55). At each step, the glass under the dock was made again from the new picture: the 1080p picture was decoded a second time on the launcher's own thread, then filtered and encoded there, while the focus moved. Now the screen decodes and shrinks it away from the launcher, and Samsung and Android TV use LG's lighter way of making the glass. In the PC preview slowed six times, 20 steps along the dock went from 2.2 s of that work to 0.06 s, and the longest pause from 600 to 317 ms. Not tried on a TV yet.
+- **Smoother moves along the dock** (#67, #55). At each step, the glass under the dock was made again from the new picture, and the whole dock was then drawn again by the screen's processor. Now the picture is decoded away from the launcher, and every screen uses the glass made for LG: the picture is a layer of its own that the graphics chip enlarges, so the dock is no longer drawn again. Measured on a Samsung M8 over 20 steps: half the frames took 50 ms or more, now 17 ms (60 frames a second), and the longest from 1.2 s to 0.45 s. A few slower frames remain when the big picture changes.
 
 ## 1.3.4
 - **The Home Screen 10 s sooner after a full start** (#66). After a power cut or a full restart, the screen takes 8 to 9 s to give its list of apps, and the Home Screen waited for it on a black screen. The launcher now keeps the list and starts the Home Screen from the last one at once, then builds it again only if an app was installed or removed meanwhile. Measured on a Samsung M8 after a power cut: the Home Screen ready about 10 s after power-on, against 19 to 21 s before.
