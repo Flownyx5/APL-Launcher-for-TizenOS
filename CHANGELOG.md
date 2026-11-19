@@ -1,6 +1,6 @@
 # Changelog
 
-## Next version (not released yet)
+## 1.3.6
 - **Continue Watching in full screen** (#56, #66). *Settings › Appearance › Top Shelf › Continue Watching*: Cards (as before), Full Screen or Off. In Full Screen, what you were watching in Stremio, Nuvio, APL TV or an IPTV app is the Top Shelf picture itself, with its episode and the time left, ◀ ▶ go through them in full screen and OK resumes it. Off keeps your Top Shelf or wallpaper with no cards over it. Tried on a Samsung M8 with Stremio.
 - **A short description in full screen** (#56). Under the title of a film or series, the start of its TMDB summary, three lines at most. Tried in the PC preview.
 - **Turkish on Android TV too** (#67). The 85 texts only Android TV shows (its Settings tab, the Home Button, Play Next) were in a table of their own with French and Polish only: they are in Turkish now. Found by goldsnow3.
