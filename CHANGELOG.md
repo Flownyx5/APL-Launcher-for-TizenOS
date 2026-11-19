@@ -1,7 +1,10 @@
 # Changelog
 
-## Next version (not released yet)
-- **Trailers on Android TV and Google TV** (#56). YouTube's player answered with its error 153 ("video player configuration error"): the launcher runs from a file inside the app, which gives the player no address to say where it is, and YouTube now refuses that. The player now goes through a small page the app serves at an https address, which passes its messages on. Tried in the Android TV emulator: error 153 before, the trailer playing after. Needs the new APK.
+## 1.3.7
+- **Trailers on Android TV and Google TV** (#56). YouTube's player answered with its error 153 ("video player configuration error"): the launcher runs from a file inside the app, which gives the player no address to say where it is, and YouTube now refuses that. The player now goes through a small relay page with an https address (served by the app on Android, by GitHub Pages for Samsung and LG). Tried in the Android TV emulator: error 153 before, the trailer playing after. Needs the new APK.
+- **Trailers on Samsung: the reason they never played.** The screen left every frame from another site empty, YouTube's own player included: the package lacked Tizen's permission for it (allow-navigation). It is in the package now, and takes effect once APL Launcher Setup installs it again. Not tried on a screen yet.
+- **Trailers as on Apple TV.** The video comes in a moment after it starts, once the player's title strip has gone, leaves a moment before its end instead of over YouTube's end screen, and asks for HD.
+- **Full-size pictures for Continue Watching in full screen**: 1280 px wide (TMDB's original on a 4K screen) instead of the cards' 780.
 - **Continue Watching, then What's Popular** (#56). In full screen, ▶ goes on from the last title you were watching to the app's popular films and series. Tried on a Samsung M8 with Stremio: its six titles, then eight popular ones.
 - **The film or series logo in Continue Watching** (#56), fetched from TMDB when the picture has no title drawn on it.
 - **The description now shows** (#56). The Top Shelf kept its films for six hours, from before 1.3.6, without their summary: they are fetched again. Tried on a Samsung M8.
