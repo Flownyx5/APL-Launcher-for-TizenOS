@@ -1,0 +1,8 @@
+#!/bin/sh
+# Boot hook (/var/lib/webosbrew/init.d, run-parts by Homebrew Channel):
+# runs apl-services-stop.sh 25 s after boot, so LG's own home has finished its own startup first.
+# Pause: touch /media/developer/apl-debloat/OFF, or OFF-services for this one only.
+[ -e /media/developer/apl-debloat/OFF ] && exit 0
+[ -e /media/developer/apl-debloat/OFF-services ] && exit 0
+(sleep 25; sh /media/developer/apl-debloat/apl-services-stop.sh) </dev/null >/dev/null 2>&1 &
+exit 0

@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title></title>
+<!-- APL Launcher (webos/root/bin/apl-noload.sh): this app is one you don't use, so it never opens. This blank
+     page covers its start page in RAM and closes at once. apl-noload-undo.sh gives the app back. -->
+<style>html, body { margin: 0; height: 100%; background: transparent; }</style>
+</head>
+<body>
+<script>
+try { window.close(); } catch (e) {}
+setTimeout(function () { try { window.close(); } catch (e) {} }, 300);
+</script>
+</body>
+</html>

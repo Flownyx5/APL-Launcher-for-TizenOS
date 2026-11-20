@@ -48,7 +48,7 @@
     }
 
     /* Tint: 15 is neutral, below it more green, above it more red. */
-    function tintText(v) { return v === 15 ? "0/0" : v < 15 ? APL.t("G{n}", { n: 15 - v }) : "R" + (v - 15); }
+    function tintText(v) { return v === 15 ? "0/0" : v < 15 ? APL.t("G{n}", { n: 15 - v }) : APL.t("tint|R{n}", { n: v - 15 }); }
     function signed(v) { return v > 0 ? "+" + v : String(v); }
     function balanceText(v) { return v === 10 ? APL.t("Center") : v < 10 ? APL.t("L{n}", { n: 10 - v }) : APL.t("R{n}", { n: v - 10 }); }
     function eqText(v) { return signed((v - 50) / 10); }
@@ -82,12 +82,21 @@
                 menu(APL.t("Top Shelf"), "photo", [
                     toggle(APL.t("What You're Watching"), "hubShelf",
                         APL.t("Continue Watching from Plex, your Spotify mixes… for the apps that share them with Samsung's home screen.")),
+                    choice(APL.t("Continue Watching"), "continueStyle",
+                        [["cards", APL.t("Cards")], ["wall", APL.t("Full Screen")], ["off", APL.t("Off")]],
+                        APL.t("What you were watching in Stremio, Nuvio, APL TV and the IPTV apps: as cards over the Top Shelf, in full screen on the wall (◀ ▶ through them, OK to resume), or not at all.")),
                     toggle(APL.t("What's Popular"), "liveShelf",
                         APL.t("Trending films, series and videos on each service, top albums, games, sports. Films and series need a TMDB key, videos a YouTube key (see Online Services).")),
                     choice(APL.t("Otherwise"), "shelfArt",
-                        [["sheets", APL.t("Sheets of Light")], ["logo", APL.t("Large Logo")], ["black", APL.t("Black")]],
-                        APL.t("Apps with their own artwork keep it (YouTube, Netflix, Steam…). For the others: soft sheets of light in their colors, or their logo on a halo of their color. Black: plain dark behind every app, artwork included."),
+                        [["sheets", APL.t("Sheets of Light")], ["logo", APL.t("Large Logo")], ["wall", APL.t("Wallpaper")], ["black", APL.t("Black")]],
+                        APL.t("Apps with their own artwork keep it (YouTube, Netflix, Steam…). For the others: soft sheets of light in their colors, or their logo on a halo of their color. Wallpaper: the one chosen below behind every app. Black: plain dark behind every app, artwork included."),
                         function () { if (APL.restyleArt) APL.restyleArt(); }),
+                    /* One picture or gradient behind every app (genart.js APL.wallpapers): choosing one turns
+                       Otherwise to Wallpaper */
+                    choice(APL.t("Wallpaper"), "shelfWall",
+                        (APL.wallpapers ? APL.wallpapers.list() : []).map(function (w) { return [w.id, w.name]; }),
+                        APL.t("Behind every app, instead of their pictures: a drawn backdrop, your own pictures (added with install-via-vetro.py --backdrops) or a colour gradient."),
+                        function () { APL.sys.setPref("shelfArt", "wall"); if (APL.restyleArt) APL.restyleArt(); }),
                     menu(APL.t("Online Services"), "globe", [
                         info(APL.t("TMDB Key"), function () { return APL.live && APL.live.keys().tmdb ? APL.t("Configured") : APL.t("Missing"); },
                             APL.t("Films and series in What's Popular. Set it in APL Launcher Setup.")),
@@ -102,9 +111,16 @@
                     APL.t("Automatic: the screen times each key press and lightens the effects if it is slow (lighter from the start on screens before 2022). Light Effects: short movements, no shadows that move. Minimal Effects: nothing animates on a key.")),
                 toggle(APL.t("Liquid Glass"), "liquidGlass", APL.t("Glass panes under the dock, the clock and Control Center, cut from the picture behind. Off by default on screens before 2022, where it slowed down every key.")),
                 toggle(APL.t("Visual Effects"), "visualEffects", APL.t("Blur and glass. Prettier but slower: off by default so the screen stays smooth.")),
-                toggle(APL.t("Dynamic Backdrops"), "cleanFrameBackdrops",
-                    APL.t("A film or series that service streams right now, on the apps that have nothing of their own to show: the storefront's trending list for your country (JustWatch, no key). Apps with a Top Shelf keep it - What You're Watching, What's Popular, Plex, Spotify and the players' Continue Watching come first.")),
-                toggle(APL.t("Slow Background Motion"), "bgMotion", APL.t("A slow camera move over the Home Screen images. Pretty, but it keeps the screen very busy and slows everything else down."))
+                toggle(APL.t("Trailers in Full Screen"), "trailers",
+                    APL.t("A muted trailer of the title on the wall, two seconds after ▲, in full screen. Needs a TMDB key. Nothing is fetched while you browse.")),
+                toggle(APL.t("Slow Background Motion"), "bgMotion", APL.t("A slow camera move over the Home Screen images. Pretty, but it keeps the screen very busy and slows everything else down.")),
+                /* The weather in the clock pill (weather.js), for a city typed with the screen's keyboard */
+                menu(APL.t("Weather"), "sun", [
+                    toggle(APL.t("Show the Weather"), "weather", APL.t("The temperature and the sky next to the clock, from Open-Meteo (no key, no account).")),
+                    info(APL.t("City"), function () { var p = APL.weather && APL.weather.place(); return p ? p.name + (p.region ? ", " + p.region.split(", ").pop() : "") : APL.t("No city yet"); }),   // the city and its country: the region did not fit (M8)
+                    action(APL.t("Choose the City"), function () { if (APL.weather) APL.weather.pickCity(); },
+                        APL.t("Type the city with the screen's keyboard, then pick it in the list."), "search")
+                ], APL.t("The weather next to the clock."))
             ], APL.t("Theme, Top Shelf, visual effects.")),
 
             /* -------- Home Screen -------- */
@@ -137,6 +153,8 @@
                     APL.t("What the play/pause button does while an app is in front: open the Control Center over it, or play and pause in the app. On the Home Screen it always opens the Control Center, and holding Home opens it everywhere.")),
                 vetro(action(APL.t("Set Up the Remote Buttons"), function () { APL.overlay.setUpButtons(); },
                     APL.t("Sends Home and ⏯ to APL Launcher in Vetro, as APL Launcher Setup does. For a launcher installed from a phone with Apps2Samsung, or when Home opens Samsung's home again."), "remote")),
+                vetro(action(APL.t("Give Home Back to Samsung"), function () { APL.overlay.giveHomeBack(); },
+                    APL.t("Home opens Samsung's home again and the screen starts as before. APL Launcher stays installed, and Set Up the Remote Buttons brings it back."), "reset")),
                 vetro(action(APL.t("Alexa on the Microphone Button"), function () { APL.settings.close(); APL.services.alexaMic(); },
                     APL.t("Do this once: in the Voice menu, choose Amazon Alexa and sign in to your Amazon account. Then hold the microphone button on the remote and talk to Alexa."), "mic")),
                 toggle("Alexa (Echo Dot)", "alexaBridge", APL.t("Say “Alexa, discover my devices” once. Then: “Alexa, turn on TizenTube”, “Alexa, turn off the screen”, “Alexa, turn on the AirPods”, “Alexa, turn on game mode”.")),
@@ -266,6 +284,12 @@
                     APL.toast(APL.t("Searching for artwork in the background…"), true);
                 }, APL.t("Clears the artwork found and searches again for all apps."), "reset"),
                 info(APL.t("Installed Apps"), function () { return String(apps.length); }),
+                action(APL.t("Home Assistant"), function () {
+                    APL.settings.close();
+                    if (APL.ha && APL.ha.connect) APL.ha.connect();
+                    else if (APL.ha) APL.ha.open();
+                },
+                    APL.t("Adds a Home app. Paste a long-lived access token into the connect screen once, on the TV (Profile, Security, Long-lived access tokens), and the tile opens it from then on. Nothing to set on the PC.")),
                 vetro(toggle(APL.t("Close Unused Apps"), "idleClose",
                     APL.t("An app left in the background for more than 10 minutes closes on its own, TizenTube included: the screen keeps its memory and stays smooth. The app in front is never closed, nor are the Home Screen, the TV inputs and AirPlay."))),
                 vetro(action(APL.t("Free Up Memory"), function () { APL.freeMemory(); },
@@ -274,7 +298,7 @@
 
             /* -------- General & Privacy -------- */
             menu(APL.t("General & Privacy"), "sliders", [
-                choice(APL.t("Language"), "language", [["auto", APL.t("Automatic")], ["en", "English"], ["fr", "Français"]],
+                choice(APL.t("Language"), "language", [["auto", APL.t("Automatic")], ["en", "English"], ["fr", "Français"], ["ms", "Bahasa Melayu"], ["pl", "Polski"], ["tr", "Türkçe"]],
                     APL.t("Automatic follows the screen's language. The launcher restarts to apply it."),
                     function (v) { if (v !== language) setTimeout(function () { global.location.reload(); }, 400); }),
                 toggle(APL.t("24-Hour Time"), "clock24", APL.t("Time format on the Home Screen and in Control Center.")),
@@ -341,17 +365,10 @@
                     action(APL.t("Go Back to the Installed Version"), function () { if (APL.updater) APL.updater.reset(); },
                         APL.t("Forgets the downloaded updates and goes back to the version installed by APL Launcher Setup."), "reset")
                 ], APL.t("Automatic updates from GitHub.")),
-                action(APL.t("Support APL Launcher"), function () {
-                    var page = "https://ko-fi.com/knikt", qr = document.createElement("div");
-                    qr.className = "aplalert__qr";
-                    if (APL.qr) qr.appendChild(APL.qr.canvas(page, 360));
-                    var url = document.createElement("div");
-                    url.className = "aplalert__qrurl";
-                    url.textContent = page.replace(/^https?:\/\//, "");
-                    qr.appendChild(url);
-                    APL.alert({ title: APL.t("Support APL Launcher"), message: APL.t("Scan the code with your phone's camera. Thank you!"),
-                                node: qr, buttons: [{ label: APL.t("OK") }] });
-                }, APL.t("APL Launcher is free and made by one person. If you like it, you can buy me a coffee on Ko-fi: OK shows a code to scan with your phone."), "sparkle"),
+                action(APL.t("Support APL Launcher"), function () { APL.showSupport(); },
+                    APL.t("APL Launcher is free and made by one person. If you like it, you can buy me a coffee on Ko-fi: OK shows a code to scan with your phone."), "sparkle"),
+                toggle(APL.t("Reminder at Start-Up"), "supportReminder",
+                    APL.t("After each full start of the screen, the Ko-fi code shows once over the Home Screen. Back or OK closes it.")),
                 menu(APL.t("About This Screen"), "info", [
                     info(APL.t("Name"), function () { return sys.product().name; }),
                     info(APL.t("Model"), function () { return sys.product().model; }),

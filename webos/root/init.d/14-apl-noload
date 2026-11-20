@@ -1,0 +1,17 @@
+#!/bin/sh
+# Boot hook (/var/lib/webosbrew/init.d, run-parts by the Homebrew Channel): the apps you don't use never open,
+# even when the TV preloads them (LG Channels): bin/apl-noload.sh, with the list in noload.list.
+# In the background: it waits for LG to mount its own apps (they are not there yet when the hooks run), then
+# looks again every 10 minutes (LG mounts an app again when it updates it). A grep and a cmp each time.
+# Pause: touch /media/developer/apl-debloat/OFF-noload (or OFF for the whole debloat).
+[ -e /media/developer/apl-debloat/OFF ] && exit 0
+[ -e /media/developer/apl-debloat/OFF-noload ] && exit 0
+[ -r /media/developer/apl-debloat/apl-noload.sh ] || exit 0
+if [ -f /tmp/apl-noload.pid ] && kill -0 "$(cat /tmp/apl-noload.pid)" 2>/dev/null; then exit 0; fi
+nohup sh -c 'echo $$ > /tmp/apl-noload.pid
+             sh /media/developer/apl-debloat/apl-noload.sh wait
+             while sleep 600; do
+                 [ -e /media/developer/apl-debloat/OFF-noload ] && exit 0
+                 sh /media/developer/apl-debloat/apl-noload.sh
+             done' </dev/null >/dev/null 2>&1 &
+exit 0

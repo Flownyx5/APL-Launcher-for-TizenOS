@@ -4,7 +4,8 @@
 #  2. saves the TMDB (and YouTube) key if you have one
 #  3. finds your Samsung certificate
 #  4. builds the launcher
-#  5. installs the launcher and APL Overlay on the screen (through Vetro), and opens the launcher;
+#  5. installs the launcher and APL Overlay on the screen (through Vetro), and opens the launcher
+#     (on Tizen 6, as two packages: the launcher, then APL Overlay on its own);
 #     with -AplTv (or a yes), APL TV too, the IPTV player in the launcher's style
 #  Nothing else is installed.
 # ============================================================
@@ -13,6 +14,7 @@ param(
     [string]$Tmdb, [string]$YouTube, [string]$Fanart,
     [string]$Sites,       # websites as apps: JSON [{"name":"…","url":"https://…"}], or that JSON in base64
     [switch]$AplTv,       # also installs APL TV, the IPTV player (06-install-apltv.ps1)
+    [switch]$Tizen6Overlay, # fork: on Tizen 6, the original's pair (.NET bridge + APL Overlay) instead of the web bridge
     [switch]$Unattended,  # started by APL Launcher Setup: no questions
     [switch]$CheckOnly    # only says what this PC has (APL-CHECK); changes nothing
 )
@@ -45,7 +47,7 @@ if (-not $Quiet) { Clear-Host }
 Write-Host ""
 Write-Host "  ==============================================" -ForegroundColor White
 Write-Host (Tr "        APL Launcher - install on the screen" "        APL Launcher - installation sur l'écran") -ForegroundColor White
-Write-Host (Tr "        (installer version 23)" "        (installateur version 23)") -ForegroundColor DarkGray
+Write-Host (Tr "        (installer version 24)" "        (installateur version 24)") -ForegroundColor DarkGray
 Write-Host "  ==============================================" -ForegroundColor White
 Write-Host (Tr "  The screen must be on, on the same Wi-Fi as this PC." "  L'écran doit être allumé, sur le même Wi-Fi que ce PC.")
 
@@ -421,17 +423,34 @@ Write-Host (Tr "        Profile: $signProfile" "        Profil : $signProfile") 
 
 # ---------- 4. build ----------
 Step 4 (Tr "Building the launcher…" "Compilation du launcher…")
-# Tizen 6.x: the full package's .NET apps (APL Overlay, the bridge, the start-up service) don't run there, and
-# the launcher reaches Vetro through that bridge (The Frame 2022, issue #21): the launcher's own package then,
-# with its web bridge. Without APL Overlay the launcher keeps Home and gives the other buttons back to Samsung.
+# Tizen 6.x: in the full package, opening the launcher starts APL Overlay instead (#10, #21). There the launcher
+# (with the .NET bridge and the start-up service built for Tizen 6) and APL Overlay come as two packages, one
+# pair for 6.0 and one for 6.5 (03-build-launcher.ps1 -Tizen6). Older screens, or a Tizen 6 whose version can't
+# be told, get the launcher's own package, with its web bridge: without APL Overlay the launcher keeps Home and
+# gives the other buttons back to Samsung. Tizen 7 and newer: the full package, as always.
 $webOnly = $false
+$tizen6 = ""
 if (Test-Vetro $TvIp) {
     $platform = Get-ScreenPlatform "http://$TvIp`:$(Get-VetroPort)"
     if ($platform) {
-        $webOnly = ($platform.Tizen -ge 1 -and $platform.Tizen -lt 7) -or ($platform.Tizen -eq 0 -and -not $platform.DotNet6)
         $seen = if ($platform.Tizen) { "Tizen $($platform.Tizen)" } else { Tr "an unknown Tizen version" "une version de Tizen inconnue" }
-        if ($webOnly) {
-            Write-Host (Tr "        The screen runs $($seen): APL Overlay needs Tizen 7 or newer, so the launcher is installed on its own." "        L'écran est sous $seen : APL Overlay demande Tizen 7 ou plus, le launcher est donc installé seul.") -ForegroundColor Yellow
+        if ($platform.Tizen6 -and -not $Tizen6Overlay) {
+            # Fork: the launcher with its web bridge, as tried on a Q60A (Tizen 6.0): the bridge follows the remote in
+            # use, closes Samsung's Smart Hub bar, serves the phone remote. The original's pair (APL Overlay and a .NET
+            # bridge, not confirmed on Tizen 6.0) replaces that bridge: -Tizen6Overlay.
+            $webOnly = $true
+            Write-Host (Tr "        The screen runs Tizen $($platform.Tizen6): the launcher with its web bridge (APL Overlay for Tizen 6: install.ps1 -Tizen6Overlay)." "        L'écran est sous Tizen $($platform.Tizen6) : le launcher avec son pont web (APL Overlay pour Tizen 6 : install.ps1 -Tizen6Overlay).") -ForegroundColor Green
+        } elseif ($platform.Tizen6) {
+            $tizen6 = $platform.Tizen6
+            Write-Host (Tr "        The screen runs Tizen $($tizen6): the launcher and APL Overlay are installed as two packages, as Tizen 6 needs." "        L'écran est sous Tizen $tizen6 : le launcher et APL Overlay sont installés en deux paquets, comme Tizen 6 le demande.") -ForegroundColor Green
+        } else {
+            $webOnly = ($platform.Tizen -ge 1 -and $platform.Tizen -lt 7) -or ($platform.Tizen -eq 0 -and -not $platform.DotNet6)
+        }
+        if ($webOnly -and $platform.Tizen -eq 6 -and -not $platform.Tizen6) {
+            Write-Host (Tr "        The screen runs Tizen 6, but neither 6.0 nor 6.5 could be read: APL Overlay is made for one of them, so the launcher is installed on its own." "        L'écran est sous Tizen 6, mais ni 6.0 ni 6.5 n'a pu être lu : APL Overlay est fait pour l'un des deux, le launcher est donc installé seul.") -ForegroundColor Yellow
+            Write-Host (Tr "        Home, the Home Screen and the settings work; the Control Center over videos and Alexa need APL Overlay." "        Home, l'écran d'accueil et les réglages marchent ; le Centre de contrôle sur les vidéos et Alexa demandent APL Overlay.") -ForegroundColor Yellow
+        } elseif ($webOnly) {
+            Write-Host (Tr "        The screen runs $($seen): APL Overlay needs Tizen 6 or newer, so the launcher is installed on its own." "        L'écran est sous $seen : APL Overlay demande Tizen 6 ou plus, le launcher est donc installé seul.") -ForegroundColor Yellow
             Write-Host (Tr "        Home, the Home Screen and the settings work; the Control Center over videos and Alexa need APL Overlay." "        Home, l'écran d'accueil et les réglages marchent ; le Centre de contrôle sur les vidéos et Alexa demandent APL Overlay.") -ForegroundColor Yellow
         }
     }
@@ -442,12 +461,20 @@ if ($certPwdFile -and $signProfile -eq 'APLPartner') {
 }
 $sf = "$env:USERPROFILE\Downloads\sf-pro-display_2"
 try {
-    if (Test-Path $sf) { & "$PSScriptRoot\03-build-launcher.ps1" -ProfileName $signProfile -TizenCli $tizen -SfProDir $sf -WebOnly:$webOnly }
-    else { & "$PSScriptRoot\03-build-launcher.ps1" -ProfileName $signProfile -TizenCli $tizen -WebOnly:$webOnly }
+    if (Test-Path $sf) { & "$PSScriptRoot\03-build-launcher.ps1" -ProfileName $signProfile -TizenCli $tizen -SfProDir $sf -WebOnly:$webOnly -Tizen6 $tizen6 }
+    else { & "$PSScriptRoot\03-build-launcher.ps1" -ProfileName $signProfile -TizenCli $tizen -WebOnly:$webOnly -Tizen6 $tizen6 }
 } catch { Fail ((Tr "the build failed: " "la compilation a échoué : ") + $_.Exception.Message) }
 
 # An expired certificate signs without a word, then the screen refuses the package: say it here.
 $wgt = Join-Path $Root "dist\APL-Launcher.wgt"
+# Tizen 6: what 03-build-launcher.ps1 could make. No release with the pair yet: the launcher's own package. APL
+# Overlay not signed: the launcher's package without it.
+$overlayTpk = Join-Path $Root "dist\APL-Overlay.tpk"
+$pair = $false
+if ($tizen6) {
+    $pair = Test-Path -LiteralPath $overlayTpk
+    $webOnly = -not (Get-PackageInfo $wgt).Hybrid
+}
 $certEnd = Get-WgtCertExpiry $wgt
 if ($certEnd -and $certEnd -lt (Get-Date)) {
     $d = $certEnd.ToString((Tr 'yyyy-MM-dd' 'dd/MM/yyyy'))
@@ -461,8 +488,26 @@ if ($certEnd -and $certEnd -lt (Get-Date)) {
 Step 5 (Tr "Installing the launcher on the screen $TvIp…" "Installation du launcher sur l'écran $TvIp…")
 if (Test-Vetro $TvIp) {
     Write-Host (Tr "        Vetro is running on the screen: installing through Vetro (nothing to change on the screen)." "        Vetro est actif sur l'écran : installation par Vetro (rien à changer sur l'écran).")
-    try { Install-ViaVetro -Ip $TvIp -Wgt $wgt }
+    # Tizen 6: the launcher opens once APL Overlay is there too, so that it finds it and hands it its settings
+    try { Install-ViaVetro -Ip $TvIp -Wgt $wgt -NoLaunch:$pair }
     catch { Fail ((Tr "the installation failed: " "l'installation a échoué : ") + $_.Exception.Message) }
+    if ($pair) {
+        Write-Host (Tr "        APL Overlay, in its own package on Tizen 6…" "        APL Overlay, dans son propre paquet sur Tizen 6…")
+        try { Install-ViaVetro -Ip $TvIp -Wgt $overlayTpk -AppId "apl.launcher.overlay" -Name "APL Overlay" -NoLaunch }
+        catch {
+            # The launcher works without it. One installed before (a test build) is left in place and still used.
+            $why = $_.Exception.Message
+            $left = ""
+            try { $left = Invoke-VetroExec "http://$TvIp`:$(Get-VetroPort)" "pkgcmd -l 2>/dev/null | grep -cF '[apl.launcher.overlay]' || true" } catch {}
+            $pair = ($left.Trim() -split '\s+')[-1] -notin @('', '0')
+            if ($pair) { Write-Host ((Tr "        APL Overlay was not updated: " "        APL Overlay n'a pas été mis à jour : ") + $why + (Tr " The one already on the screen stays." " Celui déjà sur l'écran reste.")) -ForegroundColor DarkYellow }
+            else { Write-Host ((Tr "        APL Overlay was not installed: " "        APL Overlay n'a pas été installé : ") + $why + (Tr " The launcher works on its own." " Le launcher marche seul.")) -ForegroundColor DarkYellow }
+        }
+        try {
+            Invoke-RestMethod -Uri "http://$TvIp`:$(Get-VetroPort)/apps/launch" -Method Post -ContentType 'application/json' `
+                -Body (@{ appId = "APLauncher.Home" } | ConvertTo-Json -Compress) -TimeoutSec 25 | Out-Null
+        } catch {}
+    }
 } else {
     Write-Host (Tr "        Vetro is not responding: standard installation (developer mode)." "        Vetro ne répond pas : installation classique (mode développeur).") -ForegroundColor Yellow
     Write-Host (Tr "        Without Vetro, the launcher opens from the Apps menu, but the Home button, Control Center" "        Sans Vetro, le launcher s'ouvre depuis le menu Applis, mais la touche Home, le Centre de contrôle") -ForegroundColor Yellow
@@ -473,7 +518,7 @@ if (Test-Vetro $TvIp) {
     }
 }
 
-if ($webOnly) {
+if ($webOnly -or ($tizen6 -and -not $pair)) {
     # No APL Overlay: the launcher puts the Home rule back on itself at start-up and frees the other buttons
     # (launcher/js/overlay.js), also when this replaces a full package that had them.
     Write-Host (Tr "        Without APL Overlay: the launcher keeps the Home button itself." "        Sans APL Overlay : le launcher garde lui-même la touche Home.")

@@ -78,15 +78,16 @@ function Find-Tizen {
 }
 
 # The screen's IP address, remembered on this PC (no hard-coded value)
-function Get-SavedTvIp {
-    $f = Join-Path $env:APPDATA "APL-Launcher\tv-ip.txt"
+# One file per kind of TV: tv-ip.txt (Samsung), webos-ip.txt (LG), android-ip.txt
+function Get-SavedTvIp([string]$Name = "tv-ip.txt") {
+    $f = Join-Path $env:APPDATA "APL-Launcher\$Name"
     if (Test-Path $f) { return ([IO.File]::ReadAllText($f)).Trim() }
     return ""
 }
-function Save-TvIp([string]$Ip) {
+function Save-TvIp([string]$Ip, [string]$Name = "tv-ip.txt") {
     $d = Join-Path $env:APPDATA "APL-Launcher"
     New-Item -ItemType Directory -Force -Path $d | Out-Null
-    [IO.File]::WriteAllText((Join-Path $d "tv-ip.txt"), $Ip)
+    [IO.File]::WriteAllText((Join-Path $d $Name), $Ip)
 }
 
 function Test-TvIp {
@@ -179,15 +180,61 @@ function Get-VconfValue {
 # unknown) and whether .NET 6 or newer is there. APL Overlay, the .NET bridge and the start-up service of the
 # full package need it: on Tizen 6.5 (The Frame 2022, issue #21) they don't run, and with them goes everything
 # the launcher asks Vetro. $null when Vetro does not answer.
+# Tizen 6 gets its own two packages instead, one pair for 6.0 and one for 6.5 (tools/make-tizen6.py), and
+# info.ini says "Tizen6" on both (#10, #21). Tizen6 is then '6.0' or '6.5', from the platform version
+# (/etc/config/model-config.xml, else /etc/tizen-release), else from the TizenFX version the screen ships
+# (csapi-tv-tizenfx.version: its API level, 8 on 6.0 and 9 on 6.5; 12.x on Tizen 9); '' when it can't be told.
 function Get-ScreenPlatform {
     param([string]$Base)
     try {
         $o = Invoke-VetroExec $Base ("grep -o -E 'Tizen[0-9]+' /etc/info.ini 2>/dev/null | head -1; " +
-                                     "ls -d /usr/share/dotnet/shared/Microsoft.NETCore.App/[6-9].* /usr/share/dotnet/shared/Microsoft.NETCore.App/[1-9][0-9].* 2>/dev/null | head -1; true")
+                                     "ls -d /usr/share/dotnet/shared/Microsoft.NETCore.App/[6-9].* /usr/share/dotnet/shared/Microsoft.NETCore.App/[1-9][0-9].* 2>/dev/null | head -1; " +
+                                     "grep -o -E 'platform[.]version.{0,20}>[0-9]+[.][0-9]+' /etc/config/model-config.xml 2>/dev/null | head -1; " +
+                                     "sed -n 's/^VERSION *= */release /p' /etc/tizen-release 2>/dev/null | head -1; " +
+                                     "sed -n '1s/^/tizenfx /p' /usr/share/dotnet.tizen/framework/csapi-tv-tizenfx.version 2>/dev/null; true")
     } catch { return $null }
     $tizen = 0
     if ($o -match 'Tizen(\d+)') { $tizen = [int]$Matches[1] }
-    [pscustomobject]@{ Tizen = $tizen; DotNet6 = [bool]($o -match 'Microsoft\.NETCore\.App/\d') }
+    $version = ''
+    if ($o -match 'platform[.]version.{0,20}>(\d+\.\d+)') { $version = $Matches[1] }
+    elseif ($o -match '(?m)^release (\d+\.\d+)') { $version = $Matches[1] }
+    $tizen6 = ''
+    if ($tizen -eq 6 -or ($tizen -eq 0 -and $version -like '6.*')) {
+        if ($version -match '^6\.(\d+)$') { $tizen6 = if ([int]$Matches[1] -ge 5) { '6.5' } else { '6.0' } }
+        elseif ($o -match '(?m)^tizenfx ([89])\.') { $tizen6 = if ($Matches[1] -eq '9') { '6.5' } else { '6.0' } }
+    }
+    [pscustomobject]@{ Tizen = $tizen; DotNet6 = [bool]($o -match 'Microsoft\.NETCore\.App/\d'); Version = $version; Tizen6 = $tizen6 }
+}
+
+# What a .wgt or .tpk is: Type ('wgt' or 'tpk'), Package (its id), Version, Hybrid: a .wgt with .NET apps in it
+# (tizen-manifest.xml: the full package, or the Tizen 6 one), and Overlay: a .wgt with APL Overlay among its apps
+# (the full package, Tizen 7 and newer; not the Tizen 6 launcher package, nor the launcher alone).
+function Get-PackageInfo {
+    param([string]$Path)
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $text = @{}
+    $zip = [IO.Compression.ZipFile]::OpenRead($Path)
+    try {
+        foreach ($name in @('config.xml', 'tizen-manifest.xml')) {
+            $entry = $zip.GetEntry($name)
+            if (-not $entry) { continue }
+            $reader = New-Object IO.StreamReader($entry.Open())
+            try { $text[$name] = $reader.ReadToEnd() } finally { $reader.Close() }
+        }
+    } finally { $zip.Dispose() }
+    $config = $text['config.xml']; $manifest = $text['tizen-manifest.xml']
+    if ($config) {
+        $type = 'wgt'
+        $version = ([regex]::Match($config, '<widget[^>]*\sversion="([^"]+)"')).Groups[1].Value
+        $package = ([regex]::Match($config, '<tizen:application[^>]*\spackage="([^"]+)"')).Groups[1].Value
+    } elseif ($manifest) {
+        $type = 'tpk'
+        $version = ([regex]::Match($manifest, '<manifest[^>]*\sversion="([^"]+)"')).Groups[1].Value
+        $package = ([regex]::Match($manifest, '<manifest[^>]*\spackage="([^"]+)"')).Groups[1].Value
+    } else { throw (Tr "$Path is not a Tizen package (no config.xml, no tizen-manifest.xml)." "$Path n'est pas un paquet Tizen (pas de config.xml ni de tizen-manifest.xml).") }
+    $hybrid = [bool]($config -and $manifest)
+    $overlay = $hybrid -and $manifest -match 'appid="[^"]+\.Overlay"'
+    [pscustomobject]@{ Type = $type; Package = $package; Version = $version; Hybrid = $hybrid; Overlay = [bool]$overlay }
 }
 
 # "Start on APL Launcher" undone: when the launcher is the screen's home app (db/appfw/home_appid, opened at
@@ -233,20 +280,19 @@ function Get-WgtCertExpiry {
     return $null
 }
 
+# -Wgt: a .wgt, or a .tpk (APL Overlay on Tizen 6: -AppId apl.launcher.overlay, its package of the same id).
 function Install-ViaVetro {
     param([string]$Ip, [string]$Wgt, [string]$AppId = "APLauncher.Home", [string]$Name = "APL Launcher", [switch]$NoLaunch)
     $base = "http://$Ip`:$(Get-VetroPort)"
-    $tmp = "/tmp/apl-" + (($AppId -split '\.')[0]).ToLower() + ".wgt"
     # What the screen must show afterwards: an older package left in place still has the same id
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $zip = [IO.Compression.ZipFile]::OpenRead($Wgt)
-    try {
-        $reader = New-Object IO.StreamReader($zip.GetEntry('config.xml').Open())
-        $version = ([regex]::Match($reader.ReadToEnd(), '<widget[^>]*\sversion="([^"]+)"')).Groups[1].Value
-        $reader.Close()
-        $hybrid = [bool]$zip.GetEntry('tizen-manifest.xml')
-    } finally { $zip.Dispose() }
-    if (-not $version) { throw (Tr "$Wgt has no version in its config.xml." "$Wgt n'a pas de version dans son config.xml.") }
+    $info = Get-PackageInfo $Wgt
+    $type = $info.Type
+    $version = $info.Version
+    $hybrid = $info.Overlay   # APL Overlay inside the launcher's package: it must be listed too
+    # A .wgt's package is the start of its app id (APLauncher.Home); a .tpk's is in its manifest (apl.launcher.overlay)
+    $pkg = if ($type -eq 'tpk') { $info.Package } else { ($AppId -split '\.')[0] }
+    $tmp = "/tmp/apl-" + $pkg.ToLower() + "." + $type
+    if (-not $version -or -not $pkg) { throw (Tr "$Wgt has no version or package id." "$Wgt n'a pas de version ou d'identifiant de paquet.") }
     $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($Wgt))
     $chunk = 48000
     Invoke-VetroExec $base ": > $tmp.b64" | Out-Null
@@ -262,10 +308,11 @@ function Install-ViaVetro {
     if ($sum -notmatch $local) { throw (Tr "the package arrived damaged on the screen (different hash). Run the installation again." "le paquet est arrivé abîmé sur l'écran (empreinte différente). Relance l'installation.") }
     Write-Host (Tr "        Package copied to the screen and verified." "        Paquet copié sur l'écran et vérifié.") -ForegroundColor Green
 
-    # 1) Samsung's install command (root, synchronous): shows the real reason if it fails.
-    $pkg = ($AppId -split '\.')[0]
+    # 1) Samsung's install command (root, synchronous): shows the real reason if it fails. A .tpk's app is
+    #    stopped first, as APL Launcher Setup always did for APL Overlay's own package.
     $out = ""
-    try { $out = Invoke-VetroExec $base "pkgcmd -i -t wgt -p $tmp 2>&1; echo exit=`$?" 120 }
+    $stop = if ($type -eq 'tpk') { "app_launcher -k $AppId >/dev/null 2>&1; " } else { "" }
+    try { $out = Invoke-VetroExec $base "${stop}pkgcmd -i -t $type -p $tmp 2>&1; echo exit=`$?" 120 }
     catch { $out = (Tr "pkgcmd: " "pkgcmd : ") + $_.Exception.Message }
     Write-Host (Tr "        Response from the screen:" "        Réponse de l'écran :") -ForegroundColor DarkGray
     Write-Host ($out.Trim() -replace '(?m)^', '          ')

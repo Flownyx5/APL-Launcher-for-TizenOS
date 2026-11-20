@@ -1,0 +1,13 @@
+#!/bin/sh
+# Boot hook (/var/lib/webosbrew/init.d, run-parts by the Homebrew Channel):
+# gives APL Launcher's service root with the Homebrew Channel's own elevate-service, the way it does for
+# itself at every boot. Installing or updating the launcher writes the service's luna files back to normal:
+# this puts root back at the next start (or run it by hand right after an update).
+# With root the launcher reads and sets the picture settings and closes the apps left open (webos-system.js).
+# Pause: touch /media/developer/apl-debloat/OFF-root (the launcher keeps working without root).
+[ -e /media/developer/apl-debloat/OFF-root ] && exit 0
+E=/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service
+[ -x "$E" ] || exit 0
+[ -d /media/developer/apps/usr/palm/services/com.knikt.apllauncher.service ] || exit 0
+"$E" com.knikt.apllauncher.service </dev/null >/dev/null 2>&1
+exit 0

@@ -35,10 +35,27 @@ tools/art/.cache/
 launcher/js/keys.local.js
 # Avatars added by the installer (your Memoji, Apple's Memoji): never published
 launcher/js/avatars.local.js
-# Personal interface sounds (launcher/sounds/README.md): never published
-launcher/sounds/*.wav
 launcher/images/avatars/custom/
 launcher/images/avatars/memoji/
 
 # APL TV: personal keys and the dev marker are made at install time
 apltv/app/js/*.local.js
+# Python byte-code
+__pycache__/
+*.pyc
+# Tizen packages built or signed locally
+*.tpk
+# Android (tools/make-android.py): made at each build, and the signing keys
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/app/src/main/assets/
+android/app/src/main/res/mipmap-*/
+android/app/src/main/res/drawable/banner.png
+android/homebutton/build/
+android/homebutton/src/main/res/mipmap-*/
+android/homebutton/src/main/res/drawable/banner.png
+*.apk
+*.jks
+*.keystore

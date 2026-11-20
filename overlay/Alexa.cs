@@ -43,7 +43,7 @@ namespace APL
             devices.Clear();
             Add(Text.T("Screen"), "cmd:screen");
             Add(Text.T("Home"), "cmd:home");
-            Add(Text.T("Game Mode"), "cmd:game");
+            Add(Text.T("alexa|Game Mode"), "cmd:game");         // the name the Echo hears (Text.cs)
             Add("AirPods", "cmd:airpods");
             foreach (string entry in (list ?? "").Split(';'))
             {

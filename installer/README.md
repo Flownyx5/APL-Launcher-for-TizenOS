@@ -16,7 +16,7 @@ Output: `dist\APL Launcher Setup.exe` (`dist/` is not committed). The build:
 
 - compiles every `installer\*.cs` with Roslyn `csc.exe` against the .NET Framework 4.8 assemblies (no NuGet, no MSBuild project);
 - embeds every `installer\*.xaml` as a resource (loaded at run time with `XamlReader`), and `launcher\icon.png`;
-- zips the **git-tracked** files of `launcher/`, `scripts/`, `overlay/` and `LICENSE` into the exe (never keys, avatars or certificates). A new script must be added to git (`git add`) to be part of the build;
+- zips the **git-tracked** files of `launcher/`, `scripts/`, `overlay/`, `webos/` and `LICENSE` into the exe (never keys, avatars or certificates). A new script must be added to git (`git add`) to be part of the build;
 - makes the icon (16, 32, 48 and 256 px) from `launcher\icon.png`;
 - takes the version from `version="…"` on `<widget>` in `launcher\config.xml`.
 
@@ -45,7 +45,10 @@ The app starts `powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File 
 |---|---|
 | `Program.cs` | Entry point, arguments, `setup.log` |
 | `MainWindow.cs`, `MainWindow.xaml` | Window, sidebar, confirmation sheet, shared state |
-| `InstallPage.*`, `OptimizePage.*`, `RestorePage.*`, `ToolsPage.*`, `AboutPage.xaml` | The pages |
+| `PlatformPage.*` | The first page: Samsung, LG or Android TV, rooted or not (saved in `%APPDATA%\APL-Launcher\setup-platform.txt`) |
+| `InstallPage.*` | Install on Samsung (`install.ps1`) |
+| `DevicePage.*` | Install on LG (`install-webos.ps1`) or Android TV (`install-android.ps1`), one page for both |
+| `OptimizePage.*`, `RestorePage.*`, `ToolsPage.*`, `AboutPage.xaml` | The other pages (Optimize, Restore and Tools are for Samsung: they work through Vetro) |
 | `Styles.xaml` | Colors, fonts and the style of every control |
 | `ScriptRunner.cs` | Runs the scripts and parses their marker lines |
 | `Vetro.cs` | Vetro status check and the network scan (`GET /status` only) |

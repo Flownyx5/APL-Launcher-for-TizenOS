@@ -1,0 +1,6 @@
+/* APL Launcher on Android: the Control Center over the app in front (cc.html).
+   The page is transparent: the app shows around the panel, a little dimmed on the right as on tvOS. */
+html, body.android-cc { background: transparent !important; }
+.android-cc .cc__dim,
+.android-cc.perf .cc__dim { background: linear-gradient(270deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.28) 45%, rgba(0,0,0,0) 100%); }
+.android-cc.theme-light .cc__dim { background: linear-gradient(270deg, rgba(232,233,240,0.55) 0%, rgba(232,233,240,0.2) 45%, rgba(232,233,240,0) 100%); }

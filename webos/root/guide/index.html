@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Guide</title>
+<!-- LG's Guide (com.webos.app.livemenu) on a rooted TV, mounted in RAM by apl-home.sh: a see-through window over
+     the app in front (appinfo.json), so pressing Guide never blanks the screen. When the TV opens it, the
+     launcher's service closes it and opens the Control Center: drawn over the app (launcher/cc.html, in LG's
+     overlay app that apl-home.sh points to it, webos/root/cchost), or the launcher's own one over the launcher.
+     LG gives this app no luna of its own for a web page (its role is a native program's): nothing to do here
+     but close, in case the service isn't there. -->
+<style>html, body { margin: 0; height: 100%; background: transparent; }</style>
+</head>
+<body>
+<script>
+(function () {
+    "use strict";
+    function quit() { setTimeout(function () { try { window.close(); } catch (e) {} }, 1500); }
+    quit();
+    document.addEventListener("webOSRelaunch", quit);
+})();
+</script>
+</body>
+</html>

@@ -70,10 +70,62 @@ def collect_settings():
         if len(sites) >= 30:
             break
     keys["webApps"] = sites
+    ask_home_assistant(keys)
     return keys
 
 
-def create_configured_wgt(source, destination, settings):
+
+BACKDROP_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def ask_home_assistant(keys):
+    """Ask for the address and a token, so the TV never needs a keyboard.
+
+    A password cannot be used from a packaged app: signing in with one goes
+    through Home Assistant's login API, which a browser only lets a page read
+    when the server names that page's origin, and a widget has no origin to
+    name. A token is checked over the WebSocket, which is not subject to that.
+    """
+    url = input("Home Assistant address, e.g. http://192.168.1.10:8123 (Enter to skip): ").strip()
+    if not url:
+        return
+    parsed = urlsplit(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("Home Assistant address must be an http(s) URL without credentials")
+    token = getpass("Long-lived access token (Profile -> Security): ").strip()
+    if not token:
+        raise ValueError("A token is required: this package cannot sign in with a password")
+    keys["ha"] = {"url": url.rstrip("/"), "name": "Home", "token": token}
+
+
+def read_backdrops(directory):
+    """Pictures for the house, one per file, copied into the package.
+
+    A file called kitchen.jpg becomes a backdrop named "kitchen" that can then
+    be given to the Kitchen room on the TV. Nothing is resized here: pictures
+    are expected at 3840x2160 or thereabouts.
+    """
+    if not directory:
+        return {}, []
+    root = Path(directory)
+    if not root.is_dir():
+        raise ValueError("--backdrops must be a directory of pictures")
+    entries, meta = {}, []
+    for path in sorted(root.iterdir()):
+        if not path.is_file() or path.suffix.lower() not in BACKDROP_SUFFIXES:
+            continue
+        if path.stat().st_size > 8 * 1024 * 1024:
+            raise ValueError(f"{path.name} is larger than 8 MB")
+        safe = re.sub(r"[^A-Za-z0-9._-]", "-", path.name)
+        target = "res/wgt/images/backdrops/" + safe
+        entries[target] = path.read_bytes()
+        meta.append({"id": Path(safe).stem, "name": Path(safe).stem.replace("-", " "),
+                     "file": target[len("res/wgt/"):]})
+    return entries, meta
+
+
+def create_configured_wgt(source, destination, settings, extras=None):
+    extras = extras or {}
     with zipfile.ZipFile(source, "r") as original, zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as output:
         entries = original.namelist()
         config_path = "res/wgt/js/keys.local.js"
@@ -84,6 +136,8 @@ def create_configured_wgt(source, destination, settings):
                 output.writestr(entry, original.read(entry.filename))
         contents = "window.APL_KEYS = " + json.dumps(settings, ensure_ascii=False) + ";\n"
         output.writestr(config_path, contents.encode("utf-8"))
+        for name, data in extras.items():
+            output.writestr(name, data)
 
 
 def sign_package(source, destination, duid, signer):
@@ -102,6 +156,7 @@ def main():
     parser.add_argument("--vetro-port", type=int, default=8099, help="Vetro HTTP port (default: 8099)")
     parser.add_argument("--configure", action="store_true", help="Privately enter API keys and personal websites before signing and installing")
     parser.add_argument("--duid", help="TV DUID covered by the Partner certificate (required with --configure)")
+    parser.add_argument("--backdrops", help="Directory of pictures to offer as backdrops, copied into the package")
     parser.add_argument("--apps2samsung-cli", help="Apps2Samsung CLI executable (default: apps2samsung-cli on PATH)")
     parser.add_argument("--no-launch", action="store_true", help="Do not launch after installation")
     args = parser.parse_args()
@@ -123,11 +178,14 @@ def main():
         if not signer:
             parser.error("Apps2Samsung CLI was not found; install it or pass --apps2samsung-cli")
         settings = collect_settings()
+        extras, backdrops = read_backdrops(args.backdrops)
+        if backdrops:
+            settings.setdefault("ha", {})["backdrops"] = backdrops
         temporary = tempfile.TemporaryDirectory(prefix="apl-vetro-install-")
         atexit.register(temporary.cleanup)
         customized = Path(temporary.name) / "customized.wgt"
         signed = Path(temporary.name) / "signed.wgt"
-        create_configured_wgt(args.package, customized, settings)
+        create_configured_wgt(args.package, customized, settings, extras)
         sign_package(customized, signed, args.duid, signer)
         package_path = signed
 

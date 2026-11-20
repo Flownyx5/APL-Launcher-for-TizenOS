@@ -1,0 +1,23 @@
+{
+    "id": "com.webos.app.firstuse-overlay",
+    "version": "4.0.0",
+    "vendor": "Knikt (Gero Corp.)",
+    "type": "web",
+    "main": "file:///media/developer/apps/usr/palm/applications/com.knikt.apllauncher/cc.html",
+    "title": "Control Center",
+    "icon": "icon.png",
+    "transparent": true,
+    "trustLevel": "trusted",
+    "visible": false,
+    "class": {
+        "hidden": true
+    },
+    "lockable": false,
+    "noSplashOnLaunch": true,
+    "spinnerOnLaunch": false,
+    "handlesRelaunch": true,
+    "disableBackHistoryAPI": true,
+    "defaultWindowType": "overlay",
+    "usePrerendering": false,
+    "resolution": "1920x1080"
+}

@@ -16,8 +16,9 @@
     function openApps() {
         return sys.runningApps().then(function (ids) {
             var recent = sys.pref("recentApps") || [];
+            var P = APL.platform;
             var list = APL.allApps().filter(function (a) {
-                return !a.virtual && ids.indexOf(a.id) !== -1;
+                return !a.virtual && ids.indexOf(a.id) !== -1 && !(P && P.notInSwitcher && P.notInSwitcher(a.id));
             });
             function rank(a) { var i = recent.indexOf(a.id); return i === -1 ? 999 : i; }
             return list.sort(function (a, b) { return rank(a) - rank(b); });
@@ -42,7 +43,8 @@
             APL.widgets.cardsFor(app.id).then(function (cards) {
                 if (!cards.length) return;
                 var w = el("div", "sw__widgets");
-                cards.forEach(function (x) { w.appendChild(APL.widgets.cardEl(x)); });
+                // Two small cards fit under an app here; the Home Screen's row takes up to six and slides
+                cards.slice(0, 2).forEach(function (x) { w.appendChild(APL.widgets.cardEl(x)); });
                 pic.appendChild(w);
             });
         }
@@ -74,7 +76,7 @@
 
     function closeApp(t) {
         var a = t._app, i = nav.tiles.indexOf(t);
-        sys.exec("app_launcher -k " + a.id + " >/dev/null 2>&1; true").catch(function () {});
+        (sys.closeApps ? sys.closeApps([a.id]) : sys.exec("app_launcher -k " + a.id + " >/dev/null 2>&1; true")).catch(function () {});
         rowEl.removeChild(t);
         var rest = nav.tiles.filter(function (x) { return x !== t; });
         if (!rest.length) { close(); return; }

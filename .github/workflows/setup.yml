@@ -6,6 +6,9 @@ name: Setup app
 #  - apl-launcher-vX.Y.Z.wgt: the launcher alone; apl-launcher-full-vX.Y.Z.wgt: with APL Overlay, for
 #    Apps2Samsung (packaging/apps2samsung/). Signed with the Tizen SDK's default certificate,
 #    re-signed for each screen.
+#  - Tizen 6.0 and 6.5 (tizen60, tizen65): apl-launcher-tizen6X-vX.Y.Z.wgt, the full package without APL
+#    Overlay, and apl-overlay-tizen6X-vX.Y.Z.tpk, APL Overlay alone (apl.launcher.overlay), which APL
+#    Launcher Setup installs together on those screens. Unsigned, signed for each screen.
 on:
   push:
     branches: [main]
@@ -96,6 +99,12 @@ jobs:
           bash tools/make-package.sh dist
           bash tools/make-package.sh --overlay dist/APLOverlay.tpk dist
 
+      # Tizen 6: opening the launcher of the hybrid package starts APL Overlay instead (#10, #21), so the
+      # launcher and APL Overlay come in two packages there, their .NET parts built for .NET Core 3.1 and
+      # TizenFX API 8 (Tizen 6.0) and 9 (Tizen 6.5), with the SDK's csc.
+      - name: Build the Tizen 6 packages
+        run: python3 tools/make-tizen6.py dist/apl-launcher-full-v*.wgt dist
+
       - uses: actions/upload-artifact@v4
         with:
           name: APL-Launcher-wgt
@@ -118,5 +127,7 @@ jobs:
             dist/APL-Launcher-Setup.exe
             dist/apl-launcher-v*.wgt
             dist/apl-launcher-full-v*.wgt
+            dist/apl-launcher-tizen6*-v*.wgt
+            dist/apl-overlay-tizen6*-v*.tpk
             dist/SHA256SUMS-wgt.txt
           generate_release_notes: true

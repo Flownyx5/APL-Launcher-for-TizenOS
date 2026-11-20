@@ -1,7 +1,7 @@
 /* ============================================================
    preview.js — preview of the launcher on a PC or phone.
 
-   Does NOTHING on the TV (window.tizen exists). Elsewhere:
+   Does NOTHING on a TV (window.tizen, or js/webos.js on LG). Elsewhere:
    - the 1920×1080 screen is scaled down to fit the window;
    - a Siri Remote–style remote is shown beside it (or below):
      arrows, OK (hold = app menu), Back, Home, ⏯, full screen;
@@ -12,7 +12,7 @@
 (function (global) {
     "use strict";
 
-    if (global.tizen) return;
+    if (global.tizen || (global.APL && global.APL.platform)) return;   // a TV (Samsung, LG): no preview
 
     var APL = global.APL;
     var doc = document.documentElement;

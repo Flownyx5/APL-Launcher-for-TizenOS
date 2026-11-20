@@ -19,7 +19,11 @@
 
     var tz = global.tizen;
     var wa = global.webapis;
-    var PREVIEW = !tz;
+    /* Another TV system is a real screen too: LG (js/webos.js) gives its own sound, network, picture…
+       (P.adaptSys, at the end of this file), and Android TV (android/web/android.js) replaces what follows
+       with Android's calls */
+    var P = global.APL && global.APL.platform;
+    var PREVIEW = !tz && !P && !global.APLAndroid;
     var APL = global.APL;
 
     /* Older screens (Tizen 6.5 and before ship Chromium 85 or older; Tizen 6.0 is Chromium 76):
@@ -48,6 +52,7 @@
         screensaverClockMove: 0,    // minutes between two corners of the screen saver's clock, 0 = it stays put
         uiSounds: true,             // small navigation clicks, like on Apple TV
         hiddenApps: [],
+        appIcons: {},               // Change Icon (hold OK on an app): { app id: tile picture } for the whole screen (launcher.js)
         appOrder: [],
         sourceDevices: {},          // device chosen for each input (Sources screen)
         sourcePorts: null,          // the screen's HDMI ports, read through Vetro (sources.js)
@@ -56,12 +61,12 @@
         autoArt: true,              // logos, backgrounds and content found automatically (App Store, TMDB)
         appsPerRow: 6,              // dock and grid: 5, 6 or 7 (launcher.js sizes())
         searchHidden: false,        // Search also finds the hidden apps (search.js)
-        shelfArt: "sheets",         // Top Shelf of apps without artwork: "sheets" | "logo" | "black" (genart.js, launcher.js)
+        shelfArt: "sheets",         // Top Shelf of apps without artwork: "sheets" | "logo" | "wall" | "black" (genart.js, launcher.js)
+        shelfWall: "pic:dusk",      //   with "wall": the wallpaper behind every app (genart.js APL.wallpapers)
         smartHubTileSet: false,     // the Smart Hub tile was hidden once in this profile (it starts hidden)
         hubShelf: true,             // Top Shelf: the apps' own Smart Hub rows first (liveshelf.js)
         liveShelf: true,            //   then the content of the moment (TMDB / YouTube…), then shelfArt
         visualEffects: PREVIEW,     // blur / glass: costly on the screen, off by default
-        cleanFrameBackdrops: false, // a poster only where an app shows nothing of its own (app-art.js)
         gameWanted: false,          // Game Mode requested (applied when switching to an input)
         ccHintCount: 0,             // number of times the Control Center tip has been shown
         appearance: "dark",         // "dark" | "light" | "auto" (follows the sun)
@@ -72,10 +77,12 @@
         alexaBridge: true,          // the Echo Dot can open apps (overlay/Alexa.cs)
         servicesCut: {},            // blocked Samsung services and their original settings (services.js)
         bootCleanup: true,          // once per power-on: closes what Samsung opens on its own
+        continueStyle: "cards",     // Continue Watching: "cards" over the Top Shelf | "wall" (the Top Shelf itself) | "off" (#56)
+        supportReminder: true,      // once per power-on: the Ko-fi code over the Home Screen (launcher.js supportReminder)
         homeAppSaved: null,         // { home, autostart } before "Start on APL Launcher", put back when it is turned off
         idleClose: true,            // an app left in the background for 10 min is closed (overlay/IdleApps.cs)
         pauseKey: "controlcenter",  // ⏯ in an app: "controlcenter" | "playpause", the app's own (overlay/Program.cs)
-        language: "auto",           // "auto" (screen language) | "en" | "fr": read at start-up by i18n.js
+        language: "auto",           // "auto" (screen language) | "en" | "fr" | "ms" | "pl" | "tr": read at start-up by i18n.js
         aerialQuality: "auto",      // "auto" (1080p on older screens, 4K otherwise) | "1080" | "4k"
         ambient: true,              // the Home Screen's light follows the time of day (ambient.js)
         weather: true,              // local weather in the status pill (Open-Meteo, location from the IP address)
@@ -112,8 +119,224 @@
     function load(k, fallback) {
         try { var v = JSON.parse(global.localStorage.getItem(k) || "null"); return v || fallback; } catch (e) { return fallback; }
     }
-    function save(k, v) { try { global.localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+    function save(k, v) {
+        var text = JSON.stringify(v);
+        try { global.localStorage.setItem(k, text); } catch (e) {}
+        if (!COPY_KEYS.test(k) || COPY_SKIP.test(k)) return;
+        copyPending[k] = text;
+        /* Stamped, so the copy can be told apart from local storage when a
+           screen comes back from the wall with an older one of the two. */
+        copyPending[COPY_REV] = String(Date.now());
+        try { global.localStorage.setItem(COPY_REV, copyPending[COPY_REV]); } catch (e) {}
+        copyLater();
+    }
 
+    /* ---------- a second copy of the settings, in IndexedDB ----------
+       A screen switched off at the wall can come back with its local storage empty: every setting, the
+       profiles and the Home Screen layout gone, and the version installed by APL Launcher Setup instead of
+       the downloaded one (#60, a Frame 2022). Local storage reaches the disk a while after each change;
+       an IndexedDB write is on the disk once it is done. So each setting saved above is also written there
+       a moment later, and at start-up, when local storage has none of them but the copy has, they are put
+       back and the page loads once more with them. A real first start has no copy, so nothing comes back. */
+    var COPY_DB = "apl-settings-copy", COPY_KEYS = /^apl\./;
+    /* Not settings: the downloaded launcher itself (large, and fetched again by the
+       updater), and the six-hour content lists — the apps' own Top Shelf rows,
+       which come back by themselves and would only make the copy big and the
+       restore slow on a panel with little flash. */
+    /* Nor the screen's own state: which window it is in (apl.webos.*), whether the
+       Control Center has been seen (apl.ccSeen), when the copy last put itself
+       back (apl.copyRestored*). Those say nothing about a setting and are written
+       on every window change. */
+    var COPY_SKIP = /^apl\.(bundle$|live\.|webos\.|ccSeen$|copyRestored)/;
+    var COPY_MAX = 262144;                     // 256 KB per value: a restore stays quick
+    var COPY_REV = "apl.rev";                  // when the settings were last written, in both stores
+    var copyDb = null, copyPending = {}, copySeen = {}, copyTimer = null, copyHold = false, copySweepTimer = 0;
+
+    /* The connection is reopened whenever the browser closes it under us (a screen
+       that clears its storage, a browser that restarts it): with a cached closed
+       connection every write for the rest of the session threw, in silence, and
+       the copy stopped following the settings. IndexedDB on a 6.5 panel is also
+       slow to answer and can refuse outright: nothing here may throw into the
+       start-up or hold it back. */
+    function copyOpen() {
+        if (copyDb) return copyDb;
+        copyDb = new Promise(function (resolve, reject) {
+            if (!global.indexedDB) { reject(new Error("no IndexedDB")); return; }
+            var rq;
+            try { rq = global.indexedDB.open(COPY_DB, 1); } catch (e) { reject(e); return; }
+            rq.onupgradeneeded = function () { try { rq.result.createObjectStore("kv"); } catch (e) {} };
+            rq.onsuccess = function () {
+                var db = rq.result;
+                db.onclose = function () { copyDb = null; };
+                db.onversionchange = function () { try { db.close(); } catch (e) {} copyDb = null; };
+                resolve(db);
+            };
+            rq.onerror = function () { reject(rq.error || new Error("open")); };
+            rq.onblocked = function () { reject(new Error("blocked")); };
+        });
+        copyDb["catch"](function () { copyDb = null; });     // the next call tries again
+        return copyDb;
+    }
+    function copyLater() {
+        clearTimeout(copyTimer);
+        /* A quarter of a second, not one and a half: a screen unplugged straight
+           after a change kept the copy from before it, and the setting was gone
+           when the power came back. */
+        copyTimer = setTimeout(copyFlush, 280);
+        copySweepSoon();
+    }
+    /* The modules that write straight into local storage (the Home Assistant
+       connection, a picture's address, the chosen region) do not go through
+       save(), so a sweep follows a change to catch them. It is not on a clock:
+       reading every key every twenty seconds walked over the generated artwork
+       for nothing, which is the kind of background work 1.3.0 took out on LG. */
+    function copySweepSoon() {
+        if (copySweepTimer) return;
+        copySweepTimer = global.setTimeout(function () { copySweepTimer = 0; copySweep(); }, 2000);
+    }
+    function copyWrite(batch) {
+        return copyOpen().then(function (db) {
+            return new Promise(function (resolve, reject) {
+                var tx;
+                try { tx = db.transaction("kv", "readwrite"); } catch (e) { reject(e); return; }
+                tx.oncomplete = function () { resolve(); };
+                tx.onerror = function () { reject(tx.error || new Error("write")); };
+                tx.onabort = function () { reject(tx.error || new Error("abort")); };
+                var store = tx.objectStore("kv"), keys = Object.keys(batch);
+                for (var i = 0; i < keys.length; i++) {
+                    if (batch[keys[i]] === null) store["delete"](keys[i]); else store.put(batch[keys[i]], keys[i]);
+                }
+            });
+        });
+    }
+    function copyFlush() {
+        if (copyHold) return;                       // the copy is being read back: it must not be written over first
+        var batch = copyPending, keys = Object.keys(batch);
+        copyPending = {};
+        if (!keys.length) return;
+        /* A batch that fails is not retried here: what it carried is not written
+           down as written below, so the next sweep queues it again. Only the
+           connection is dropped, so the next attempt reopens it. */
+        copyWrite(batch).then(function () {
+            /* What the copy holds now, so a sweep queues only what has changed
+               since. Every value used to be queued on every hide, which on a TV is
+               every time an app opens, the generated artwork included. */
+            for (var i = 0; i < keys.length; i++) {
+                if (batch[keys[i]] === null) delete copySeen[keys[i]]; else copySeen[keys[i]] = batch[keys[i]];
+            }
+        })["catch"](function () { copyDb = null; });
+    }
+    function copyDrop(k) { copyPending[k] = null; copyLater(); }
+    /* Everything the launcher keeps, read out of local storage and written to the
+       copy. Most modules write straight into local storage (the Home Assistant
+       connection, the address of each app's picture, the chosen region) without
+       passing through save(), so the copy is swept rather than only fed by it - a
+       walk over the keys after a change, and at the moment the page is hidden or
+       closed, which is when the power can go - and only the values that are not in
+       the copy already are queued. */
+    function copySweep() {
+        var changed = 0;
+        try {
+            for (var i = 0; i < global.localStorage.length; i++) {
+                var k = global.localStorage.key(i);
+                if (!k || !COPY_KEYS.test(k) || COPY_SKIP.test(k) || k === COPY_REV) continue;
+                var v = global.localStorage.getItem(k);
+                if (typeof v !== "string" || v.length > COPY_MAX) continue;
+                if (copySeen[k] === v) continue;               // already in the copy, unchanged
+                copyPending[k] = v;
+                changed++;
+            }
+        } catch (e) {}
+        if (changed) {
+            copyPending[COPY_REV] = String(Date.now());
+            try { global.localStorage.setItem(COPY_REV, copyPending[COPY_REV]); } catch (e) {}
+        }
+        copyFlush();
+    }
+    function copyStored() {
+        return copyOpen().then(function (db) {
+            return new Promise(function (resolve) {
+                var out = {}, rq;
+                try { rq = db.transaction("kv", "readonly").objectStore("kv").openCursor(); }
+                catch (e) { resolve(out); return; }
+                rq.onsuccess = function () { var c = rq.result; if (c) { out[c.key] = c.value; c["continue"](); } else resolve(out); };
+                rq.onerror = function () { resolve(out); };
+            });
+        });
+    }
+    /* What the copy has is compared with what local storage has, at every start -
+       not only when local storage is empty. A screen that loses power can come
+       back with an older copy of its storage rather than none, which is why the
+       settings were sometimes kept and sometimes not; and it can come back with
+       only some of the keys, which left the Home Screen layout at its defaults
+       while the rest was still there. The copy carries the time it was written:
+       when it is newer than local storage, or when local storage has none of it,
+       the copy is put back and the page loads once more with it. */
+    function copyCheck() {
+        copyHold = true;
+        var answered = false;
+        function release() {
+            if (answered) return;
+            answered = true;
+            copyHold = false;
+            copyFlush();
+        }
+        /* A storage that never answers must not hold the Home Screen back: after
+           three seconds the copy is left for the next start. */
+        var watchdog = setTimeout(release, 3000);
+        try {
+            copyStored().then(function (saved) {
+                clearTimeout(watchdog);
+                if (answered) return;               // the start has already gone on without it
+                answered = true;
+                var keys = Object.keys(saved || {}).filter(function (k) {
+                    return (COPY_KEYS.test(k) || k === COPY_REV) && typeof saved[k] === "string";
+                });
+                if (!keys.length) { copyHold = false; copySweep(); return; }
+                var there = Number(saved[COPY_REV] || 0), here = 0;
+                try { here = Number(global.localStorage.getItem(COPY_REV) || 0); } catch (e) { here = 0; }
+                /* Only what the copy can actually fill: a key this code never wrote
+                   there (an older copy) must not reload the page for nothing. */
+                var partial = false;
+                try {
+                    var cur = (load("apl.profiles", {}) || {}).current;
+                    var want = ["apl.prefs", "apl.profiles", cur ? "apl.prefs." + cur : ""];
+                    for (var i = 0; i < want.length; i++) {
+                        if (want[i] && !global.localStorage.getItem(want[i]) && keys.indexOf(want[i]) >= 0) partial = true;
+                    }
+                } catch (e) {}
+                /* A minute of slack: two clocks that disagree must not cause a restore. */
+                var behind = !!there && there > here + 60000;
+                if (!partial && !behind) { copyHold = false; return; }   // nothing to put back: the copy follows a change from here
+                /* The guard is here to stop a reload loop, not to stop the next
+                   restore: it used to live in window.name, which survives every
+                   reload in the tab, so one restore in a session turned every
+                   later one off - and a storage wiped again a minute later was
+                   then never put back. Thirty seconds is longer than the reload
+                   needs and far shorter than a session. */
+                var last = 0;
+                try { last = Number(global.sessionStorage.getItem("apl.copyRestoredAt") || 0); } catch (e) {}
+                if (last && Date.now() - last < 30000) { copyPending = {}; copyHold = false; return; }
+                var wrote = 0;
+                for (var j = 0; j < keys.length; j++) {
+                    /* The copy is what put these back, so they are already in it. */
+                    try { global.localStorage.setItem(keys[j], saved[keys[j]]); copySeen[keys[j]] = saved[keys[j]]; wrote++; } catch (e) {}
+                }
+                if (!wrote) { copyHold = false; return; }   // nothing could be written: leave the copy alone
+                try { global.sessionStorage.setItem("apl.copyRestoredAt", String(Date.now())); } catch (e) {}
+                global.location.reload();
+            }, release);
+        } catch (e) { release(); }
+    }
+    /* A screen that is switched off has a moment between the change and the power
+       going: the copy is written then, without waiting for its quarter second. */
+    if (global.addEventListener) {
+        global.addEventListener("pagehide", function () { copyHold = false; copySweep(); });
+        global.addEventListener("beforeunload", function () { copyHold = false; copySweep(); });
+        global.addEventListener("visibilitychange", function () {
+            if (global.document && global.document.hidden) copySweep();
+        });
+    }
     var prefs = load("apl.prefs", {});
     var household = load("apl.profiles", null);
     if (!household || !household.list || !household.list.length) {
@@ -136,6 +359,15 @@
         delete pp.appBackgrounds;
         save("apl.prefs." + p.id, pp);
     });
+
+    // Local storage came back empty (a screen switched off at the wall): the copy, if there is one, comes back
+    /* Nothing else writes the copy on its own: a ten-second "make sure it is
+       there" pass read local storage and pushed it into the copy, so a start that
+       had not restored yet (a slow storage, an empty one that was about to be
+       put back) could overwrite a good copy with this start's defaults. The copy
+       follows the settings through save() and is only ever seeded from local
+       storage when the copy is empty. */
+    copyCheck();
 
     function currentProfile() {
         for (var i = 0; i < household.list.length; i++) if (household.list[i].id === household.current) return household.list[i];
@@ -168,18 +400,40 @@
         DEFAULTS.homeReturn = false;
         if (pref("homeReturn") !== before) (listeners.homeReturn || []).forEach(function (fn) { fn(false); });
     }
+    /* The screen's list of apps (about 500 entries with the services), asked once for everyone at start-up.
+       Vetro's check below asked first and the Home Screen a moment later, each on its own, and the Home
+       Screen waits for its answer: after a full start the screen answers slowly. One request in flight is
+       shared, and an answer serves for a few seconds; fresh: true always asks again (an install, an uninstall). */
+    var appsInfoAsk = null, appsInfoAt = 0, appsInfoList = null, APPS_INFO_KEEP = 5000;
+    function appsInfo(fresh) {
+        if (!tz || !tz.application || typeof tz.application.getAppsInfo !== "function") return Promise.reject(new Error("unavailable"));
+        if (!fresh && appsInfoList && Date.now() - appsInfoAt < APPS_INFO_KEEP) return Promise.resolve(appsInfoList);
+        if (!fresh && appsInfoAsk) return appsInfoAsk;
+        var ask = new Promise(function (resolve, reject) {
+            try {
+                tz.application.getAppsInfo(function (list) {
+                    appsInfoList = list; appsInfoAt = Date.now();
+                    resolve(list);
+                }, reject);
+            } catch (e) { reject(e); }
+        });
+        appsInfoAsk = ask;
+        function done() { if (appsInfoAsk === ask) appsInfoAsk = null; }
+        ask.then(done, done);
+        return ask;
+    }
+
     function detectVetro() {
+        if (P) return;                     // not a Samsung screen: no Vetro to look for
         if (PREVIEW) {
             // The PC preview has no Vetro to look for: ?novetro shows the screen without it
             if (global.location && /[?&]novetro\b/.test(global.location.search)) markNoVetro();
             return;
         }
-        try {
-            tz.application.getAppsInfo(function (list) {
-                for (var i = 0; i < list.length; i++) if (/^vetrotvapp\./.test(list[i].id)) return;
-                markNoVetro();
-            }, function () {});
-        } catch (e) {}
+        appsInfo().then(function (list) {
+            for (var i = 0; i < list.length; i++) if (/^vetrotvapp\./.test(list[i].id)) return;
+            markNoVetro();
+        }, function () {});
     }
     detectVetro();
 
@@ -214,6 +468,7 @@
             if (household.list.length < 2) return false;
             household.list = household.list.filter(function (p) { return p.id !== id; });
             try { global.localStorage.removeItem("apl.prefs." + id); } catch (e) {}
+            copyDrop("apl.prefs." + id);
             if (household.current === id) profiles.switchTo(household.list[0].id);
             save("apl.profiles", household);
             return true;
@@ -294,7 +549,7 @@
         });
     }
 
-    function gb(bytes) { var n = (bytes / 1e9).toFixed(1); return APL.t("{n} GB", { n: APL.lang === "fr" ? n.replace(".", ",") : n }); }
+    function gb(bytes) { var n = (bytes / 1e9).toFixed(1); return APL.t("{n} GB", { n: APL.lang === "fr" || APL.lang === "pl" || APL.lang === "tr" ? n.replace(".", ",") : n }); }
     function storage() {
         return new Promise(function (resolve) {
             if (PREVIEW) return resolve(APL.t("4.1 GB free of 8.0 GB (preview)"));
@@ -584,7 +839,7 @@
         hasKeys = on;
         try { tz.messageport.requestTrustedRemoteMessagePort(BRIDGE_ID, BRIDGE_PORT).sendMessage([{ key: "focus", value: on ? "1" : "0" }]); } catch (e) {}
     }
-    if (!PREVIEW && global.document) {
+    if (!PREVIEW && !P && global.document) {
         document.addEventListener("visibilitychange", function () {
             bridgeFront(!document.hidden);
             if (!document.hidden) { hasKeys = null; bridgeFocus(true); }          // back in front: it has the keys
@@ -626,7 +881,7 @@
             .then(function (ok) { alive = ok; aliveAt = Date.now(); return ok; });
     }
     // Bridge started early: Control Center and Settings respond right away
-    if (!PREVIEW) setTimeout(checkVetro, 4000);
+    if (!PREVIEW && !P) setTimeout(checkVetro, 4000);
     /* Vetro silent (its service didn't start with the screen): the bridge wakes it up (bridge/service.js,
        wakeVetro: its service, otherwise its app for a few seconds, then back to the launcher). */
     function checkVetro() {
@@ -634,7 +889,7 @@
             if (!ok) bridgeSend([{ key: "vetro", value: "wake" }]).catch(function () {});
         });
     }
-    if (!PREVIEW && global.document) {
+    if (!PREVIEW && !P && global.document) {
         document.addEventListener("visibilitychange", function () { if (!document.hidden) setTimeout(checkVetro, 3000); });
     }
 
@@ -843,7 +1098,7 @@
         if (PREVIEW) return Promise.resolve(MOCK_NATIVE[id] || (d.min !== undefined ? Math.round((d.min + d.max) / 2) : 0));
         if (d.home) {
             // On only if both took: with Autorun off the screen still starts on the TV input
-            return homeAppRead().then(function (s) { return s.home === "APLauncher.Home" && s.autostart === 1 ? 1 : 0; });
+            return withTimeout(homeAppRead(), 15000).then(function (s) { return s.home === "APLauncher.Home" && s.autostart === 1 ? 1 : 0; });
         }
         if (d.vconf) {
             return tvExec("vconftool get " + d.vconf + " 2>&1").then(function (r) {
@@ -862,9 +1117,10 @@
     function nativeSet(id, value) {
         var d = NATIVE[id];
         if (PREVIEW) { MOCK_NATIVE[id] = value; return Promise.resolve(value); }
+        // Start on APL Launcher first: it has no D-Bus method, and reading d.set below threw before anything was
+        // written, so OK only showed "…" on every screen (an S90F). The timeout covers the read back too.
+        if (d.home) return withTimeout(homeAppSet(value).then(function (r) { return homeAppCheck(value, r); }), 20000);
         var write = d.vconf ? "vconftool set -f -t int " + d.vconf + " " + value + " 2>&1" : AVOC + d.set.replace("V", value) + " 2>&1";
-        // A write the screen never answers would only say so after the bridge's minute: an S90F showed nothing at all
-        if (d.home) return withTimeout(homeAppSet(value), 20000).then(function (r) { return homeAppCheck(value, r); });
         return tvExec(write).then(function () { return nativeGet(id); }).then(function (back) {
             if (back !== value) throw new Error(APL.t("The screen refused this setting for now"));
             return back;
@@ -1052,13 +1308,14 @@
     global.APL.sys = {
         PREVIEW: PREVIEW,
         pref: pref, setPref: setPref, onPref: onPref, profiles: profiles,
+        setDefault: function (k, v) { DEFAULTS[k] = v; },     // another platform's defaults (android.js)
         audio: audio, network: network, product: product, display: display, storage: storage, hdr: hdr,
         remoteKey: remoteKey, openSamsungSettings: openSamsungSettings, sleepNow: sleepNow,
         switchSource: switchSource, vetroAlive: vetroAlive, vetroLink: vetroLink,
         vetroUrl: vetroUrl, vetroPort: function () { return vetroPortNum; },
         noVetro: function () { return noVetro; },
         registerKeys: registerKeys, armSleepTimer: armSleepTimer, readSleepTimer: readSleepTimer,
-        vetroGet: vetroGet, vetroPost: vetroPost, exec: tvExec, game: game, runningApps: runningApps,
+        vetroGet: vetroGet, vetroPost: vetroPost, exec: tvExec, appsInfo: appsInfo, game: game, runningApps: runningApps,
         bridgeSend: bridgeSend, onBridgeEvent: onBridgeEvent,
         /* Diagnostic: the bridge answers (a path it refuses to relay still proves it is there). */
         bridgePing: function () { return bridgeRequest("GET", "/__ping", "").then(function (r) { return r.status; }); },
@@ -1069,4 +1326,5 @@
         tvSettings: tvSettings, tvItem: tvItem, tvAdjust: tvAdjust, tvValue: tvValue,
         version: (global.APL_UPDATE && global.APL_UPDATE.running) || "1.0.0"
     };
+    if (P && P.adaptSys) P.adaptSys(global.APL.sys, { DEFAULTS: DEFAULTS });
 })(window);

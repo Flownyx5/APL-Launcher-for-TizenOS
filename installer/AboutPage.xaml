@@ -10,7 +10,7 @@
                     <TextBlock Text="APL Launcher" FontFamily="{StaticResource Font.Display}" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,16,0,0"/>
                     <TextBlock x:Name="VersionText" Style="{StaticResource Text.Secondary}" FontSize="14" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                     <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text2}" TextAlignment="Center" HorizontalAlignment="Center"
-                               MaxWidth="560" Margin="0,12,0,0" Text="An Apple TV–style home screen for Samsung Tizen screens."/>
+                               MaxWidth="560" Margin="0,12,0,0" Text="An Apple TV–style home screen for Samsung, LG and Android TV screens."/>
                     <TextBlock Style="{StaticResource Text.Secondary}" FontSize="13" HorizontalAlignment="Center" Margin="0,10,0,0" Text="Created by Knikt (Gero Corp.)"/>
                 </StackPanel>
             </Border>
@@ -69,7 +69,7 @@
                 <Run Text="Vetro by andrearicci93; film and series data from TMDB; logos from Fanart.tv."/>
             </TextBlock>
             <TextBlock Style="{StaticResource Text.Caption}" Margin="4,10,4,0" Text="This product uses the TMDB API but is not endorsed or certified by TMDB."/>
-            <TextBlock Style="{StaticResource Text.Caption}" Margin="4,4,4,0" Text="APL Launcher is an independent project. It is not affiliated with Apple, Samsung or Amazon; their names and trademarks belong to them."/>
+            <TextBlock Style="{StaticResource Text.Caption}" Margin="4,4,4,0" Text="APL Launcher is an independent project. It is not affiliated with Apple, Samsung, LG, Google or Amazon; their names and trademarks belong to them."/>
         </StackPanel>
     </ScrollViewer>
 </Grid>

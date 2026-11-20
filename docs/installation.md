@@ -2,6 +2,8 @@
 
 This guide installs APL Launcher on a Samsung Tizen TV or Smart Monitor from a Windows PC, and makes it replace Samsung's home screen.
 
+APL Launcher Setup starts with **Your TV**: Samsung, LG or Android TV, and whether the TV is rooted. Then its **Install** page is the one for that TV. This guide covers Samsung first; [LG (webOS)](#lg-webos) and [Android TV](#android-tv-and-google-tv) are at the end.
+
 ## 1. Before you start
 
 **On the PC**
@@ -17,7 +19,7 @@ This guide installs APL Launcher on a Samsung Tizen TV or Smart Monitor from a W
 
 ## 2. Install
 
-1. Download **APL Launcher Setup** (`APL-Launcher-Setup.exe`) from the [latest release](https://github.com/Knikt/APL-Launcher-for-TizenOS/releases/latest) and open it. Windows may say the app is not signed: *More info › Run anyway*. It needs nothing else to run.
+1. Download **APL Launcher Setup** (`APL-Launcher-Setup.exe`) from the [latest release](https://github.com/Knikt/APL-Launcher/releases/latest) and open it. Windows may say the app is not signed: *More info › Run anyway*. It needs nothing else to run.
 2. On the **Install** page:
    - the app finds the screen with **Find**, or type its IP address (*Settings › Connection › Network › Network Status*); it is remembered for next time, and the app checks that Vetro answers;
    - it checks the PC: Tizen Studio and `sdb`, a Samsung certificate;
@@ -35,25 +37,25 @@ Your keys and websites stay on your PC (`%APPDATA%\APL-Launcher\keys.local.js`) 
 
 The Python installer works on macOS, Linux, and Windows with Python 3. It installs the full release package directly through Vetro without changing Developer Mode's **Host PC IP** (keep it at `127.0.0.1`) or using TV-Store. By default, use a WGT already signed with a Partner certificate accepted by your TV. To privately enter API keys and websites during installation, use `--configure`: it prompts for keys without echoing them, adds the values to a temporary local package, signs that package with Apps2Samsung CLI, then installs it. Settings are not saved in a local keys file; the resulting installed package contains them on the TV. Do not paste certificate passwords into the terminal.
 
-1. Download `apl-launcher-full-vX.Y.Z.wgt` from the [latest release](https://github.com/Knikt/APL-Launcher-for-TizenOS/releases/latest). This release is signed with the Tizen SDK's default certificate, so it must be Partner-signed for your TV before installation. Either sign it separately with `apps2samsung-cli sign apl-launcher-full-vX.Y.Z.wgt -o apl-launcher-full-signed.wgt --duids <TV-DUID> --partner`, or let the installer sign it as part of `--configure` (requires the Apps2Samsung CLI and the TV's DUID). If you do not know the DUID, `apps2samsung-cli cert --tv <screen-ip>` lists DUIDs already covered by local certificates; with Host PC IP `127.0.0.1`, the CLI may not be able to query the TV itself.
+1. Download `apl-launcher-full-vX.Y.Z.wgt` from the [latest release](https://github.com/Knikt/APL-Launcher/releases/latest). This release is signed with the Tizen SDK's default certificate, so it must be Partner-signed for your TV before installation. Either sign it separately with `apps2samsung-cli sign apl-launcher-full-vX.Y.Z.wgt -o apl-launcher-full-signed.wgt --duids <TV-DUID> --partner`, or let the installer sign it as part of `--configure` (requires the Apps2Samsung CLI and the TV's DUID). If you do not know the DUID, `apps2samsung-cli cert --tv <screen-ip>` lists DUIDs already covered by local certificates; with Host PC IP `127.0.0.1`, the CLI may not be able to query the TV itself.
 2. Confirm Vetro is running and note the port used by its dashboard. The default is `8099`; if it differs, pass `--vetro-port <port>`.
 3. From a downloaded or cloned repository, run `python3 scripts/install-via-vetro.py <screen-ip> /path/to/apl-launcher-full.wgt`. To enter the API keys and personal websites, add `--configure --duid <TV-DUID>`; if Apps2Samsung CLI is not on PATH, also pass `--apps2samsung-cli /path/to/apps2samsung-cli`. The script verifies Vetro connectivity and the file-transfer checksum, installs the hybrid package, confirms both launcher and overlay are registered, and launches it. Add `--no-launch` to skip launching.
 4. Follow steps 3 onward below to configure remote buttons and set up the launcher. Without keys, everything works except trending films and series in the Top Shelf.
 
-The installer sends the package to Vetro over the local network using bounded base64 chunks and removes its temporary files from the TV after installation. It does not print API keys or save them to disk outside its temporary package, which is deleted when the script exits. Tizen 6.x screens should use the launcher-only package instead, as described below.
+The installer sends the package to Vetro over the local network using bounded base64 chunks and removes its temporary files from the TV after installation. It does not print API keys or save them to disk outside its temporary package, which is deleted when the script exits. Tizen 6.x screens need their own two packages instead, as described below.
 
 ### Alternative: Apps2Samsung or TV-Store
 
 Every release also has the whole package as `apl-launcher-full-vX.Y.Z.wgt`, for [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung): the launcher, APL Overlay, the bridge to Vetro and the start-up service, in one hybrid package. It is signed with the Tizen SDK's default certificate, and Apps2Samsung re-signs it for your screen. Vetro is still required.
 
-1. Install `apl-launcher-full-vX.Y.Z.wgt` from the [latest release](https://github.com/Knikt/APL-Launcher-for-TizenOS/releases/latest) in Apps2Samsung as a custom `.wgt` (or send it to TV-Store at `http://<screen-ip>:8077/upload`). Installed this way, the package has no API keys: everything works without them except trending films and series in the Top Shelf.
+1. Install `apl-launcher-full-vX.Y.Z.wgt` from the [latest release](https://github.com/Knikt/APL-Launcher/releases/latest) in Apps2Samsung as a custom `.wgt` (or send it to TV-Store at `http://<screen-ip>:8077/upload`). Installed this way, the package has no API keys: everything works without them except trending films and series in the Top Shelf.
 2. If the launcher is already installed with another certificate, uninstall it first: the screen refuses a package signed with a different certificate.
 3. Open APL Launcher from the screen's apps, then *Settings › Remote and Devices › Set Up the Remote Buttons*. It sends Home and ⏯ to APL Overlay in Vetro (Samsung TV Plus and Prime Video too when AquaPlay and TizenTube are installed), as APL Launcher Setup does. Vetro's own app list hides APL Overlay, an app without an icon, so this is the way to pick it from a phone.
 4. If the launcher says one step is left: open `http://<screen-ip>:8099` on the phone, then **Remapper**, choose your remote (*Smart Control* when it is paired over Bluetooth, *rc device* by infrared) and turn on **Remote interception**.
 
 After a full restart, the screen comes back on its last input or on Smart Hub; the start-up service puts the launcher on screen about 80 s after power-on. No personal websites, Memoji or SF Pro fonts in this package. Automatic updates work the same way. (`apl-launcher-vX.Y.Z.wgt`, next to it, is the launcher alone, without the overlay.)
 
-**Tizen 6.x screens**: APL Overlay and the other .NET parts of the full package don't run there. Install `apl-launcher-vX.Y.Z.wgt` instead, the launcher alone with its own bridge (in Apps2Samsung's catalog: the *Tizen 6* variant of APL Launcher, from 1.0.20), and map Home to **APL Launcher** with *Set Up the Remote Buttons*.
+**Tizen 6.x screens**: in the full package, opening the launcher starts APL Overlay instead. From 1.1.0, every release has two packages for each Tizen 6 version: `apl-launcher-tizen65-vX.Y.Z.wgt` and `apl-overlay-tizen65-vX.Y.Z.tpk` for Tizen 6.5 (2022 screens), `apl-launcher-tizen60-vX.Y.Z.wgt` and `apl-overlay-tizen60-vX.Y.Z.tpk` for Tizen 6.0 (2021 screens). The `.wgt` is the launcher with its bridge to Vetro and the start-up service, the `.tpk` is APL Overlay in a package of its own (`apl.launcher.overlay`). APL Launcher Setup picks the right pair by itself. With Apps2Samsung, install the `.wgt` as a custom `.wgt`, then the `.tpk` with its command line (the app's custom install takes `.wgt` files only): `apps2samsung-cli install apl-overlay-tizen65-vX.Y.Z.tpk --tv <screen-ip>`. Both files are unsigned: Apps2Samsung signs them for your screen. Then *Set Up the Remote Buttons* as above. Without the `.tpk`, the launcher works on its own and Home goes to APL Launcher; the *Tizen 6* variant of APL Launcher in Apps2Samsung's catalog is that too, `apl-launcher-vX.Y.Z.wgt`, the launcher alone with a web bridge.
 
 ### Optional API keys
 
@@ -75,7 +77,7 @@ The installer downloads 58 Memoji faces once from [wimell/tapback-memojis](https
 
 To use **your own Memoji**, put PNG images in the `APL Launcher avatars` folder inside your *Pictures* folder, then install again. They come first in the avatar list. On an iPhone: send your Memoji sticker in Messages, open it, then *Share › Save Image*.
 
-**Tizen 6.x screens** (The Frame 2022, for example): APL Launcher Setup installs the launcher on its own, with its own bridge to Vetro. APL Overlay and the other parts of the full package need Tizen 7 or newer: the Home Screen, Home, Sources and the settings work, the Control Center over videos and Alexa on the microphone don't.
+**Tizen 6.x screens** (The Frame 2022, for example): from 1.1.0, APL Launcher Setup reads whether the screen runs Tizen 6.0 or 6.5 and installs the two packages made for it, both signed with your certificate and the launcher with your keys: the launcher with its bridge to Vetro and the start-up service, then APL Overlay in a package of its own (`apl.launcher.overlay`), which gets Home and ⏯ like on newer screens. On Tizen 6 the launcher doesn't open when APL Overlay is in its package, hence the two. If APL Overlay can't be installed, the launcher works on its own (the Home Screen, Home, Sources and the settings, but not the Control Center over videos or Alexa on the microphone). Before 1.1.0, or when Setup can't tell 6.0 from 6.5, it installs the launcher alone, with a web bridge.
 
 ## 3. Replace Samsung's home screen
 
@@ -126,3 +128,33 @@ Open the **Restore** page. It:
 - can uninstall the launcher too (*Also uninstall APL Launcher*).
 
 Then turn **Autorun Smart Hub** back on.
+
+## LG (webOS)
+
+**Rooted TV** (rooted with [WTFBro](https://e.nya.je/getroot/) for example, the Homebrew Channel installed, *SSH Server* on in its settings):
+
+1. In APL Launcher Setup, **Your TV › LG**, *My TV is rooted* on, **Continue**.
+2. Type the TV's IP address (or **Find**), the root password (`alpine` unless you changed it), your keys if you have them, then **Install**.
+3. The Setup builds the package with your keys, sends it over SSH with Windows' own `ssh.exe` (OpenSSH 8.4 or later: Windows 11, or [Git for Windows](https://git-scm.com/download/win) on Windows 10), installs it with LG's own installer, then puts the [root scripts](../webos/root/README.md) on the TV from the PC: Home opens APL Launcher and the TV starts on it, the picture settings, closing apps, Guide = Control Center, the debloat (a switch), and the TV's software updates blocked. About 10 seconds on an OLED G5.
+
+Without a PC: add `https://raw.githubusercontent.com/Knikt/APL-Launcher/main/webos/repo/apps.json` in the Homebrew Channel (*Settings › Add repository*) and install APL Launcher from its list ([webos/repo](../webos/repo/README.md)); then, for the root features, run once in SSH as root:
+
+```sh
+wget -qO- https://raw.githubusercontent.com/Knikt/APL-Launcher/main/webos/root/install.sh | sh
+```
+
+**Without root**: LG's Developer Mode.
+
+1. On the TV, install **Developer Mode** from LG's app store and sign in with a free [LG developer account](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app). Turn on *Dev Mode Status* (the TV restarts), then *Key Server*.
+2. In the Setup, **Your TV › LG**, *My TV is rooted* off. Type the IP address and the **passphrase** the Developer Mode app shows, then **Install**.
+3. Open APL Launcher from LG's app list. The first time, LG asks whether it may control the TV: **Allow**. Developer Mode lasts 1000 hours: APL Launcher renews it by itself every day.
+
+Without root, Home keeps opening LG's Home, and there are no picture settings, no closing of apps, no Guide button and no debloat.
+
+## Android TV and Google TV
+
+1. On the TV, *Settings › Device Preferences › About*: press OK seven times on *Build*, then in *Developer options* turn on *USB debugging* or *Network debugging*.
+2. In the Setup, **Your TV › Android TV**, **Continue**, type the TV's IP address (with Wireless debugging on Android 11 and later, also its pairing port and code), then **Install**.
+3. On the TV, allow debugging from this PC (*Always allow*). The Setup finds `adb` or downloads Google's platform-tools once, installs the latest release's two `.apk` (APL Launcher and APL Launcher Home Button, the small app with the remote buttons service), turns that service on (Home opens APL Launcher), lets the launcher draw over apps (its Control Center over the app in front) and opens it.
+
+Without a PC: the **Downloader** app on the TV, with the code **9890834** (it opens `https://github.com/Knikt/APL-Launcher/releases/latest/download/apl-launcher-android.apk`, always the latest version). For the Home button, APL Launcher Home Button: `https://github.com/Knikt/APL-Launcher/releases/latest/download/apl-launcher-home-button.apk`, with Play Protect's scan turned off while it installs (it blocks any sideloaded app that uses Accessibility). More: [android.md](android.md).

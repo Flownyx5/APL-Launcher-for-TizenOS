@@ -32,6 +32,8 @@ namespace APL.Bridge
     {
         private const string PortName = "APL_BRIDGE";
         private const string LauncherId = "APLauncher.Home", ReplyPort = "APL_BRIDGE_REPLY";
+        // APL Overlay: in the launcher's package (Tizen 7 and newer), or a package of its own (Tizen 6)
+        private static readonly string[] OverlayIds = { "APLauncher.Overlay", "apl.launcher.overlay" };
         private const int Chunk = 4000;                       // characters per message, as service.js
         private static readonly TimeSpan IdleAfter = TimeSpan.FromMinutes(15);
         private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
@@ -364,13 +366,14 @@ namespace APL.Bridge
             return st;
         }
 
-        /// <summary>The app in front from the app manager, when vconf does not give it: null if unknown.</summary>
+        /// <summary>The app in front from the app manager, when vconf does not give it: null if unknown. APL Overlay
+        /// is never the one: it shows over the others (a package of its own on Tizen 6, apl.launcher.overlay).</summary>
         private static async Task<string> FrontApp()
         {
             try
             {
                 var front = (await ApplicationManager.GetRunningApplicationsAsync())
-                    .Where(a => a.State.ToString() == "Foreground" && a.ApplicationId != "APLauncher.Overlay")
+                    .Where(a => a.State.ToString() == "Foreground" && Array.IndexOf(OverlayIds, a.ApplicationId) < 0)
                     .Select(a => a.ApplicationId).ToList();
                 if (!appsLogged) { appsLogged = true; Note("app manager, in front: " + (front.Count > 0 ? string.Join(", ", front) : "none")); }
                 return front.Count == 1 ? front[0] : null;          // several: not sure which one shows, ask Vetro

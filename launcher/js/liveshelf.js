@@ -43,7 +43,7 @@
     })();
     var KEYS = global.APL_KEYS;
     var TTL = 6 * 3600 * 1000;
-    var CACHE_VERSION = 5;              // 3: movies and series carry their title and their rating; 4: Smart Hub items their deep link; 5: "tv" / "movie", translated when shown
+    var CACHE_VERSION = 7;              // 7: films and series carry their overview (#56: kept 6 h, it never showed after 1.3.6); 3: movies and series carry their title and their rating; 4: Smart Hub items their deep link; 5: "tv" / "movie", translated when shown; 6: all audiences only on LG
     var MIN_VOTES = 20;                 // below that, a rating doesn't mean anything yet
 
     /* The screen's country, for trending videos, charts, prices and what each service streams there.
@@ -121,7 +121,7 @@
         } catch (e) {}
     }
     cacheFor(REGION);
-    setTimeout(function () { readRegion(6); }, 20000);
+    if (!APL.ccOverlay) setTimeout(function () { readRegion(6); }, 20000);
 
     /* TMDB (JustWatch) "provider" ids of the services (the same in every country). */
     var TMDB_PROVIDERS = {
@@ -141,22 +141,143 @@
         try { global.localStorage.setItem("apl.live." + k, JSON.stringify({ v: CACHE_VERSION, t: Date.now(), items: items })); } catch (e) {}
     }
 
+    /* ---------- the pictures themselves, kept on the screen ---------- */
+    /* The lists of titles stay 6 h, their pictures did not: every launch fetched
+       the same ten backdrops again, and a picture that is not there yet is a
+       download before it can be drawn. They are kept as blobs in the screen's own
+       storage and drawn from there, so a step - and a launch - finds them ready.
+       Forty-eight at most, newest kept; the store lives beside the lists. */
+    var ART_DB = "apl-art", ART_STORE = "pics", ART_MAX = 48;
+    var ART_TTL = 6 * 3600 * 1000;              // the same six hours as the lists of titles
+    var artUrls = {}, artDb = null, artHydrated = false;
+
+    function artOpenDb(then) {
+        if (!global.indexedDB) { then(null); return; }
+        if (artDb) { then(artDb); return; }
+        var req;
+        try { req = global.indexedDB.open(ART_DB, 1); } catch (e) { then(null); return; }
+        req.onupgradeneeded = function () {
+            var db = req.result;
+            if (!db.objectStoreNames.contains(ART_STORE)) db.createObjectStore(ART_STORE);
+        };
+        req.onsuccess = function () { artDb = req.result; then(artDb); };
+        req.onerror = function () { then(null); };
+    }
+    function artDrop(url) {
+        if (!artDb) return;
+        try { artDb.transaction(ART_STORE, "readwrite").objectStore(ART_STORE)["delete"](url); } catch (e) {}
+    }
+    /* Once, at start-up: every kept picture becomes an object URL in memory, so a
+       shelf can be shown from it without waiting for a single read. */
+    function artHydrate() {
+        artOpenDb(function (db) {
+            if (!db || artHydrated) return;
+            artHydrated = true;
+            var tx, store, cur, found = [];
+            try { tx = db.transaction(ART_STORE, "readonly"); store = tx.objectStore(ART_STORE); } catch (e) { return; }
+            cur = store.openCursor();
+            cur.onsuccess = function () {
+                var c = cur.result;
+                if (c) { found.push({ url: c.key, rec: c.value }); c.continue(); return; }
+                found.sort(function (a, b) { return ((b.rec && b.rec.t) || 0) - ((a.rec && a.rec.t) || 0); });
+                found.forEach(function (e, i) {
+                    /* A picture kept from an older list is a picture of a show
+                       the app may not even open on any more: it goes. */
+                    if (i >= ART_MAX || Date.now() - ((e.rec && e.rec.t) || 0) > ART_TTL) { artDrop(e.url); return; }
+                    if (e.rec && e.rec.blob) {
+                        try { artUrls[e.url] = global.URL.createObjectURL(e.rec.blob); } catch (err) {}
+                    }
+                });
+            };
+        });
+    }
+    /* A picture that has just been fetched for the wall is kept for next time,
+       as the host sent it: full resolution, one copy. A fetch that fails (the
+       network is not up yet at a start, a timeout) is asked for again the next
+       time the title comes round, rather than that host being written off. */
+    function artKeep(url) {
+        if (!url || !/^https?:/i.test(url) || artUrls["!" + url]) return;
+        artUrls["!" + url] = true;
+        artOpenDb(function (db) {
+            if (!db) return;
+            /* Not from the HTTP cache: the wall has just shown this picture as an
+               <img>, and that copy is cached without the headers a read needs, so a
+               plain fetch of the same address is refused by the browser itself - which
+               is what made it look as if the host refused to be read. */
+            global.fetch(url, { cache: "no-store" }).then(function (r) { return r.ok ? r.blob() : null; }).then(function (b) {
+                if (!b) throw new Error("no picture");
+                try { db.transaction(ART_STORE, "readwrite").objectStore(ART_STORE).put({ blob: b, t: Date.now() }, url); } catch (e) {}
+                /* Drawn from the store from now on, without asking the host again. */
+                if (!artUrls[url]) { try { artUrls[url] = global.URL.createObjectURL(b); } catch (e) {} }
+            })["catch"](function () { delete artUrls["!" + url]; });
+        });
+    }
+    /* The picture to draw: the one on the screen if it is there, its address otherwise. */
+    function artLook(url) { return (url && artUrls[url]) || ""; }
+    /* One picture per app, and its name kept: an app's first backdrop is written
+       down here, so the wall can have it the moment that app takes the focus -
+       before its shelf has even been asked for. */
+    function artFirst(appId) {
+        var rec;
+        try { rec = JSON.parse(global.localStorage.getItem("apl.art.first." + appId) || "null"); } catch (e) { return ""; }
+        /* Six hours, like the list the address came from: an app whose shelf has
+           been refreshed since opens on whatever it shows now. The picture itself
+           is dropped by artHydrate; this is what stops a stale address being used
+           while the new one is on its way. */
+        if (!rec || !rec.u || Date.now() - (rec.t || 0) > ART_TTL) return "";
+        return rec.u;
+    }
+    function artRemember(appId, url, index) {
+        if (!appId || !url || !/^https?:/i.test(url)) return;   // a data: picture is not an address to keep
+        try { global.localStorage.setItem("apl.art.first." + appId, JSON.stringify({ u: url, t: Date.now(), i: index || 0 })); } catch (e) {}
+    }
+    /* Which title of the shelf that picture is: the wall opens on it rather than on
+       the first one, so the picture does not change back a moment later. */
+    function artFirstIndex(appId) {
+        var rec;
+        try { rec = JSON.parse(global.localStorage.getItem("apl.art.first." + appId) || "null"); } catch (e) { return 0; }
+        if (!rec || Date.now() - (rec.t || 0) > ART_TTL) return 0;
+        return rec.i || 0;
+    }
+
+    APL.artCache = { look: artLook, keep: artKeep, first: artFirst, firstIndex: artFirstIndex, remember: artRemember };
+    setTimeout(artHydrate, 0);
+
     function getJson(url) {
         return global.fetch(url).then(function (r) {
             if (!r.ok) throw new Error("HTTP " + r.status);
             return r.json();
         });
     }
+    /* A title's ids never change: one request each, however many ask. Its rating and its fanart.tv picture
+       each asked TMDB for the same ids, so every series on the Top Shelf was looked up twice. */
+    var idsAsked = {};
+    function getIds(url) {
+        if (!idsAsked[url]) idsAsked[url] = getJson(url).then(null, function (e) { delete idsAsked[url]; throw e; });
+        return idsAsked[url];
+    }
 
     var TMDB = "https://api.themoviedb.org/3";
     var IMG = "https://image.tmdb.org/t/p/";
+    /* The full-screen pictures' size: TMDB's own on a page drawn in 4K (LG, js/webos.js sets APL_HIRES),
+       where a 780 or 1280 px wide picture showed its title logo blurred; Samsung keeps its sizes. */
+    function big(size) { return global.APL_HIRES ? "original" : size; }
+    /* The same TMDB picture at a smaller one of its sizes, never a bigger one: w300 for a blur or a sample,
+       w1280 for a card. Drawing a 4K "original" into a 192 x 108 blur made the page decode all of it on its
+       own thread, 0.4 s at a time on an LG G5 while the focus moved. Other hosts are left as they are. */
+    var SIZES = ["w45", "w92", "w154", "w185", "w300", "w342", "w500", "w780", "w1280", "original"];
+    APL.artSize = function (url, size) {
+        var m = /^(https?:\/\/image\.tmdb\.org\/t\/p\/)([a-z0-9]+)(\/.+)$/.exec(String(url || ""));
+        if (!m || SIZES.indexOf(m[2]) <= SIZES.indexOf(size) || SIZES.indexOf(size) < 0) return url;
+        return m[1] + size + m[3];
+    };
 
     /* Fanart.tv (free key): textless HD background and title logo, when available. */
     var FANART = "https://webservice.fanart.tv/v3/";
     function fanart(r) {
         if (!KEYS.fanart) return Promise.resolve(null);
         var idP = r._kind === "movie" ? Promise.resolve({ path: "movies/" + r.id })
-            : getJson(TMDB + "/tv/" + r.id + "/external_ids?api_key=" + KEYS.tmdb)
+            : getIds(TMDB + "/tv/" + r.id + "/external_ids?api_key=" + KEYS.tmdb)
                 .then(function (x) { return x.tvdb_id ? { path: "tv/" + x.tvdb_id } : null; });
         return idP.then(function (id) {
             if (!id) return null;
@@ -182,13 +303,13 @@
     /* The rating of a TMDB result: IMDb if there is one, else TMDB. */
     function noteFor(r, imdbId) {
         var other = { rating: ratingOf(r), ratingFrom: "TMDB" };
-        var id = imdbId ? Promise.resolve(imdbId) : getJson(TMDB + "/" + r._kind + "/" + r.id + "/external_ids?api_key=" + KEYS.tmdb).then(function (x) { return x.imdb_id; });
+        var id = imdbId ? Promise.resolve(imdbId) : getIds(TMDB + "/" + r._kind + "/" + r.id + "/external_ids?api_key=" + KEYS.tmdb).then(function (x) { return x.imdb_id; });
         return id.then(function (i) { return i ? imdbRating(r._kind, i) : null; }).then(function (n) {
             return n ? { rating: n, ratingFrom: "IMDb" } : other;
         }, function () { return other; });
     }
-    /* "★ 7.8 IMDb" (with a decimal comma in French) */
-    function noteOf(item) { return item.rating ? "★ " + item.rating.toFixed(1).replace(".", APL.lang === "fr" ? "," : ".") + " " + (item.ratingFrom || "TMDB") : ""; }
+    /* "★ 7.8 IMDb" (with a decimal comma in French and Polish) */
+    function noteOf(item) { return item.rating ? "★ " + item.rating.toFixed(1).replace(".", APL.lang === "fr" || APL.lang === "pl" || APL.lang === "tr" ? "," : ".") + " " + (item.ratingFrom || "TMDB") : ""; }
     /* "★ 7.8 IMDb · 2025 · TV Show" */
     function metaOf(item) {
         var type = item.type === "tv" ? APL.t("TV Show") : item.type === "movie" ? APL.t("content|Movie") : item.type;
@@ -201,10 +322,11 @@
             return Promise.all([fanart(r), noteFor(r)]).then(function (both) {
                 var fa = both[0] || {};
                 return {
-                    bg: fa.bg || IMG + "w1280" + r.backdrop_path,
+                    bg: fa.bg || IMG + big("w1280") + r.backdrop_path,
                     bgSmall: fa.bg ? fa.bg.replace("/fanart/", "/preview/") : IMG + "w300" + r.backdrop_path,   // enlarged = blurred, for the grid
                     card: IMG + "w780" + r.backdrop_path,
                     title: r.title || r.name || "",
+                    overview: String(r.overview || "").slice(0, 400),   // shown under the title in full screen (#56)
                     rating: both[1].rating,
                     ratingFrom: both[1].ratingFrom,
                     year: String(r.release_date || r.first_air_date || "").substr(0, 4),
@@ -221,6 +343,51 @@
     }
     function kind(k) { return function (r) { r._kind = r._kind || k; return r; }; }
 
+    /* ---------- all audiences only (LG: APL.platform.allAges, js/webos.js) ----------
+       What the Top Shelf recommends (popular on a service, trending, anime) is then only for all ages: every
+       rating TMDB knows for it, in the screen's country and in the big ones (US, UK, Germany, France), is
+       Tous publics, U, G, PG, FSK 0 or 6. Nothing rated -10, -12, PG-13, 12A, FSK 12 and above, nothing with no
+       rating. The same rule as APL TV's screen saver (its js/meta.js, allAges). */
+    var ALL_AGES = !!(APL.platform && APL.platform.allAges);
+    var AGES = { G: 0, U: 0, TP: 0, AL: 0, KT: 0, T: 0, L: 0, APTA: 0, A: 0, "TV-Y": 0, "TV-G": 0, C: 0,
+                 PG: 8, "TV-Y7": 7, C8: 8, "TV-PG": 10, "PG-13": 13, "TV-14": 14, "14A": 14, "12A": 12, R: 17, "TV-MA": 17,
+                 "NC-17": 18, "18A": 18, R18: 18, X: 18, VM14: 14, VM18: 18 };
+    var UNRATED = /^(NR|N\/A|NA|UNRATED|NOT RATED|-|EXEMPT|E)$/i;
+    function minAge(cc, v) {
+        var up = String(v || "").toUpperCase().trim(), n = parseInt(up.replace(/^M\//, "").replace(/\D/g, ""), 10);
+        if (!up || UNRATED.test(up)) return -1;
+        if (AGES[up] !== undefined) return cc === "CA" && up === "R" ? 18 : AGES[up];
+        return isNaN(n) ? -1 : n;
+    }
+    var RELEASE_ORDER = [3, 2, 4, 5, 1, 6];          // the cinema release's rating first, then the others
+    function ageOk(r) {
+        if (r.adult) return Promise.resolve(false);
+        var path = r._kind === "tv" ? "/tv/" + r.id + "/content_ratings" : "/movie/" + r.id + "/release_dates";
+        return getJson(TMDB + path + "?api_key=" + KEYS.tmdb).then(function (j) {
+            var by = {};
+            (j.results || []).forEach(function (x) {
+                var v = x.rating || "", rank = 99;
+                (x.release_dates || []).forEach(function (d) {
+                    var k = RELEASE_ORDER.indexOf(d.type);
+                    if (k < 0) k = 9;
+                    if (d.certification && k < rank) { rank = k; v = d.certification; }
+                });
+                by[x.iso_3166_1] = v;
+            });
+            var worst = -1;
+            ["US", "GB", "DE", "FR", REGION].forEach(function (cc) { if (by[cc]) worst = Math.max(worst, minAge(cc, by[cc])); });
+            return worst >= 0 && worst < 10;
+        }).catch(function () { return false; });
+    }
+    /* The most popular ones, or on LG the most popular for all audiences (more are looked at: few are) */
+    function pick(results, n) {
+        if (!ALL_AGES) return Promise.resolve(top(results, n));
+        var many = top(results, 30);
+        return Promise.all(many.map(ageOk)).then(function (ok) {
+            return many.filter(function (r, i) { return ok[i]; }).slice(0, n || 8);
+        });
+    }
+
     /* Popular movies and series on a service (Netflix, Prime Video…) in the screen's country. */
     function tmdb(providerId) {
         var common = "api_key=" + KEYS.tmdb + "&language=" + APL.locale + "&watch_region=" + REGION +
@@ -229,15 +396,15 @@
             getJson(TMDB + "/discover/tv?" + common).catch(function () { return { results: [] }; }),
             getJson(TMDB + "/discover/movie?" + common).catch(function () { return { results: [] }; })
         ]).then(function (res) {
-            return decorate(top((res[0].results || []).map(kind("tv")).concat((res[1].results || []).map(kind("movie")))));
+            return pick((res[0].results || []).map(kind("tv")).concat((res[1].results || []).map(kind("movie")))).then(decorate);
         });
     }
 
     /* Trending titles of the week, all services (movie and series websites). */
     function trending() {
         return getJson(TMDB + "/trending/all/week?api_key=" + KEYS.tmdb + "&language=" + APL.locale).then(function (j) {
-            return decorate(top((j.results || []).filter(function (r) { return r.media_type === "movie" || r.media_type === "tv"; })
-                .map(function (r) { r._kind = r.media_type; return r; })));
+            return pick((j.results || []).filter(function (r) { return r.media_type === "movie" || r.media_type === "tv"; })
+                .map(function (r) { r._kind = r.media_type; return r; })).then(decorate);
         });
     }
 
@@ -248,7 +415,7 @@
             getJson(TMDB + "/discover/tv?" + q).catch(function () { return { results: [] }; }),
             getJson(TMDB + "/discover/movie?" + q).catch(function () { return { results: [] }; })
         ]).then(function (res) {
-            return decorate(top((res[0].results || []).map(kind("tv")).concat((res[1].results || []).map(kind("movie")))));
+            return pick((res[0].results || []).map(kind("tv")).concat((res[1].results || []).map(kind("movie")))).then(decorate);
         });
     }
 
@@ -289,7 +456,7 @@
     /* Games: Steam top sellers in the screen's country (no key). Background = a screenshot of the game at
        1920×1080, title = the game's official logo (else its name). */
     var STEAM_CDN = "https://cdn.akamai.steamstatic.com/steam/apps/";
-    var STEAM_LANG = APL.lang === "fr" ? "french" : "english";       // language of the genres
+    var STEAM_LANG = APL.lang === "fr" ? "french" : APL.lang === "pl" ? "polish" : APL.lang === "tr" ? "turkish" : "english";       // language of the genres
     function games() {
         return getJson("https://store.steampowered.com/api/featuredcategories?cc=" + REGION + "&l=" + STEAM_LANG).then(function (j) {
             var seen = {}, list = [];
@@ -335,6 +502,126 @@
                          title: lp.ProductTitle || "", sub: "Xbox Game Pass" };
             }).filter(Boolean);
         });
+    }
+
+    /* Consoles: a Home tile for an input with its device chosen (Switch 2, PS5, Xbox, Steam Deck…) shows the games
+       of the moment on that console, from each maker's own store, with no key and no account:
+         PS5, PS4          the PlayStation Store's best sellers of the last 30 days, in the screen's country, with
+                           each game's wide background art (else a screenshot) and its logo
+         Switch 2, Switch  Nintendo's European eShop sorted by popularity (games out, or out within 45 days)
+         Xbox (Series, One) Game Pass's most popular games (gamepass above)
+         Steam Deck, Steam Machine, ROG Ally, Legion Go, PC: Steam's top sellers (games above)
+       The older and retro consoles (PS3, PS2, Wii U, Wii, Xbox 360, Sega, Atari…) have no store left to ask:
+       their tile keeps its own picture. The PlayStation app (Remote Play, PS Plus) shows the PS5's.
+       The store's own web requests: one that changes gives no list, and then a few big games of the Switch 2 and
+       the PS5 chosen by hand, with their official store pictures, stand in. */
+    var CONSOLES = {
+        switch2: { name: "Nintendo Switch 2", eshop: "BEE" }, "switch": { name: "Nintendo Switch", eshop: "HAC" },
+        ps5: { name: "PS5", store: "PS5" }, ps4: { name: "PS4", store: "PS4" },
+        xbox: { name: "Xbox", gamepass: 1 }, xboxseries: { name: "Xbox Series X|S", gamepass: 1 }, xboxone: { name: "Xbox One", gamepass: 1 },
+        steamdeck: { name: "Steam Deck" }, steammachine: { name: "Steam Machine" }, rogally: { name: "ROG Ally" }, legiongo: { name: "Legion Go" },
+        pc: { name: "PC" }
+    };
+    var NINTENDO = "https://assets.nintendo.com/image/upload/", PLAYSTATION = "https://gmedia.playstation.com/is/image/SIEPDC/";
+    var PICKED = {
+        switch2: [
+            ["The Legend of Zelda: Ocarina of Time", "70010000130792/9fb8faf644291a8398e43eadab602842d21c6b80537f71be0462685f52605c51"],
+            ["Pokémon Pokopia", "70010000107421/2045c3f67f865d333b1995562ad6b2894473b8a869e4c8efa01572539ec86019"],
+            ["Mario Kart World", "70010000095431/b8ca3bbb06f7a4149bea701e6764ed302b9ec0b41b3d7137d52eddb6ed05d704"],
+            ["Donkey Kong Bananza", "70010000096809/c111819ae2b07f446ab92d64c8d37e9ef8e541e30b687121fa6d5976096b61f9"],
+            ["Metroid Prime 4: Beyond", "70010000104849/89135935439ee6c3125ed070b578dbf11d352afa8af0f1efec0f9fb150e856e8"],
+            ["Kirby Air Riders", "70010000103775/23e7a16efe6b022a2e7b3922dc9648759ca6d2a47fbc4ee8c65b4b396564524a"],
+            ["Pokémon Legends: Z-A", "70010000099365/5d23a0f34b2c8f5a9c22724692d58360e6313671a949663caf10017b59cb3a05"],
+            ["Hyrule Warriors: Age of Imprisonment", "70010000103459/6c233749c2311251c1df347f5e46016b95c293d1568e1196b44d6712dcfae308"],
+            ["The Legend of Zelda: Ocarina of Time", "70010000130792/2e76ea7cb3eb833a0cbe8c9b016b28b3a7ef95838b66c1eaced1c0db7747dd37"]
+        ],
+        ps5: [
+            ["Grand Theft Auto VI", "grand-theft-auto-vi-screenshot-10-en-06may25"],
+            ["Ghost of Yōtei", "ghost-of-yotei-screenshot-02-en-04sep26"],
+            ["Marvel's Wolverine", "marvels-wolverine-overview-background-desktop-01-en-14aug26"],
+            ["Death Stranding 2: On the Beach", "death-stranding-2-screenshot-05-en-10mar25"],
+            ["Ghost of Tsushima", "ghost-of-tsushima-directors-cut-screenshot-05-en-22jun21"],
+            ["Saros", "saros-screenshot-04-en-14feb25"],
+            ["Astro Bot", "Astro-Bot-key-features-screenshot-02-en-24may24"],
+            ["Grand Theft Auto VI", "grand-theft-auto-vi-screenshot-08-en-06may25"],
+            ["Ghost of Tsushima", "ghost-of-tsushima-directors-cut-screenshot-01-en-22jun21"]
+        ]
+    };
+    function picked(key) {
+        var c = CONSOLES[key], wide = global.APL_HIRES ? 3840 : 1920;
+        if (!PICKED[key]) return null;
+        return PICKED[key].map(function (g) {
+            var bg = key === "ps5" ? PLAYSTATION + g[1] + "?wid=" + wide + "&hei=" + wide * 9 / 16 + "&fit=crop" : NINTENDO + "c_fill,w_" + wide + ",ar_16:9/f_auto/q_auto/store/software/switch2/" + g[1];
+            var small = key === "ps5" ? PLAYSTATION + g[1] + "?wid=320&hei=180&fit=crop" : NINTENDO + "c_fill,w_320,ar_16:9/f_auto/q_auto/store/software/switch2/" + g[1];
+            return { bg: bg, bgSmall: small, logo: null, title: g[0], sub: c.name };
+        });
+    }
+    function outOn(day) {
+        var d = new Date(String(day).slice(0, 10) + "T12:00:00Z");
+        return isNaN(d.getTime()) ? "" : APL.t("Out {date}", { date: d.getUTCDate() + " " + APL.t(MONTHS[d.getUTCMonth()]) });
+    }
+
+    /* PlayStation Store: the request its own pages make for "All games" sorted by Best Selling, one console. The
+       store of the screen's language and country (fr-FR), else the English one of that country, else the US one. */
+    var PS_GRID = "https://web.np.playstation.com/api/graphql/v1/op?operationName=categoryGridRetrieve";
+    var PS_QUERY = "88c0b9a1273c6d320c51cd73e390924e21ae28bf09f01cde8b84b1034b16cd03", PS_ALL_GAMES = "28c9c2b2-cecc-415c-9a08-482a605cb104";
+    function psStore(c) {
+        var vars = { id: PS_ALL_GAMES, pageArgs: { size: 16, offset: 0 }, sortBy: { name: "sales30", isAscending: false }, filterBy: ["targetPlatforms:" + c.store], facetOptions: [] };
+        var url = PS_GRID + "&variables=" + encodeURIComponent(JSON.stringify(vars)) + "&extensions=" + encodeURIComponent(JSON.stringify({ persistedQuery: { version: 1, sha256Hash: PS_QUERY } }));
+        var wide = global.APL_HIRES ? 3840 : 1920;
+        var locales = [String(APL.lang || "en").slice(0, 2) + "-" + REGION, "en-" + REGION, "en-US"].filter(function (l, i, a) { return a.indexOf(l) === i; });
+        function ask(i) {
+            if (i >= locales.length) return Promise.reject(new Error("no list"));
+            return global.fetch(url, { headers: { "x-psn-store-locale-override": locales[i], "content-type": "application/json" } }).then(function (r) {
+                if (!r.ok) throw new Error("HTTP " + r.status);
+                return r.json();
+            }).then(function (j) {
+                var list = (j && j.data && j.data.categoryGridRetrieve && j.data.categoryGridRetrieve.concepts) || [];
+                if (list.length < 3) throw new Error("too few");
+                return list;
+            }).catch(function () { return ask(i + 1); });
+        }
+        return ask(0).then(function (list) {
+            return list.map(function (g) {
+                var media = g.media || [];
+                function pick(role) { for (var i = 0; i < media.length; i++) if (media[i].role === role && media[i].type === "IMAGE" && media[i].url) return media[i].url; return ""; }
+                var art = pick("BACKGROUND_LAYER_ART") || pick("SCREENSHOT"), logo = pick("LOGO");
+                if (!art || !g.name) return null;
+                return { bg: art + "?w=" + wide, bgSmall: art + "?w=320", logo: logo ? logo + "?w=" + (global.APL_HIRES ? 1200 : 640) : null,
+                         title: g.name, sub: APL.t("Trending on {console}", { console: c.name }) };
+            }).filter(Boolean);
+        });
+    }
+
+    /* Nintendo's European eShop: its own search, sorted by popularity. Its 16:9 pictures come 500 pixels wide;
+       the same picture is there at 1600 (a size it lacks is skipped by the Top Shelf, launcher.js). */
+    var ESHOP_LANGS = { fr: "fr", de: "de", es: "es", it: "it", nl: "nl", pt: "pt" };
+    function eshop(c) {
+        var lang = ESHOP_LANGS[String(APL.lang || "").slice(0, 2)] || "en";
+        var q = "type:GAME AND playable_on_txt:" + c.eshop + " AND date_from:[* TO NOW+45DAYS]";
+        return getJson("https://searching.nintendo-europe.com/" + lang + "/select?q=*&fq=" + encodeURIComponent(q) +
+                       "&sort=" + encodeURIComponent("popularity asc") + "&rows=16&wt=json&fl=title,image_url_h16x9_s,date_from").then(function (j) {
+            var now = Date.now(), wide = global.APL_HIRES ? 1920 : 1600;
+            var list = ((j && j.response && j.response.docs) || []).map(function (g) {
+                var pic = g.image_url_h16x9_s || "";
+                if (!pic || !g.title) return null;
+                var big = pic.replace(/_image500w\.(png|jpe?g)$/i, "_image1600w.$1").replace(/\/w_500\//, "/w_" + wide + "/");
+                var out = g.date_from && Date.parse(g.date_from) > now;
+                return { bg: big, bgSmall: pic, logo: null, title: String(g.title).trim(),
+                         sub: out ? outOn(g.date_from) + " · " + c.name : APL.t("Trending on {console}", { console: c.name }) };
+            }).filter(Boolean);
+            if (list.length < 3) throw new Error("too few");
+            return list;
+        });
+    }
+
+    function consoleGames(key) {
+        var c = CONSOLES[key];
+        var live = c.store ? psStore(c) : c.eshop ? eshop(c) : c.gamepass ? gamepass() : games();
+        return Promise.resolve(live).then(function (items) {
+            if (!items || items.length < 3) throw new Error("too few");
+            return items;
+        }).catch(function () { return picked(key); });
     }
 
     /* Sport: next Ligue 1 and Champions League matches (TheSportsDB,
@@ -448,7 +735,39 @@
     /* Which source for this app? (null = no dynamic Top Shelf) */
     /* Settings › Appearance › Top Shelf, in this order: the app's own rows (What You're Watching, hubShelf), what
        is popular (liveShelf), then the app's artwork or the style chosen in Otherwise (launcher.js, genart.js). */
+    /* Settings › Appearance › Top Shelf › Continue Watching › Full Screen (#56): what the app's cards would show
+       (widgets.js) is the Top Shelf instead, one title at a time, ◀ ▶ through them in full screen, OK resumes it.
+       An app without any falls back to its usual Top Shelf. */
+    /* Full screen wants the big picture: a card's is 780 px wide, blurred on a 1080p wall (TMDB pictures only) */
+    function bigger(url) {
+        var m = /^(https?:\/\/image\.tmdb\.org\/t\/p\/)(w(?:300|342|500|780))(\/.+)$/.exec(String(url || ""));
+        return m ? m[1] + big("w1280") + m[3] : url;
+    }
+    function wallItem(c) {
+        var img = bigger(c.image || "");
+        // A picture with the title already drawn on it (TMDB): not written a second time under it
+        return { bg: img, bgSmall: APL.artSize ? APL.artSize(img, "w300") : img, card: img, title: c.titled ? "" : c.title || "",
+                 logo: c.logo || "", meta: c.sub || "", cw: c };
+    }
+    function continueSource(app, other) {
+        if (APL.sys.pref("continueStyle") !== "wall" || !APL.widgets || !APL.widgets.hasCards || !APL.widgets.hasCards(app.id)) return null;
+        return { id: "cw-" + app.id, ttl: 1, load: function () {
+            return APL.widgets.cardsFor(app.id).then(function (cards) {
+                var items = (cards || []).filter(function (c) { return c.kind === "video" && c.image; }).map(wallItem);
+                if (!other) return items.length ? items : null;
+                /* Then the app's usual Top Shelf (What's Popular), ◀ ▶ going on from one to the other (#56) */
+                return Promise.resolve(other.load()).catch(function () { return null; }).then(function (rest) {
+                    var all = items.concat(rest || []);
+                    return all.length ? all : null;
+                });
+            });
+        } };
+    }
     function sourceFor(app) {
+        var usual = usualSource(app);
+        return continueSource(app, usual) || usual;
+    }
+    function usualSource(app) {
         var pub = APL.sys.pref("liveShelf") ? publicSource(app) : null, pkg = hubPackage(app);
         if (!APL.sys.pref("hubShelf")) return pub;
         refreshHub();
@@ -495,6 +814,9 @@
                                                               : { id: "music-" + REGION, load: appleCharts };
         if (app.live === "games") return { id: "games-steam", load: games };
         if (app.live === "gamepass") return { id: "gamepass", load: gamepass };
+        // a console: an input's tile with its device chosen (sources.js), or a game app shown as one (live: "console:ps5")
+        var ck = app.consoleKey || (/^console:/.test(app.live || "") ? app.live.slice(8) : "");
+        if (ck && CONSOLES[ck]) return { id: "console-" + ck, load: function () { return consoleGames(ck); } };
         if (app.live === "sports") return { id: "sports", load: sports };
         if (app.live === "dailymotion") return { id: "dailymotion", load: dailymotion };
         if (app.live === "trending") return KEYS.tmdb ? { id: "trending", load: trending } : null;
@@ -549,19 +871,44 @@
             return artOf(hit);
         }).catch(function () { return null; });
     }
+    /* The official title logo of a film or a series (TMDB, the same picture the cards lay over a
+       backdrop): the wall shows it in place of the name when one exists. */
+    function logoArt(title, year) {
+        if (!KEYS.tmdb || !title) return Promise.resolve("");
+        function pickLogo(list, lang) {
+            return (list || []).filter(function (b) { return b.iso_639_1 === lang && b.file_path; })
+                .sort(function (a, b) { return (b.vote_average || 0) - (a.vote_average || 0); })[0];
+        }
+        return getJson(TMDB + "/search/multi?api_key=" + KEYS.tmdb + "&language=" + APL.locale + "&query=" + encodeURIComponent(title)).then(function (d) {
+            var found = (d.results || []).filter(function (r) { return r.media_type === "tv" || r.media_type === "movie"; });
+            var exact = found.filter(function (r) { return same(r.name || r.title, title) || same(r.original_name || r.original_title, title); });
+            var dated = exact.filter(function (r) { return year && String(r.first_air_date || r.release_date || "").substr(0, 4) === year; });
+            var hit = dated[0] || exact[0] || found[0];
+            if (!hit) return "";
+            var kind = hit.media_type === "tv" ? "tv" : "movie";
+            return getJson(TMDB + "/" + kind + "/" + hit.id + "/images?api_key=" + KEYS.tmdb + "&include_image_language=" + APL.lang + ",en,null").then(function (im) {
+                var logo = pickLogo(im.logos, APL.lang) || pickLogo(im.logos, "en");
+                return logo ? IMG + big("w500") + logo.file_path : "";
+            });
+        }).catch(function () { return ""; });
+    }
+
     /* Like on Apple TV, the picture with the title already drawn on it: TMDB tags it with a language, the
        interface's language first. Else the textless background, with the title logo laid over it (widgets.js). */
+    /* A card is about a quarter of the screen wide: 1280 px is sharp on a page drawn in 4K, where the
+       "original" cost a 4K decode for each card (widgets.js) */
+    function cardSize() { return global.APL_HIRES ? "w1280" : "w780"; }
     function keyArt(hit) {
-        var plain = { image: IMG + "w780" + hit.backdrop_path };
+        var plain = { image: IMG + cardSize() + hit.backdrop_path };
         return getJson(TMDB + "/" + hit._kind + "/" + hit.id + "/images?api_key=" + KEYS.tmdb + "&include_image_language=" + APL.lang + ",en,null").then(function (im) {
             function best(list, lang) {
                 return (list || []).filter(function (b) { return b.iso_639_1 === lang && b.file_path; })
                     .sort(function (a, b) { return (b.vote_average || 0) - (a.vote_average || 0); })[0];
             }
             var titled = best(im.backdrops, APL.lang) || best(im.backdrops, "en");
-            if (titled) return { image: IMG + "w780" + titled.file_path, titled: true };
+            if (titled) return { image: IMG + cardSize() + titled.file_path, titled: true };
             var logo = best(im.logos, APL.lang) || best(im.logos, "en");
-            return { image: plain.image, logo: logo ? IMG + "w500" + logo.file_path : "" };
+            return { image: plain.image, logo: logo ? IMG + big("w500") + logo.file_path : "" };
         }).catch(function () { return plain; });
     }
     function artOf(hit, imdbId) {
@@ -588,6 +935,7 @@
 
     APL.live = {
         searchArt: searchArt,
+        logoOf: logoArt,
         findImdb: findImdb,
         itemsFor: itemsFor,
         itemsNow: itemsNow,

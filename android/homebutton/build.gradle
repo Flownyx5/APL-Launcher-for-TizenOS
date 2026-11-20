@@ -1,0 +1,55 @@
+/* APL Launcher Home Button: the optional second app with the accessibility service for the remote's Home and
+   play/pause buttons (Google Play Protect blocks a sideloaded app that declares one, so the launcher has none).
+   Built and signed with the launcher by tools/make-android.py: the same key, or the two can't talk. */
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+}
+
+def aplVersion = project.findProperty("aplVersion") ?: "1.0.0"
+def parts = aplVersion.tokenize(".").collect { it as int } + [0, 0, 0]
+
+android {
+    namespace "com.knikt.apllauncher.home"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.knikt.apllauncher.home"
+        minSdk 21
+        targetSdk 35
+        versionCode parts[0] * 10000 + parts[1] * 100 + parts[2]
+        versionName aplVersion
+    }
+
+    signingConfigs {
+        release {
+            if (project.hasProperty("aplKeystore")) {
+                storeFile file(project.property("aplKeystore"))
+                storePassword System.getenv("APL_KEYSTORE_PASS")
+                keyAlias project.property("aplKeyAlias")
+                keyPassword System.getenv("APL_KEYSTORE_PASS")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            debuggable project.hasProperty("aplDebuggable")
+            signingConfig project.hasProperty("aplKeystore") ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}

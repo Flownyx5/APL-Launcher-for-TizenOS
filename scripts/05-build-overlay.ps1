@@ -2,6 +2,8 @@
 # APL Overlay comes in the launcher's package (hybrid .wgt, 03-build-launcher.ps1): nothing is built
 # here any more. A screen set up before that still has the old separate package (apl.launcher.overlay)
 # and Vetro rules pointing to it: the package is removed and the rules move to APLauncher.Overlay.
+# Tizen 6 is the exception: there APL Overlay IS that separate package (apl.launcher.overlay, installed by
+# install.ps1 next to the launcher's), so the buttons go to it and nothing is removed.
 #
 #   .\scripts\05-build-overlay.ps1 -TvIp 192.168.1.50
 #   .\scripts\05-build-overlay.ps1 -TvIp 192.168.1.50 -RemapOnly    (once the remote is set up in Vetro)
@@ -16,21 +18,29 @@ $ErrorActionPreference = 'Stop'
 $Base = "http://$TvIp`:$(Get-VetroPort)"
 $Overlay = "APLauncher.Overlay"
 $OldOverlay = "apl.launcher.overlay"
+$Separate = $false   # Tizen 6: APL Overlay in a package of its own
 
-# APL Overlay must be on the screen, in the launcher's package
-try { $have = Invoke-VetroExec $Base "app_launcher -l 2>/dev/null | grep -c '$Overlay' || true" }
+# APL Overlay must be on the screen: in the launcher's package, or else (Tizen 6) in its own
+function Test-App([string]$Id) {
+    $n = Invoke-VetroExec $Base "app_launcher -l 2>/dev/null | grep -cF '$Id' || true"
+    return (($n.Trim() -split '\s+')[-1] -notin @('', '0'))
+}
+try {
+    $have = Test-App $Overlay
+    if (-not $have -and (Test-App $OldOverlay)) { $Overlay = $OldOverlay; $OldOverlay = "APLauncher.Overlay"; $Separate = $true; $have = $true }
+}
 catch {
     $msg = (Tr "Vetro did not answer: " "Vetro n'a pas répondu : ") + $_.Exception.Message
     if ($RemapOnly) { Send-Gui ("APL-RESULT fail " + $msg); exit 1 }
     throw $msg
 }
-if (($have.Trim() -split '\s+')[-1] -in @('', '0')) {
+if (-not $have) {
     $msg = Tr "APL Overlay is not on the screen: install APL Launcher first." "APL Overlay n'est pas sur l'écran : installe d'abord APL Launcher."
     if ($RemapOnly) { Send-Gui ("APL-RESULT fail " + $msg); exit 1 }
     throw $msg
 }
 
-# The Home button goes to the overlay if it went to the launcher (or to the old overlay). The launcher takes it back if the overlay disappears, and says so.
+# The Home button goes to the overlay if it went to the launcher (or to the other overlay id). The launcher takes it back if the overlay disappears, and says so.
 try {
 $cur = Invoke-RestMethod -Uri "$Base/remap" -TimeoutSec 15
 $changed = $false
@@ -42,8 +52,9 @@ foreach ($rule in $rules) {
     }
 }
 # Pause (244) = Control Center. Samsung TV Plus (560) = AquaPlay and Prime Video (221) = TizenTube, only if
-# the app is installed: otherwise the button keeps its Samsung role. Restore removes them.
-$codes = @(244)
+# the app is installed: otherwise the button keeps its Samsung role. Multi View (497, the remotes that have it,
+# #47) = Control Center: Sources is there. Not 28, which is OK. Restore removes them.
+$codes = @(244, 497)
 try {
     $installed = Invoke-VetroExec $Base "app_launcher -l 2>/dev/null | grep -o -E 'AquaPlay02.AquaPlay|xvvl3S1bvH.TizenBrewStandalone' | sort -u"
     if ($installed -match 'AquaPlay02') { $codes += 560 }
@@ -67,8 +78,11 @@ $left = @($after.rules | Where-Object { $_ } | Where-Object { @($_.actions) | Wh
     throw
 }
 # The old separate package, from before the hybrid one. Removed only once Vetro has no rule left that
-# launches it (read back above): otherwise Home would point to an app that is gone.
-if ($left) {
+# launches it (read back above): otherwise Home would point to an app that is gone. Never on Tizen 6, where
+# it is APL Overlay itself (and the "old" one would be the launcher's package).
+if ($Separate) {
+    # nothing to remove: apl.launcher.overlay is the one in use
+} elseif ($left) {
     Write-Host (Tr "        The old APL Overlay package is kept: $left Vetro rule(s) still open it." "        L'ancien paquet APL Overlay est conservé : $left règle(s) Vetro l'ouvrent encore.") -ForegroundColor DarkYellow
 } else {
     try {

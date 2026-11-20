@@ -45,6 +45,13 @@
     function check(manual) {
         if (busy) return Promise.resolve();
         if (sys.PREVIEW) { if (manual) APL.toast(APL.t("Preview: updates happen on the screen")); return Promise.resolve(); }
+        // Another TV system (LG): GitHub's version is Samsung's until that system's own files are published
+        // with it, and its loader would not run a downloaded version anyway (boot.js)
+        if (APL.platform && !APL.platform.updates) {
+            if (APL.platform.updateNotice) return notice(manual);
+            if (manual) APL.toast(APL.t("On this TV, updates come as a new package"));
+            return Promise.resolve();
+        }
         busy = true;
         if (manual) APL.toast(APL.t("Checking for an update…"), true);
         return getText(U.RAW + "version.json").then(function (txt) {
@@ -99,9 +106,46 @@
         setTimeout(function () { global.location.reload(); }, 1200);
     }
 
-    function auto() { if (sys.pref("autoUpdate")) check(false); }
-    setTimeout(auto, 30000);
-    setInterval(auto, 6 * 3600 * 1000);
+    /* Another TV system (LG, Android TV): the launcher can't update itself there, so it says when a new
+       version is out and how to get it (APL.platform.updateNotice: the Homebrew Channel, APL Launcher Setup,
+       the Downloader app). Once per version, on the Home Screen with nothing open; Check for Update asks now. */
+    function notice(manual) {
+        busy = true;
+        if (manual) APL.toast(APL.t("Checking for an update…"), true);
+        return getText(U.RAW + "version.json").then(function (txt) {
+            var v = JSON.parse(txt);
+            if (U.cmp(v.version, U.installed) <= 0) {
+                if (manual) APL.toast(APL.t("The launcher is up to date (version {v})", { v: U.installed }));
+                return;
+            }
+            if (!manual && sys.pref("updateNotified") === v.version) return;
+            whenIdle(function () {
+                sys.setPref("updateNotified", v.version);
+                APL.platform.updateNotice(v);
+            }, manual);
+        }).catch(function (e) {
+            if (manual) APL.toast(APL.t("Update failed: {error}. Try again later.", { error: e.message || APL.t("no network") }));
+        }).then(function () { busy = false; });
+    }
+    function idle() {
+        return !((APL.settings && APL.settings.isOpen()) || (APL.controlCenter && APL.controlCenter.isOpen()) ||
+                 (APL.contextMenu && APL.contextMenu.isOpen()) || (APL.alert && APL.alert.isOpen && APL.alert.isOpen()) ||
+                 (APL.sources && APL.sources.isOpen()) || (APL.search && APL.search.isOpen()) ||
+                 (APL.screensaver && APL.screensaver.isActive && APL.screensaver.isActive()) || document.hidden);
+    }
+    function whenIdle(fn, now) {
+        if (now || idle()) { fn(); return; }
+        setTimeout(function () { whenIdle(fn, false); }, 20000);
+    }
+
+    function auto() {
+        if (APL.platform && !APL.platform.updates) { if (APL.platform.updateNotice) check(false); return; }
+        if (sys.pref("autoUpdate")) check(false);
+    }
+    if (!APL.ccOverlay) {                   // not from the Control Center over the apps (LG, webos.js)
+        setTimeout(auto, 30000);
+        setInterval(auto, 6 * 3600 * 1000);
+    }
 
     APL.updater = { check: check, reset: reset, running: function () { return U.running; },
                     installed: function () { return U.installed; }, fromBundle: function () { return U.fromBundle; } };

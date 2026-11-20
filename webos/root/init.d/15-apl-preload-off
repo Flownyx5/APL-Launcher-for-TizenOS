@@ -1,0 +1,16 @@
+#!/bin/sh
+# Boot hook (/var/lib/webosbrew/init.d, run-parts by the Homebrew Channel): LG never opens apps in the background
+# on its own (bin/apl-preload-off.sh). Now, then again every 10 minutes: LG sets its preload policy back a few
+# minutes after a start and when an app opens. A few luna calls each time, nothing else.
+# Pause: touch /media/developer/apl-debloat/OFF-preload (or OFF for the whole debloat).
+[ -e /media/developer/apl-debloat/OFF ] && exit 0
+[ -e /media/developer/apl-debloat/OFF-preload ] && exit 0
+[ -r /media/developer/apl-debloat/apl-preload-off.sh ] || exit 0
+if [ -f /tmp/apl-preload.pid ] && kill -0 "$(cat /tmp/apl-preload.pid)" 2>/dev/null; then exit 0; fi
+nohup sh -c 'echo $$ > /tmp/apl-preload.pid
+             while :; do
+                 [ -e /media/developer/apl-debloat/OFF-preload ] && exit 0
+                 sh /media/developer/apl-debloat/apl-preload-off.sh quiet
+                 sleep 600
+             done' </dev/null >/dev/null 2>&1 &
+exit 0

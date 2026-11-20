@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">APL Launcher Home Button</string>
+    <string name="key_service_description">Lets APL Launcher answer the remote\'s Home and play/pause buttons over every app: Home opens APL Launcher, holding Home opens its Control Center. It also tells the launcher which app is in front, for the App Switcher and Close Unused Apps. Only the remote\'s buttons and the name of the app in front are seen; nothing you type or see is read or sent anywhere.</string>
+</resources>

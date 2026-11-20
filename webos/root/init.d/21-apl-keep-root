@@ -1,0 +1,9 @@
+#!/bin/sh
+# Boot hook (/var/lib/webosbrew/init.d, run-parts by the Homebrew Channel): starts apl-keep-root.sh in the
+# background. It keeps APL Launcher's service as root and puts your own files (SF Pro fonts, keys, avatars)
+# back into the launcher after every update of it, Homebrew Channel's included: no restart needed.
+# Pause: touch /media/developer/apl-debloat/OFF-root.
+[ -e /media/developer/apl-debloat/OFF-root ] && exit 0
+[ -r /media/developer/apl-debloat/apl-keep-root.sh ] || exit 0
+nohup sh /media/developer/apl-debloat/apl-keep-root.sh </dev/null >/dev/null 2>&1 &
+exit 0

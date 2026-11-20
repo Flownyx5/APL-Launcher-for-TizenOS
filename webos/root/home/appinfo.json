@@ -1,0 +1,18 @@
+{
+    "id": "com.webos.app.home",
+    "version": "2.0.0",
+    "vendor": "Knikt (Gero Corp.)",
+    "type": "web",
+    "main": "index.html",
+    "title": "Home",
+    "icon": "icon.png",
+    "transparent": true,
+    "visible": false,
+    "class": { "hidden": true },
+    "noSplashOnLaunch": true,
+    "handlesRelaunch": true,
+    "disableBackHistoryAPI": true,
+    "lockable": false,
+    "appCategory": ["home"],
+    "requiredPermissions": ["applications", "applications.launcher", "applications.operation", "applications.internal", "settings", "system"]
+}

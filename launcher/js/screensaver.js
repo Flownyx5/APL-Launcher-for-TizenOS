@@ -17,7 +17,10 @@
 
     var APL = global.APL, sys = APL.sys;
     var root, layers, vids, labelEl, timeEl, logos, lcur = 0;
-    var active = false, lastInput = Date.now(), slideTimer = null, watchdog = null;
+    /* Idle time on the page's own clock, not the date: the screen starts at 1970 and only gets the
+       time once online, and that jump looked like 56 years without a key (the screen saver at boot). */
+    function now() { return global.performance && performance.now ? performance.now() : Date.now(); }
+    var active = false, lastInput = now(), slideTimer = null, watchdog = null;
     var idx = 0, cur = 0, vcur = 0, tries = 0, history = [];
     var MAX_TRIES = 3;
 
@@ -219,6 +222,10 @@
     function start() {
         if (active) return;
         if (!root) buildDom();
+        /* The connect form leaves the focus in a text field, and the launcher
+           ignores keys while one is focused: the saver could not be closed. */
+        var ae = document.activeElement;
+        if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA") && ae.blur) ae.blur();
         active = true;
         root.classList.toggle("no-motion", !!sys.pref("reduceMotion"));
         root.classList.add("is-active");
@@ -250,33 +257,38 @@
         layers.forEach(function (l) { l.classList.remove("is-on"); });
         (logos || []).forEach(function (l) { l.classList.remove("is-on"); });
         root.classList.remove("is-active", "is-video", "is-playing");
-        lastInput = Date.now();
+        lastInput = now();
     }
 
     // Any key: resets the idle time; if the screen saver is running, exits it without acting.
     APL.addHotkey(function () {
-        lastInput = Date.now();
+        lastInput = now();
         if (active) { stop(); return true; }
         return false;
     });
 
-    setInterval(function () {
+    // The Control Center over the apps (LG, webos.js) is a page of its own: never a screen saver there
+    if (!APL.ccOverlay) setInterval(function () {
         var delay = sys.pref("screensaverDelay");
         // Only with the launcher really in front: an app over it can leave the page "visible", and the
         // screen saver would then greet the return to the Home Screen
         var front = document.visibilityState !== "hidden" && (!document.hasFocus || document.hasFocus());
-        if (!active && delay && front && Date.now() - lastInput > delay * 60000) start();
+        if (!active && delay && front && now() - lastInput > delay * 60000) start();
         if (active) clock();
     }, 10000);
 
     // Back from an app, or Home (an app control, not a key): the Home Screen, never the screen saver.
     // The idle time starts again from there, not from the last key pressed in the launcher.
-    function back() { if (active) stop(); lastInput = Date.now(); }
+    function back() { if (active) stop(); lastInput = now(); }
     document.addEventListener("visibilitychange", function () {
         if (document.visibilityState === "hidden") stop();
         else back();
     });
     global.addEventListener("appcontrol", back);
 
-    APL.screensaver = { start: start, stop: stop, isActive: function () { return active; } };
+    /* touch: a screen that draws its own keys (the Home app) consumes them
+       before the launcher's hotkey above, so it has to say the viewer is
+       there, or the saver comes up over it. */
+    APL.screensaver = { start: start, stop: stop, isActive: function () { return active; },
+        touch: function () { lastInput = now(); } };
 })(window);

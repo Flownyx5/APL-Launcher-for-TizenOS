@@ -17,11 +17,61 @@ namespace APL.Setup
         public List<Site> Sites = new List<Site>();
     }
 
-    /// <summary>What the scripts saved in %APPDATA%\APL-Launcher, read to prefill the form. The app never writes it.</summary>
+    /// <summary>What the scripts saved in %APPDATA%\APL-Launcher, read to prefill the form. The app itself only
+    /// writes the TV chosen on its first page (setup-platform.txt) and the LG Home choice (setup-lg-home.txt).</summary>
     internal static class Saved
     {
         private static readonly string Dir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "APL-Launcher");
+
+        /// <summary>setup-platform.txt: "webos rooted", "tizen", "android"…</summary>
+        internal static bool Platform(out string platform, out bool rooted)
+        {
+            platform = "tizen"; rooted = true;
+            try
+            {
+                string f = Path.Combine(Dir, "setup-platform.txt");
+                if (!File.Exists(f)) return false;
+                string[] w = File.ReadAllText(f).Trim().ToLowerInvariant().Split(' ');
+                if (w[0] != "tizen" && w[0] != "webos" && w[0] != "android") return false;
+                platform = w[0];
+                rooted = w.Length > 1 && w[1] == "rooted";
+                return true;
+            }
+            catch { return false; }
+        }
+
+        internal static void SavePlatform(string platform, bool rooted)
+        {
+            try
+            {
+                Directory.CreateDirectory(Dir);
+                File.WriteAllText(Path.Combine(Dir, "setup-platform.txt"), platform + (rooted ? " rooted" : ""));
+            }
+            catch (Exception ex) { Log.Error("setup-platform.txt", ex); }
+        }
+
+        /// <summary>setup-lg-home.txt: "lg" once an LG install was started with "Home opens APL Launcher" off. The
+        /// next install keeps LG's Home the same way: the Setup never switches the TV's Home without being asked.</summary>
+        internal static bool LgHomeIsApl()
+        {
+            try
+            {
+                string f = Path.Combine(Dir, "setup-lg-home.txt");
+                return !File.Exists(f) || File.ReadAllText(f).Trim().ToLowerInvariant() != "lg";
+            }
+            catch { return true; }
+        }
+
+        internal static void SaveLgHome(bool apl)
+        {
+            try
+            {
+                Directory.CreateDirectory(Dir);
+                File.WriteAllText(Path.Combine(Dir, "setup-lg-home.txt"), apl ? "apl" : "lg");
+            }
+            catch (Exception ex) { Log.Error("setup-lg-home.txt", ex); }
+        }
 
         internal static string TvIp()
         {

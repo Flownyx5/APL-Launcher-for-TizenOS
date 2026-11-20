@@ -28,7 +28,15 @@
     }
 
     /* ---------- where the screen is ---------- */
+    /* The city chosen in Settings › Appearance › Weather (weather.js, the original's) wins over the one found
+       from the internet address: its pill then shows the weather, and the light and the rain follow it. */
+    function chosen() {
+        var p = sys.pref("weatherPlace");
+        return p && typeof p.lat === "number" && typeof p.lon === "number" ? { lat: p.lat, lon: p.lon, city: p.name || p.city || "" } : null;
+    }
     function place() {
+        var picked = chosen();
+        if (picked) return Promise.resolve(picked);
         var c = load(LOC_KEY);
         if (c && Date.now() - c.t < LOC_TTL) return Promise.resolve(c);
         if (sys.PREVIEW) return Promise.resolve(PARIS);
@@ -97,7 +105,8 @@
 
     function paintWeather() {
         if (!wxEl) return;
-        if (!sys.pref("weather") || !wx || isNaN(wx.temp)) { wxEl.style.display = "none"; return; }
+        // A city chosen in Settings: weather.js has its own pill next to the clock, one is enough
+        if (!sys.pref("weather") || !wx || isNaN(wx.temp) || chosen()) { wxEl.style.display = "none"; return; }
         var k = sky(wx.code, wx.day !== 0);
         wxEl.style.display = "";
         wxEl.innerHTML = APL.icon(k.icon, 30, 2) + "<span>" + wx.temp + "°</span>";
@@ -195,7 +204,7 @@
             if (document.hidden) { clearTimeout(fxTimer); if (fxEl) fxEl.classList.remove("is-on"); return; }
             refresh(true);                     // back Home: the weather again, for a few seconds
         });
-        ["ambient", "weather", "weatherFx"].forEach(function (k) {
+        ["ambient", "weather", "weatherFx", "weatherPlace"].forEach(function (k) {
             sys.onPref(k, function () { phase = ""; refresh(k !== "ambient"); });
         });
     }

@@ -57,6 +57,38 @@ html, body {
     will-change: opacity, transform;                 /* layer ready in advance: the fade redraws nothing */
 }
 .bg.is-active { opacity: 1; }
+/* LG draws the page in 4K: a layer kept ready is 32 MB there (8 on Samsung), and its browser gets 250 MB
+   for all of them (--force-gpu-mem-available-mb). One per app visited went past it after eight apps (431 MB
+   measured on a G5), and the TV left squares of the screen undrawn, black. Only the backdrop on screen is
+   kept ready; a fading one keeps its layer for the length of its fade. 209 MB measured after. */
+.is-webos .bg { will-change: auto; }
+.is-webos .bg.is-active { will-change: opacity, transform; }
+/* LG, 4K: what changes on a move has a layer of its own, so a move repaints only that and never the page or
+   the whole grid (G5, measured with the inspector's paint events): the title area, the dock (its frosted
+   picture changes with each app), every grid tile (the focused one scaled up left the grid layer and was
+   repainted into it again, 8 Mpx twice a move), the grid's blurred picture and the hint as they fade.
+   Dock 43 -> 57 images a second, moving in the grid 45 -> 55, opening it 33 -> 43. */
+.is-webos .shelfinfo, .is-webos .dock, .is-webos .rows .tile { will-change: transform; }
+.is-webos .bgblur, .is-webos .hint { will-change: opacity; }
+/* The page is the screen: the rows below it made the document 2443 px tall, and each slide of the grid
+   resized the page's own layer and repainted it whole (and took 72 MB instead of 32). The body is the
+   rows' containing block and clips them; nothing scrolls, everything moves by transform. */
+.is-webos body { position: relative; overflow: clip; }
+/* The grid's blurred picture fades in faster: two 4K layers blended on each frame of its fade */
+.is-webos .bgblur { transition-duration: 250ms; }
+/* The Control Center: its dim (a plain colour with Visual Effects off, the default) and its panel each a
+   layer. The screen draws a plain colour without painting it; opening no longer repaints a 4K surface. */
+.is-webos .cc__dim { will-change: opacity; }
+.is-webos .cc__panel { will-change: transform, opacity; }
+/* The scrim, a plain gradient, drawn at a quarter of the size and scaled up (webos.js adds is-up once it is
+   drawn, so it keeps that size): 2 MB instead of 32, under LG's 250 MB, and nothing to see in a gradient.
+   Over the grid it only fades out: its darkening is drawn into the grid's blurred picture (launcher.js
+   gridTint), so no 4K background is swapped and one full-screen layer fewer is blended. */
+.is-webos .scrim { right: auto; bottom: auto; width: 25%; height: 25%; transform-origin: 0 0; transform: scale(1); will-change: transform, opacity; }
+.is-webos .scrim.is-up { transform: scale(4); }
+.is-webos .mode-grid .scrim, .is-webos .perf.mode-grid .scrim, .is-webos .theme-light.mode-grid .scrim,
+.is-webos .theme-light.perf.mode-grid .scrim { opacity: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0) 16%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.55) 70%, rgba(0,0,0,0.92) 86%, #000 100%); }
 /* A backdrop picture is an <img> (launcher.js showPicture): a decoded bitmap is
    painted whole, where a CSS background on this layer filled itself in a line at
    a time from the top as it decoded. */
@@ -155,6 +187,23 @@ html, body {
     transition: opacity 400ms ease;
 }
 .status__clock { font-size: 24px; font-weight: 500; color: rgba(255,255,255,0.95); }
+/* The weather before the clock (weather.js): its sky and temperature, the clock's size and colour */
+.status__weather { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; font-size: 24px; font-weight: 500; color: rgba(255,255,255,0.95); }
+.status__weather .ico { flex: none; }
+.theme-light .status__weather { color: #1d1d1f; }
+/* The city picker (weather.js): a field for the screen's keyboard, then the cities found */
+.wpick { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 900; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); }
+.wpick.is-open { display: flex; }
+.wpick__box { width: 760px; padding: 44px 48px; border-radius: 36px; background: #1c1c1e; color: #fff; }
+.wpick__title { margin: 0 0 24px; font-size: 38px; font-weight: 600; }
+.wpick__field { box-sizing: border-box; width: 100%; height: 76px; padding: 0 26px; border: 3px solid transparent; border-radius: 18px; background: #2c2c2e; color: #fff; font: inherit; font-size: 30px; outline: none; }
+.wpick__field.is-focused { border-color: #fff; }
+.wpick__note { margin: 18px 4px 14px; font-size: 22px; color: rgba(255,255,255,0.6); }
+.wpick__list { display: flex; flex-direction: column; gap: 10px; }
+.wpick__row { display: flex; flex-direction: column; padding: 16px 24px; border-radius: 18px; background: #2c2c2e; transition: transform 160ms ease; }
+.wpick__row.is-focused { background: #fff; color: #000; transform: scale(1.03); }
+.wpick__name { font-size: 28px; font-weight: 600; }
+.wpick__region { font-size: 20px; opacity: 0.7; }
 .status__avatar {
     width: 46px; height: 46px; border-radius: 50%;
     background: radial-gradient(circle at 35% 30%, #ffd9a0, #e58a5c 45%, #6b3fb8 100%);
@@ -195,13 +244,30 @@ html, body {
 }
 
 /* Top Shelf movie title and rating: on the left, without touching the hint in the center */
-.shelfinfo { position: fixed; left: 90px; top: calc(var(--dock-top) - 133px); width: 640px; z-index: 9; color: #fff; opacity: 0; pointer-events: none; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85); transition: opacity 220ms ease; }
+.shelfinfo { position: fixed; left: 90px; top: calc(var(--dock-top) - 215px); width: 1400px; z-index: 9; color: #fff; opacity: 0; pointer-events: none; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85); transition: opacity 220ms ease; }
 .shelfinfo.is-visible { opacity: 1; }
 .mode-grid .shelfinfo, .has-wdg .shelfinfo { opacity: 0; }
 .mode-full .shelfinfo { top: 910px; width: 1200px; }
-.shelfinfo__title { font-size: 44px; font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The logo's height is reserved whether it is there or not: the rating and the
+   year sit where they will sit, and the logo grows up into its own space instead
+   of pushing them down when its file arrives a moment later. */
+.shelfinfo__title { min-height: 120px; display: flex; align-items: flex-end; font-size: 44px; font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The title's own logo, where TMDB has one: never stretched, never above the
+   height the name would have taken. */
+.shelfinfo__title.is-swap { animation: titleSwap 240ms ease both; }
+@keyframes titleSwap {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+}
+.shelfinfo__logo { display: block; height: 120px; width: auto; max-width: 1320px; object-fit: contain; flex: 0 0 auto; filter: drop-shadow(0 3px 14px rgba(0, 0, 0, 0.8)); opacity: 0; transition: opacity 320ms ease-out; }
+.shelfinfo__logo.is-in { opacity: 1; }
 .shelfinfo__open { display: none; margin-top: 14px; font-size: 24px; font-weight: 600; color: rgba(255, 255, 255, 0.95); }
 .mode-full .shelfinfo.can-open .shelfinfo__open { display: block; }
+/* The description, in full screen only (#56): three lines at most, the title moves up to make room */
+.shelfinfo__desc { display: none; margin-top: 14px; max-width: 1100px; font-size: 26px; font-weight: 400; line-height: 1.35; color: rgba(255, 255, 255, 0.86);
+                   overflow: hidden; -webkit-line-clamp: 3; -webkit-box-orient: vertical; max-height: 106px; white-space: normal; }
+.mode-full .shelfinfo.has-desc .shelfinfo__desc { display: -webkit-box; }
+.mode-full .shelfinfo.has-desc { top: 780px; }
 .shelfinfo__meta { margin-top: 6px; font-size: 26px; font-weight: 500; color: rgba(255, 255, 255, 0.88); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ===================== HOME (dock + rows) ===================== */
@@ -331,9 +397,50 @@ html, body {
     top: 0; right: 0; bottom: 0; left: 0;
     background: #000;
     z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: opacity 500ms ease;
 }
 .boot.is-hidden { opacity: 0; pointer-events: none; }
+/* The mark and a thin line: the start-up has something to show while the
+   settings, the profiles and the apps are read (and while a screen puts its
+   settings back). One transform on a small element - nothing else moves. */
+.boot__mark { display: flex; flex-direction: column; align-items: center; gap: 34px; opacity: 0.92; }
+.boot__a {
+    font-size: 62px;
+    font-weight: 600;
+    letter-spacing: 10px;
+    margin-right: -10px;
+    color: rgba(255, 255, 255, 0.92);
+}
+.boot__bar {
+    position: relative;
+    display: block;
+    width: 184px;
+    height: 3px;
+    border-radius: 2px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.14);
+}
+.boot__bar i {
+    position: absolute;
+    top: 0; left: 0;
+    display: block;
+    width: 38%;
+    height: 100%;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.86);
+    animation: bootLine 1.2s ease-in-out infinite;
+}
+@keyframes bootLine {
+    from { transform: translateX(-110%); }
+    to   { transform: translateX(280%); }
+}
+.reduce-motion .boot__bar i { animation: none; width: 100%; opacity: 0.6; }
+/* A start-up that is still going after twenty seconds (launcher.js): the line sits
+   still instead of sweeping, so it reads as slow rather than as loading. */
+.boot--slow .boot__bar i { animation: none; width: 100%; opacity: 0.3; }
 
 /* ===================== BUILT-IN APPS (Settings, Sources) ===================== */
 .vtile {
@@ -347,6 +454,10 @@ html, body {
 .vtile--sources  { background: linear-gradient(180deg, #3d7bf0 0%, #1d47b5 100%); color: #fff; }
 .vtile--search   { background: linear-gradient(180deg, #4a4a52 0%, #26262b 100%); color: #fff; }
 .vtile--samsunghome { background: linear-gradient(180deg, #2a4fd6 0%, #1428a0 100%); color: #fff; }
+/* The Home app: its own white plate, with the Home Assistant mark in the
+   brand's blue. Only the logo differs from the HomeKit tile. */
+.vtile--ha-mark { background: #fff; color: #18bcf2; }
+.vtile--ha-mark .vtile__ha { width: 92px; height: 92px; display: block; fill: currentColor; }
 
 /* ===================== SETTINGS (tvOS split view) ===================== */
 .settings {
@@ -412,6 +523,8 @@ html, body {
     text-align: center;
     min-height: 70px;
 }
+/* The whole value of an information row the column cuts (settings.js, describe) */
+.settings__full { display: block; margin-top: 16px; font-size: 23px; color: rgba(255, 255, 255, 0.62); word-wrap: break-word; }
 .settings__path {
     margin-top: 14px;
     width: 560px;
@@ -501,16 +614,16 @@ html, body {
 .cc.is-open .cc__dim { opacity: 1; }
 .cc__panel {
     position: absolute;
-    top: 52px;
+    top: 32px;
     right: 60px;
-    width: 582px;          /* the 534 px grid plus its 24 px insets */
+    width: 542px;          /* the 494 px grid plus its 24 px insets */
     opacity: 0;
     transform: translateY(-14px) scale(0.97);
     transform-origin: 100% 0;
     transition: opacity 200ms ease, transform 260ms var(--spring, ease);
 }
 .cc.is-open .cc__panel { opacity: 1; transform: none; }
-.cc__head { display: flex; justify-content: space-between; align-items: center; height: 64px; margin-bottom: 18px; padding: 0 6px; }
+.cc__head { display: flex; justify-content: space-between; align-items: center; height: 60px; margin-bottom: 12px; padding: 0 6px; }
 .cc__time { font-size: 34px; font-weight: 600; letter-spacing: -0.5px; }
 .cc__heads { display: flex; gap: 14px; }
 .cc__headico, .cc__avatar {
@@ -523,14 +636,14 @@ html, body {
     background: radial-gradient(circle at 35% 30%, #7cc4ff, #2f6bdc 55%, #1b2f86 100%);
     box-shadow: inset 0 0 0 2px rgba(255,255,255,0.22);
 }
-.cc__viewport { max-height: 920px; overflow: hidden; padding: 8px 24px 12px; margin: -12px -24px 0; }   /* 24 px: room for an enlarged row (1.06 × 586 px) */
-/* One grid for every tile, 534 px wide: 260 + 14 + 260. 260 px is the narrowest
-   column the French labels fit in on one line ("Économiseur", "Minuterie");
-   wider than that only makes every tile a longer rectangle. */
-.cc__body { display: grid; grid-template-columns: repeat(2, 260px); justify-content: center; gap: 14px; transition: transform 260ms var(--ease); }
-/* The power tile is square: two 123 px rows and their 14 px gap are exactly its
-   260 px width, and the two tiles beside it fill those rows instead of floating. */
-.cc__body--main { grid-template-rows: 123px 123px; }
+.cc__viewport { max-height: 960px; overflow: hidden; padding: 8px 24px 12px; margin: -12px -24px 0; }   /* the grid and its two captions: 955 px, and 32 + 72 + 960 still clears 1080 */
+/* One grid for every tile, 494 px wide: 240 + 14 + 240. 240 px is the narrowest
+   column the French labels fit in ("Économiseur" needs 140 px at 24 px, in a
+   148 px title box); wider than that only makes every tile a longer rectangle. */
+.cc__body { display: grid; grid-template-columns: repeat(2, 240px); justify-content: center; gap: 14px; transition: transform 260ms var(--ease); }
+/* The power tile is square: two 113 px rows and their 14 px gap are exactly its
+   240 px width, and the two tiles beside it fill those rows instead of floating. */
+.cc__body--main { grid-template-rows: 113px 113px; }
 .cc__body--main > .cc__t--big + .cc__t, .cc__body--main > .cc__t--big + .cc__t + .cc__t { height: 100%; }
 .cc__body--audio, .cc__body--pair, .cc__body--airplay { grid-template-columns: 1fr; gap: 12px; }
 
@@ -548,29 +661,33 @@ html, body {
 }
 .cc__t--big {
     grid-row: span 2;
-    width: 260px;
-    height: 100%;           /* the two 121 px rows it spans */
+    width: 240px;
+    height: 100%;           /* the two 113 px rows it spans */
     border-radius: 44px;
     flex-direction: column;
     justify-content: center;
     gap: 16px;
 }
 .cc__t--big .cc__title { font-size: 26px; }
-.cc__t--pill { height: 96px; border-radius: 48px; gap: 14px; padding: 0 22px 0 20px; min-width: 0; }
-.cc__t--wide { grid-column: span 2; height: 96px; border-radius: 48px; gap: 14px; padding: 0 22px 0 20px; }   /* Screensaver, Settings */
-.cc__t--pill .cc__ico { width: 56px; height: 56px; }
+/* One cell is 113 px: the two rows under the power tile are 113 + 14 + 113, so a
+   pill is exactly one cell tall and two wide, and a circle is one cell square.
+   Every tile in the grid then follows the same measure, and each step is half
+   the area of the one before it. */
+.cc__t--pill { height: 113px; border-radius: 56.5px; gap: 12px; padding: 0 16px; min-width: 0; }
+.cc__t--wide { grid-column: span 2; height: 113px; border-radius: 56.5px; gap: 12px; padding: 0 16px; }   /* Screensaver, Settings */
+.cc__t--pill .cc__ico { width: 48px; height: 48px; }
 .cc__t--pill .cc__title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 24px; }
 /* The device name under Wi-Fi or Audio is a label, not a detail to clip. */
 .cc__t--pill .cc__sub { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.15; font-size: 19px; }
-/* The circles take an equal share of the row, so four of them fill the 534 px
-   grid exactly (4 × 120 + 3 × 18); a row of one (Search) is marked solo by
+/* The circles take an equal share of the row, so four of them fill the 494 px
+   grid exactly (4 × 113 + 3 × 14); a row of one (Search) is marked solo by
    controlcenter.js and stays a small button. */
-.cc__rounds { grid-column: span 2; display: flex; justify-content: center; align-items: center; gap: 18px; height: 120px; padding: 0; }
-.cc__t--round { flex: 1 1 0; max-width: 120px; height: 120px; border-radius: 50%; justify-content: center; }
-.cc__rounds--solo, .cc__rounds--solo .cc__t--round { height: 88px; max-width: 88px; }
+.cc__rounds { grid-column: span 2; display: flex; justify-content: center; align-items: center; gap: 14px; height: 113px; padding: 0; }
+.cc__t--round { flex: none; width: 113px; height: 113px; border-radius: 50%; justify-content: center; }
+.cc__rounds--solo, .cc__rounds--solo .cc__t--round { height: 113px; max-width: 113px; }
 .cc__caption { display: block; grid-column: span 2; height: 20px; margin-top: -4px; text-align: center; font-size: 19px; font-weight: 500; line-height: 20px; color: rgba(255,255,255,0.78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Spans both columns: 260 + 14 + 260 = 534, the width of the grid. */
-.cc__t--slider { grid-column: span 2; height: 96px; border-radius: 48px; gap: 20px; padding: 0 26px 0 24px; }
+/* Spans both columns: 240 + 14 + 240 = 494, the width of the grid. */
+.cc__t--slider { grid-column: span 2; height: 113px; border-radius: 56.5px; gap: 20px; padding: 0 26px 0 24px; }
 .cc__t--row { min-height: 104px; border-radius: 52px; gap: 18px; padding: 14px 30px 14px 22px; }
 .cc__ico {
     flex: none;
@@ -853,8 +970,17 @@ html, body {
 .mode-grid .bg.is-motion { animation-play-state: paused; }
 .reduce-motion .bg.is-motion { animation: none; }
 
-.tile__card--icon { overflow: hidden; }
-.tile__card--icon .tile__icon { position: relative; z-index: 1; }
+/* No fill, no shadow, no sheen: anything drawn behind a transparent icon is a
+   rectangle with the icon's outline in the middle of it. */
+.tile__card--icon { overflow: hidden; background: transparent !important; box-shadow: none; }
+.tile__card--icon::after { content: none; }
+/* An app with no catalogue artwork: its real icon is the tile, edge to edge, as
+   on tvOS. Kept at 68 % with the card's colour around it, the icon sat inside a
+   rectangle of that colour - the plate that was still showing behind the icons.
+   The rounded clip of the card shapes it, so the icon needs no frame of its own.
+   The App Store icon keeps its own rounded square (it is drawn that way). */
+.tile__card--icon .tile__icon { position: relative; z-index: 1; width: 100%; height: 100%; max-width: none; object-fit: cover; }
+.tile__card--icon .tile__icon--app { width: 100%; height: 100%; max-width: none; object-fit: cover; border-radius: 0; box-shadow: none; }
 /* App Store icon: rounded square like an app, with a soft shadow */
 .tile__icon--app { height: 74%; border-radius: 22%; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); }
 
@@ -868,7 +994,9 @@ html, body {
     backdrop-filter: blur(40px) saturate(1.4);
 }
 .perf .sources__dim { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(6, 8, 14, 0.9); }
-.sources__title { position: absolute; top: 120px; left: 0; right: 0; text-align: center; font-size: 56px; font-weight: 700; }
+/* White in both themes, like the cards: Sources keeps its dark veil in the light theme too,
+   where the title took the theme's dark text and could hardly be seen. */
+.sources__title { position: absolute; top: 120px; left: 0; right: 0; text-align: center; font-size: 56px; font-weight: 700; color: #fff; }
 .sources__row { position: absolute; left: 0; right: 0; top: 360px; display: flex; justify-content: center; gap: 44px; padding: 0 96px; }
 .sources__row.is-picking { top: 250px; flex-wrap: wrap; gap: 26px 30px; padding: 0 140px; }
 /* As wide as 400 px, narrower when the screen has more inputs than fit (4 HDMI ports and AirPlay):
@@ -909,15 +1037,14 @@ html, body {
 .search.is-open { opacity: 1; pointer-events: auto; }
 .search__dim { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: rgba(6, 8, 14, 0.82); -webkit-backdrop-filter: blur(40px) saturate(1.4); backdrop-filter: blur(40px) saturate(1.4); }
 .perf .search__dim { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(6, 8, 14, 0.94); }
-.search__field { position: absolute; top: 96px; left: 90px; right: 90px; height: 84px; font-size: 64px; font-weight: 600; letter-spacing: -0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.search__field.is-empty { color: rgba(255, 255, 255, 0.35); }
-.search__keys { position: absolute; top: 220px; left: 90px; right: 90px; display: flex; gap: 6px; }
-.search__key { flex: 1 1 0; height: 64px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 500; color: rgba(255, 255, 255, 0.85); transition: transform 150ms var(--ease), background 150ms ease; }
-.search__key--wide { flex: 0 0 auto; padding: 0 22px; font-size: 24px; }
-.search__key.is-focused { background: #fff; color: #111; transform: scale(1.15); }
-.search__results { position: absolute; top: 400px; left: 85px; display: grid; grid-template-columns: repeat(var(--cols, 6), var(--tile-w)); column-gap: var(--gap-x); row-gap: 90px; }
+.search__field { position: absolute; top: 96px; left: 70px; width: 1100px; height: 96px; padding: 0 20px; box-sizing: border-box; border: 0; border-radius: 22px; outline: none;
+    background: transparent; color: #fff; caret-color: #fff; font: inherit; font-size: 64px; font-weight: 600; letter-spacing: -0.5px; transition: background 150ms ease, transform 150ms var(--ease); }
+.search__field::placeholder { color: rgba(255, 255, 255, 0.35); }
+.search__field.is-focused { background: rgba(255, 255, 255, 0.12); }
+.search.is-typing .search__field { background: rgba(255, 255, 255, 0.08); }
+.search__results { position: absolute; top: 320px; left: 85px; display: grid; grid-template-columns: repeat(var(--cols, 6), var(--tile-w)); column-gap: var(--gap-x); row-gap: 90px; }
 .search__results .tile__label { opacity: 1; }
-.search__empty { position: absolute; top: 330px; left: 90px; font-size: 26px; font-weight: 600; color: rgba(255, 255, 255, 0.6); }
+.search__empty { position: absolute; top: 250px; left: 90px; font-size: 26px; font-weight: 600; color: rgba(255, 255, 255, 0.6); }
 .has-search .shelfinfo, .has-search .home, .has-search .status, .has-search .hint { opacity: 0; }
 /* Search's hint, top left across from the status pill: a magnifier on the Home Screen, "▲ Search" in full screen.
    Search also has a button in the Control Center (controlcenter.js); this stays, because it is how the Home
@@ -981,7 +1108,7 @@ html, body {
 .pprompt__title { font-size: 44px; font-weight: 700; margin: 0 0 30px; }
 .pprompt__input {
     width: 600px; height: 86px; border-radius: 18px; border: 0; outline: none; padding: 0 28px;
-    font: 600 36px/1 inherit; color: #1c1c1e; background: #f5f5f7; text-align: center;
+    font-family: inherit; font-weight: 600; font-size: 36px; line-height: 1; color: #1c1c1e; background: #f5f5f7; text-align: center;
 }
 .pprompt__hint { margin-top: 24px; font-size: 24px; color: rgba(255,255,255,0.6); }
 /* 3D avatars (Memoji style) */
@@ -1002,6 +1129,22 @@ html, body {
 .status__avatar .pavatar--memoji, .cc__avatar .pavatar--memoji { margin-top: 14%; }
 .apicker__item.is-focused { transform: scale(1.18); box-shadow: 0 0 0 5px #fff, 0 18px 36px rgba(0,0,0,0.5); }
 .pitem__avatar { overflow: hidden; }
+/* Change Icon (hold OK on an app, launcher.js chooseIcon): the launcher's tiles, Original first.
+   A row is 132 + 12 + 30 + 30 = 204 px, launcher.js ROW. */
+.ipicker { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 47; background: rgba(6, 8, 14, 0.92); display: flex; flex-direction: column; align-items: center; }
+.ipicker__title { margin: 70px 0 34px; max-width: 1600px; font-size: 48px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ipicker__scroll { flex: 1; overflow: hidden; padding: 24px 40px 0; margin-top: -24px;
+    -webkit-mask-image: linear-gradient(#000 88%, transparent); mask-image: linear-gradient(#000 88%, transparent); }
+.ipicker__grid { display: grid; grid-template-columns: repeat(6, 220px); gap: 30px 40px; transition: transform 320ms var(--spring, ease); }
+.ipicker__item { transition: transform 220ms var(--spring, ease); }
+.ipicker__art { position: relative; width: 220px; height: 132px; border-radius: 22px; overflow: hidden; display: flex; align-items: center; justify-content: center;
+    background: #111 center / cover no-repeat; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4); transition: box-shadow 220ms ease; }
+.ipicker__art img { width: 70px; height: 70px; object-fit: contain; }
+.ipicker__name { height: 30px; margin-top: 12px; font-size: 22px; font-weight: 500; line-height: 30px; text-align: center; color: rgba(255, 255, 255, 0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ipicker__item.is-current .ipicker__name { color: rgba(255, 255, 255, 0.9); }
+.ipicker__item.is-focused { transform: scale(1.12); }
+.ipicker__item.is-focused .ipicker__art { box-shadow: 0 0 0 5px #fff, 0 18px 36px rgba(0, 0, 0, 0.5); }
+.ipicker__item.is-focused .ipicker__name { color: #fff; }
 
 
 /* ===================== FOLDERS ===================== */
@@ -1084,6 +1227,7 @@ html, body {
 .theme-light .srow__bar { background: rgba(0, 0, 0, 0.13); }
 .theme-light .srow__bar i { background: #1d1d1f; }
 .theme-light .settings__desc, .theme-light .settings__path, .theme-light .srow__section { color: #55555b; }
+.theme-light .settings__full { color: #6e6e73; }
 /* Menus, folders, switcher */
 .theme-light .appmenu__panel { background: rgba(250, 250, 253, 0.97); color: #1d1d1f; }
 .theme-light .aplalert__box { background: rgba(250, 250, 253, 0.98); color: #1d1d1f; }
@@ -1096,11 +1240,13 @@ html, body {
 .wdg.is-on { display: block; animation: wdgIn 240ms ease; }
 @keyframes wdgIn { from { opacity: 0; } to { opacity: 1; } }
 .mode-grid .wdg { display: none; }
-.has-wdg .hint { opacity: 0; }
+.has-wdg .hint, .has-alert .hint { opacity: 0; }
 .wdg__bg { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: linear-gradient(120deg, #20409a 0%, #1476a8 55%, #0f8f96 100%); }
 .wdg__blur { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 240ms ease; }
-.wdg__row { position: absolute; left: 90px; top: 96px; display: flex; gap: 44px; }
+.wdg__row { position: absolute; left: 90px; top: 96px; display: flex; gap: 44px; transition: transform 320ms var(--spring, ease); will-change: transform; }
 .wdg__heading { height: 58px; font-size: 28px; font-weight: 600; color: rgba(255, 255, 255, 0.82); }
+.wdg__item.is-out .wdg__heading { opacity: 0; }      /* a card cut by the screen's edge: no heading under the clock (widgets.js markOut) */
+.wdg__heading { transition: opacity 200ms ease; }
 .wdg__card { position: relative; flex: none; width: 800px; height: 450px; border-radius: 26px; overflow: hidden; background: #14161c; color: #fff; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35); transition: transform 240ms var(--spring, ease), box-shadow 240ms ease; will-change: transform; }
 .wdg__card.is-focused { transform: scale(1.05); box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55); }
 .wdg__pic { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; padding-bottom: 90px; color: rgba(255, 255, 255, 0.4); background: center / cover no-repeat; }
@@ -1109,8 +1255,8 @@ html, body {
 .wdg__mark { font-size: 96px; font-weight: 700; letter-spacing: -2px; color: #fff; text-align: center; line-height: 1.05; }
 .sw__widgets .wdg__card--channel .wdg__pic { padding: 22px 60px 54px; }
 .sw__widgets .wdg__mark { font-size: 38px; letter-spacing: 0; }
-.wdg__txt { position: absolute; left: 0; right: 0; bottom: 0; padding: 90px 30px 20px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.8) 62%); }
-.wdg__card--video .wdg__txt { padding-bottom: 34px; }
+/* The same room under the text on every card, bar or not: the texts of two cards stay on one line */
+.wdg__txt { position: absolute; left: 0; right: 0; bottom: 0; padding: 90px 30px 34px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.8) 62%); }
 .wdg__label { display: none; }
 .wdg__title { font-size: 34px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wdg__sub { font-size: 24px; color: rgba(255, 255, 255, 0.76); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1124,14 +1270,14 @@ html, body {
 .sw__widgets { position: absolute; left: 24px; bottom: 24px; display: flex; gap: 14px; }
 .sw__widgets .wdg__card { width: 320px; height: 180px; border-radius: 18px; }
 .sw__widgets .wdg__pic { padding-bottom: 40px; }
-.sw__widgets .wdg__txt { padding: 26px 14px 10px; }
-.sw__widgets .wdg__card--video .wdg__txt { padding-bottom: 20px; }
+.sw__widgets .wdg__txt { padding: 26px 14px 20px; }
 .sw__widgets .wdg__label { display: block; font-size: 15px; font-weight: 600; color: rgba(255, 255, 255, 0.76); }
 .sw__widgets .wdg__title { font-size: 21px; }
 .sw__widgets .wdg__sub { font-size: 15px; }
 .sw__widgets .wdg__bar { left: 14px; right: 14px; bottom: 8px; height: 5px; }
 .sw__widgets .wdg__logo { left: 14px; bottom: 44px; max-height: 50px; }
 
+/* ===================== OLD SCREENS (Tizen 6.0 and earlier, Chromium < 84) =====================
    `gap` works only in grids there, not in flex rows: the same spacing with margins.
    launcher.js puts .no-flexgap on <html> when the screen ignores it. */
 
@@ -1415,7 +1561,6 @@ html, body {
 .tile.is-launching .tile__card { transform: scale(1.16); opacity: 0; transition: transform 230ms cubic-bezier(0.2, 0.7, 0.2, 1), opacity 210ms ease-in; }
 .tile.is-launching .tile__card::before { animation: none; }
 .veil.is-slow { transition-duration: 240ms; }
-=======
 /* ===================== LIQUID GLASS =====================
    The dock, the Control Center's tiles and the status pill, like tvOS 26: a clear sheet, lightly tinted,
    with light pooling in its top left corner, a thick rim that catches the light where it is lit (top
@@ -1424,6 +1569,7 @@ html, body {
    the default on the screen). Declared last, it overrides the glass above. */
 .dock, .perf .dock,
 .status, .perf .status,
+.search-hint, .perf .search-hint,
 .cc__t, .perf .cc__t {
     background:
         radial-gradient(120% 90% at 12% 0%, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 70%),
@@ -1434,7 +1580,7 @@ html, body {
         inset 0 0 14px rgba(255,255,255,0.07),        /* lensing: the glass a little brighter along its edges */
         0 12px 32px rgba(0,0,0,0.24);
 }
-.dock::before, .status::before, .cc__t::before {
+.dock::before, .status::before, .search-hint::before, .cc__t::before {
     content: "";
     position: absolute;
     top: 0; right: 0; bottom: 0; left: 0;
@@ -1478,6 +1624,7 @@ html, body {
 
 .theme-light .dock, .theme-light.perf .dock,
 .theme-light .status, .theme-light.perf .status,
+.theme-light .search-hint, .theme-light.perf .search-hint,
 .theme-light .cc__t, .theme-light.perf .cc__t {
     background:
         radial-gradient(120% 90% at 12% 0%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0.35) 70%),
@@ -1486,7 +1633,7 @@ html, body {
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), inset 0 0 14px rgba(255,255,255,0.35), 0 10px 28px rgba(0,0,0,0.12);
 }
 .theme-light .cc__t, .theme-light.perf .cc__t { background-color: rgba(236, 238, 244, 0.6); }
-.theme-light .dock::before, .theme-light .status::before, .theme-light .cc__t::before {
+.theme-light .dock::before, .theme-light .status::before, .theme-light .search-hint::before, .theme-light .cc__t::before {
     background: linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.35) 25%,
                 rgba(0,0,0,0.04) 55%, rgba(255,255,255,0.25) 80%, rgba(255,255,255,0.6) 100%);
 }
@@ -1500,14 +1647,19 @@ html, body {
         var(--glass-img, none) -42px var(--glass-y, -783px) / 1920px 1080px no-repeat;
 }
 
-/* The status pill: more tint than the dock, the time stays readable over a bright picture (snow, white posters) */
-.status, .perf .status {
+/* The status pill and the magnifier across from it: more tint than the dock, the time stays readable over a
+   bright picture (snow, white posters) */
+.status, .perf .status,
+.search-hint, .perf .search-hint {
     background:
         radial-gradient(120% 90% at 12% 0%, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.03) 45%, rgba(255,255,255,0) 70%),
         linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.01) 50%, rgba(255,255,255,0.03) 100%),
         rgba(26, 28, 36, 0.68);
 }
-.theme-light .status, .theme-light.perf .status { background-color: rgba(236, 238, 244, 0.7); }
+.theme-light .status, .theme-light.perf .status,
+.theme-light .search-hint, .theme-light.perf .search-hint { background-color: rgba(236, 238, 244, 0.7); }
+/* The time follows the pill: it kept its white in the light theme, invisible on the pale glass */
+.theme-light .status__clock { color: #1d1d1f; }
 
 /* A round button that is on keeps its color (Game Mode green…), with visual effects off too: the glass
    rules above have the same weight and came later */
@@ -1519,7 +1671,6 @@ html, body {
     background: #f5f5f7; color: var(--tint, #0a84ff);
 }
 
-/* ===================== OLD SCREENS (Tizen 6.0 and earlier, Chromium < 84) ==============
 /* ===================== SMOOTHNESS (fork, js/smooth.js) =====================
    html.lite: screens before 2022, or keys measured slow. The same look with less to redraw per key:
    no mask over the Settings list (a masked list is drawn again whole at each step of its slide), rows
@@ -1570,3 +1721,163 @@ html, body {
 /* The grid's blurred wallpaper is only drawn in the grid; the rain or snow is shorter (ambient.js) */
 .lite .bgblur { visibility: hidden; }
 .lite .mode-grid .bgblur { visibility: visible; }
+/* ===================== LG, 4K: NOTHING PAINTED ON A MOVE =====================
+   LG's browser draws on the GPU thread that also puts each frame on screen, so whatever is painted during a
+   move takes that time from the frames (a G5: a tile with its blurred shadow 3.5 ms, the clock pill 25 ms,
+   a 4K backdrop 30 ms, against 16.6 ms a frame). Here a move changes transforms and opacities of layers that
+   already exist, and pictures are composited from their own bitmaps. All behind .is-webos (js/webos.js). */
+
+/* A backdrop picture (an <img>, launcher.js showPicture) is its own layer: a layer made of one image is
+   rastered at the image's size (480 x 270 for the generated artwork) and scaled by the GPU, where the
+   layer around it was painted in 4K, 8 Mpx for a soft picture. The layer around it has no black of its own
+   then, and it is kept for good (it holds nothing): only a card (Settings, Sources) is a 4K layer, kept
+   while it is shown. */
+.is-webos .bg:has(> img:not(.brandcard__icon)) { background: none !important; will-change: opacity; }
+.is-webos .bg > img:not(.brandcard__icon) { will-change: transform; }
+/* A card (launcher.js cardBack): its glow is such a picture, and its icon and name are layers the size of
+   themselves, so the card's own full-screen layer holds nothing */
+.is-webos .brandcard > * { will-change: transform; }
+
+/* What is hidden holds no memory, and what comes back is not painted again. LG gives the page 125 MB of
+   tiles (half of --force-gpu-mem-available-mb=250). Past it the browser throws away what isn't on screen
+   and paints it again when it returns: with a closed Settings panel still painted in 4K under everything
+   (32 MB) and a card kept ready (32 MB), opening the Control Center or the grid repainted the dock, the
+   clock, the magnifier and every tile, 100 to 600 ms of GPU each time (a G5).
+   - A closed panel is not painted at all (visibility), once its fade is over.
+   - What fades out and back keeps its layers while it is out: with will-change its opacity is a change the
+     compositor makes alone; without it, each fade rebuilt and repainted everything under it. */
+/* Settings: the focused row's white plate and its shadow are one layer sliding from row to row (settings.js
+   placePlate), as on tvOS; the row itself only changes the colour of its text, at once. Its background and
+   shadow fading on focus repainted its 1736 x 360 layer on every frame of the change (80 ms of GPU a move). */
+.is-webos .srow__plate { position: absolute; left: 0; top: 0; width: 100%; height: 72px; border-radius: 36px; background: #fff;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28); opacity: 0; pointer-events: none; will-change: transform, opacity;
+    transition: transform 250ms var(--ease), opacity 200ms ease; }
+.is-webos .srow__plate.is-on { opacity: 1; }
+.is-webos .srow { position: relative; transition: none; }
+.is-webos .srow.is-focused, .is-webos .theme-light .srow.is-focused { background: transparent; box-shadow: none; transform: none; }
+/* Sources: its dim a layer of its own, a plain colour the screen draws without painting it. Inside the sheet's
+   layer it made opening Sources raster a 4K surface (113 ms of GPU on a G5). */
+.is-webos .sources__dim { will-change: opacity; }
+.is-webos .settings:not(.is-open) { visibility: hidden; transition: opacity 350ms ease, visibility 0s linear 350ms; }
+.is-webos .sources:not(.is-open), .is-webos .search:not(.is-open) { visibility: hidden; transition: opacity 220ms ease, visibility 0s linear 220ms; }
+.is-webos .profiles:not(.is-open) { visibility: hidden; transition: opacity 200ms ease, visibility 0s linear 200ms; }
+.is-webos .boot.is-hidden { visibility: hidden; transition: opacity 500ms ease, visibility 0s linear 500ms; }
+.is-webos .home { will-change: transform, opacity; }
+.is-webos .status, .is-webos .search-hint, .is-webos .hint { will-change: opacity; }
+.is-webos .shelfinfo { will-change: transform, opacity; }
+
+/* A tile: its small shadow never changes and nothing is painted on it on focus. Its large shadow, its sheen
+   and its name in the grid are two shared sets of layers (launcher.js focusFx) put where the focus is: they
+   have the tile's box and its scale, with the same spring, so they move as one with it. */
+.is-webos .tile .tile__card, .is-webos .tile.is-focused .tile__card { box-shadow: 0 4px 10px rgba(0, 0, 0, 0.30); transition: none; }
+.is-webos .tile__card::after { content: none; }
+.is-webos .home .tile.is-focused .tile__label { opacity: 0; }
+.tfx { position: absolute; width: var(--tile-w); height: var(--tile-h); pointer-events: none; opacity: 0; transform: scale(1);
+       transition: transform 150ms var(--spring), opacity 160ms ease; will-change: transform, opacity; }
+.tfx.is-on { opacity: 1; transform: scale(1.2); }
+.tfx--lift > img { position: absolute; left: -80px; top: -80px; width: calc(100% + 160px); height: calc(100% + 160px); max-width: none; }
+.tfx--sheen { z-index: 4; border-radius: var(--radius); overflow: hidden; transition: transform 150ms var(--spring), opacity 300ms var(--ease); }
+.tfx--sheen > img { display: block; width: 100%; height: 100%; }
+.tfx--name { z-index: 2; transition: transform 150ms var(--spring), opacity 200ms ease; }
+.tfx--name > span { position: absolute; left: 50%; top: calc(100% + 12px); transform: translateX(-50%); font-size: 24px; font-weight: 500;
+                    white-space: nowrap; color: #fff; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6); }
+.theme-light .tfx--name > span { color: #1d1d1f; text-shadow: none; }
+
+/* The clock: its text is a layer, so a new minute doesn't repaint the pill under it (25 ms) */
+.is-webos .status__clock { will-change: transform; }
+
+/* The Control Center's tiles: under its pane a tile's own fill and rim are never seen, so the tile paints
+   nothing at all there, focused or not: no layer, where each tile's own (fill, blurred shadow, masked rim)
+   was 10 ms to paint and 1.2 MB, 15 MB for the twelve of them kept ready. Focus is the pane's plate and the
+   text. The soft shadow under a tile goes with it: over the dimmed screen it could hardly be seen. No fade
+   of the text colour, which repainted the tile on every frame. */
+.is-webos body.glass .cc__t, .is-webos body .cc__t { transition: transform 220ms var(--spring, ease); }
+.is-webos .cc__t:has(> .cg__glass.is-on), .is-webos .cc__t.is-focused:has(> .cg__glass.is-on) { background: none; box-shadow: none; }
+.is-webos .cc__t:has(> .cg__glass.is-on)::before { content: none; }
+
+/* Settings: the list's fade at its top and bottom was a mask, a second surface the size of the list (22 MB
+   with it) drawn again on every frame it scrolled. With Visual Effects off the list is simply cut at its
+   edges. With the Settings panel (32 MB) the page then stays under the TV's 125 MB: past it, a band of the
+   panel was left unpainted, a black bar (a G5). */
+.is-webos .perf .settings__listwrap { -webkit-mask-image: none; mask-image: none; }
+
+/* LG, 4K: the screen blends every full-screen layer on every frame, 8.3 million pixels each, and that was the
+   limit on a G5 (the inspector's quads: 37 Mpx a frame at rest on the Home Screen, 67 during a crossfade,
+   frames dropped while the GPU caught up). What is covered whole is no longer drawn at all:
+   - the page's own black: the TV's window is black already (appinfo.json bgColor), and it was blended under
+     every picture;
+   - under the Continue cards, once they have faded in (an opaque gradient, then their opaque blurred
+     picture, widgets.js wdg-solid): the backdrop, its scrim and the grid's blur;
+   - under the cards' blurred picture, their gradient (a layer of its own that only fades, widgets.js);
+   - the scrim's empty middle: its bottom half and its top band are two layers, a third of the screen less;
+   - the Control Center and Sources while closed: 70 layers the screen kept in every frame (is-gone). */
+html.is-webos, .is-webos body { background: transparent; }
+.is-webos body.wdg-solid:not(.mode-grid) .bg,
+.is-webos body.wdg-solid:not(.mode-grid) .scrim,
+.is-webos body.wdg-solid:not(.mode-grid) .scrim-top,
+.is-webos body.wdg-solid:not(.mode-grid) .bgblur { visibility: hidden; }
+.is-webos .wdg__bg { background: none; }
+.is-webos .wdg__bg::before { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+    background: linear-gradient(120deg, #20409a 0%, #1476a8 55%, #0f8f96 100%); will-change: opacity; }
+.is-webos .wdg--blurred .wdg__bg::before { opacity: 0; }
+.is-webos .scrim, .is-webos .mode-grid .scrim, .is-webos .perf.mode-grid .scrim, .is-webos .theme-light.mode-grid .scrim,
+.is-webos .theme-light.perf.mode-grid .scrim { top: 50%; height: 12.5%;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 40%, rgba(0,0,0,0.92) 72%, #000 100%); }
+.is-webos .scrim-top { position: fixed; top: 0; left: 0; width: 100%; height: 16%; pointer-events: none;
+    background: linear-gradient(180deg, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0) 100%);
+    transition: opacity 500ms ease; will-change: opacity; }
+.is-webos .mode-full .scrim-top { opacity: 0.25; }
+.is-webos .mode-grid .scrim-top, .is-webos.is-cc-overlay .scrim-top { opacity: 0; }
+.is-webos .cc.is-gone, .is-webos .sources.is-gone { display: none; }
+
+/* The Control Center over the apps (LG's Guide button on a rooted TV, js/webos.js): this page is a window LG
+   draws over the app in front, see-through, with nothing but the panel. The app's own picture stays under it. */
+html.is-cc-overlay, html.is-cc-overlay body { background: transparent; }
+.is-cc-overlay .bg, .is-cc-overlay .bgblur, .is-cc-overlay .scrim, .is-cc-overlay .status, .is-cc-overlay .shelfinfo,
+.is-cc-overlay .hint, .is-cc-overlay .home { display: none; }
+/* And the start-up screen: LG opens this window as a page of its own over the app in front, so the
+   launcher's boot runs again in it and would cover what is playing with a black plate and the mark. */
+.is-cc-overlay .boot { display: none; }
+
+/* ---------- Trailer over the full-screen artwork ----------
+   A layer of its own, between the pictures and the scrim: the picture under it
+   can change without taking the video with it, and the scrim, the dock and the
+   title cards stay above exactly as they were. */
+.trailerlayer {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 600ms linear;
+}
+
+.trailerlayer.is-on { opacity: 1; }
+
+/* Larger than the layer, so the player's own corner branding falls outside the
+   frame: the video is cropped at the edges, which nothing in the picture
+   notices. The extra height goes to the bottom, where the player keeps its
+   progress bar, its title card and the "watch on YouTube" line - 6 % all round
+   left those in view, 12 % down the bottom takes them out. */
+.trailerlayer {
+    overflow: hidden;
+}
+
+.trailerlayer > iframe {
+    position: absolute;
+    top: -6%;
+    left: -3%;
+    width: 106%;
+    height: 118%;
+    border: 0;
+}
+
+/* ===================== NOTHING DRIFTS UNDER A PANEL ===================== */
+/* Nothing drifts while a panel is over the wall: the artwork's slow move was
+   costing a full-screen transform every frame behind the Control Center. */
+.has-cc .bg.is-motion,
+.has-sources .bg.is-motion,
+.has-search .bg.is-motion,
+.has-settings .bg.is-motion,
+.has-profiles .bg.is-motion,
+.has-wdg .bg.is-motion { animation-play-state: paused; }
+

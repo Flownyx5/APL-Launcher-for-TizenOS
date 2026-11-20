@@ -1,0 +1,25 @@
+#!/bin/sh
+# APL Launcher on a rooted LG TV: blocks LG's ads, telemetry and content-recognition servers.
+# Run at every start-up by the Homebrew Channel (/var/lib/webosbrew/init.d, run-parts).
+#
+# Snapshot of furkan-bayrak/lg-tv-blocklist (CC BY 4.0), tier SAFE, taken on 2026-09-14.
+# Only the 21 hostnames verified not to break Netflix, Prime, HBO or YouTube. The LG store,
+# app updates and signing-ins keep working: the launcher needs them.
+# /etc/hosts is read-only on the TV: a copy of it is bind-mounted over the original.
+APL_PRIVACY_FLAG="# APL Launcher privacy block (webos/root/init.d/11-apl-block-privacy)"
+H="ad.lgappstv.com ads.lgtvcommon.com adsdtvc.com ca.nextlgsdp.com cdpbeacon.lgtvcommon.com
+de.emp.lgsmartplatform.com de.info.lgsmartad.com de.nextlgsdp.com eic.api.lgtviot.com eic.lgtviot.com
+eic.nudge.lgtvcommon.com eic.tv.wiselg.com eic.wiseconfig.lgtvcommon.com homeprv.lgtvcommon.com
+info.lgsmartad.com initscr.lge.com lgsmartad.com lgtvsdp.com recommend.lgtvcommon.com smart.adtvc.app
+us.lgtvsdp.com"
+if ! grep -q "APL Launcher privacy block" /etc/hosts; then
+    # /etc/hosts is already bind-mounted by the mises-à-jour script (10-apl-block-updates),
+    # so appending to the current file is enough; it will be rewritten each boot.
+    echo "" >> /etc/hosts
+    echo "$APL_PRIVACY_FLAG" >> /etc/hosts
+    for h in $H; do
+        echo "127.0.0.1 $h" >> /etc/hosts
+        echo "::1 $h" >> /etc/hosts
+    done
+fi
+exit 0

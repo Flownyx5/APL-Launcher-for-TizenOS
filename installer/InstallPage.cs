@@ -126,7 +126,7 @@ namespace APL.Setup
             debounce.Tick += (s, e) => { debounce.Stop(); CheckVetro(false); };
             // Keeps the status live: the screen may be turned on or off while the window is open.
             recheck = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
-            recheck.Tick += (s, e) => { if (Vetro.IsIPv4(Main.Ip) && Main.Window.IsActive) CheckVetro(true); };
+            recheck.Tick += (s, e) => { if (Main.Platform == "tizen" && Vetro.IsIPv4(Main.Ip) && Main.Window.IsActive) CheckVetro(true); };
 
             AddSite("", "");
             ShowView("form");

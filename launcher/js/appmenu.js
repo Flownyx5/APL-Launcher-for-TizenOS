@@ -123,6 +123,7 @@
             return e;
         });
         alertRoot.classList.add("is-open");
+        document.body.classList.add("has-alert");        // the Home Screen's hint stays out from under its buttons
         alertNav.setTiles(btns);
         alertNav.focus(spec.focus || 0);
         APL.pushNav(alertNav);
@@ -132,6 +133,7 @@
         if (!alertSpec) return;
         alertSpec = null;
         alertRoot.classList.remove("is-open");
+        document.body.classList.remove("has-alert");
         APL.popNav(alertNav);
     }
 

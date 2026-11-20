@@ -22,6 +22,13 @@ for name in sorted(os.listdir(os.path.join(L, "js"))):
         r = subprocess.run(["node", "--check", os.path.join(L, "js", name)], capture_output=True, text=True)
         if r.returncode:
             fail("syntax: js/%s\n%s" % (name, r.stderr.strip()))
+# the Android layer (android/web, added to the page by tools/make-android.py)
+AW = os.path.join(ROOT, "android", "web")
+for name in sorted(os.listdir(AW)) if os.path.isdir(AW) else []:
+    if name.endswith(".js"):
+        r = subprocess.run(["node", "--check", os.path.join(AW, name)], capture_output=True, text=True)
+        if r.returncode:
+            fail("syntax: android/web/%s\n%s" % (name, r.stderr.strip()))
 for name in sorted(os.listdir(os.path.join(L, "bridge"))):
     if name.endswith(".js"):
         r = subprocess.run(["node", "--check", os.path.join(L, "bridge", name)], capture_output=True, text=True)
@@ -38,6 +45,17 @@ for name in sorted(os.listdir(os.path.join(L, "js"))):
         for call, edition in TOO_NEW.items():
             if call in text:
                 fail("js/%s uses %s (%s): too new for the browser of older screens, keep to ES5" % (name, call.strip(".("), edition))
+# Android TV boxes can have an old WebView too (Android 7: Chromium 5x)
+for name in sorted(os.listdir(AW)) if os.path.isdir(AW) else []:
+    if name.endswith(".js"):
+        text = open(os.path.join(AW, name), encoding="utf-8").read()
+        for call, edition in TOO_NEW.items():
+            if call in text:
+                fail("android/web/%s uses %s (%s): keep to ES5" % (name, call.strip(".("), edition))
+        code = re.sub(r"/\*.*?\*/|//[^\n]*|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'", "", text, flags=re.S)
+        for word in ("=>", "`", "let ", "const ", "class "):
+            if word in code:
+                fail("android/web/%s uses %s: keep to ES5" % (name, word.strip()))
 
 # 2. release manifest
 config = open(os.path.join(L, "config.xml"), encoding="utf-8").read()
@@ -66,7 +84,7 @@ for cat in ("catalog.js", "devices.js"):
 # 4. nothing private tracked
 tracked = subprocess.run(["git", "-C", ROOT, "ls-files"], capture_output=True, text=True).stdout.split()
 for f in tracked:
-    if re.search(r"(\.local\.js$|\.p12$|\.pwd$|password|images/avatars/(custom|memoji)/)", f, re.I):
+    if re.search(r"(\.local\.js$|\.p12$|\.pwd$|\.jks$|\.keystore$|password|images/avatars/(custom|memoji)/)", f, re.I):
         fail("private file tracked by git: " + f)
 
 if errors:

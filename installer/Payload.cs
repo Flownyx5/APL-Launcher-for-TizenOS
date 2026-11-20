@@ -43,7 +43,7 @@ namespace APL.Setup
                 if (Directory.Exists(dir))
                 {
                     // Keep dist\ (the last build) but replace everything that came from the payload.
-                    foreach (string sub in new[] { "launcher", "scripts", "overlay" })
+                    foreach (string sub in new[] { "launcher", "scripts", "overlay", "webos" })
                     {
                         string p = Path.Combine(dir, sub);
                         if (Directory.Exists(p)) Directory.Delete(p, true);

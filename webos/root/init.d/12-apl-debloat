@@ -1,0 +1,7 @@
+#!/bin/sh
+# Boot hook (/var/lib/webosbrew/init.d, run-parts by the Homebrew Channel):
+# runs apl-debloat-stop.sh about fifteen seconds after boot, so LG's own home has already started.
+# Pause: touch /media/developer/apl-debloat/OFF, or OFF-ads/tracking/logs/suggestions to pause one group.
+[ -e /media/developer/apl-debloat/OFF ] && exit 0
+(sleep 15; sh /media/developer/apl-debloat/apl-debloat-stop.sh) </dev/null >/dev/null 2>&1 &
+exit 0

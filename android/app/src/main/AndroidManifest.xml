@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- APL Launcher for Android TV and Google TV: the remote only, no touch screen needed.
+     No accessibility service here: Google Play Protect blocks any app installed outside the Play Store that declares
+     one. The remote's Home and play/pause buttons are in the optional second app, APL Launcher Home Button
+     (../../homebutton, HomeButton.kt). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Between APL Launcher and APL Launcher Home Button only: Android gives it to apps signed with the same key.
+         Both declare it, so it exists whichever is installed first. -->
+    <permission
+        android:name="com.knikt.apllauncher.permission.HOME_BUTTON"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="com.knikt.apllauncher.permission.HOME_BUTTON" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- Free Up Memory, Close Unused Apps, the App Switcher's ▲: Android closes apps that are in the background, never
+         the one in front. Up to Android 13 only: Android 14 lets an app close nothing but its own processes. -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+    <!-- Delete App: Android's own confirmation -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Sleep Timer: on time, whatever app is in front -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- The apps' Continue Watching in the Top Shelf: Android TV's Watch Next row (WatchNext.kt, Android 11+). Android
+         asks once, or APL Launcher Setup gives it with adb. -->
+    <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
+    <!-- Optional (docs/android.md): the Control Center over the app in front, and the apps used lately in the
+         App Switcher -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <!-- Android 11+: the apps a launcher may see -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <!-- APL TV's Top Shelf (its ShelfProvider) -->
+        <provider android:authorities="com.knikt.apltv.shelf" />
+        <!-- Android TV's programs: the Watch Next row -->
+        <provider android:authorities="android.media.tv" />
+        <!-- APL Launcher Home Button: installed, and the commands sent to it -->
+        <package android:name="com.knikt.apllauncher.home" />
+    </queries>
+
+    <application
+        android:label="APL Launcher"
+        android:icon="@mipmap/ic_launcher"
+        android:banner="@drawable/banner"
+        android:allowBackup="false"
+        android:hardwareAccelerated="true"
+        android:largeHeap="true"
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:theme="@style/AplTheme">
+
+        <!-- The Home Screen. HOME + DEFAULT: Android TV can make it its launcher (docs/android.md). -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:stateNotNeeded="true"
+            android:excludeFromRecents="true"
+            android:resizeableActivity="false"
+            android:screenOrientation="landscape"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode|density|locale|layoutDirection"
+            android:windowSoftInputMode="adjustNothing">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- What APL Launcher Home Button asks (HomeButton.kt): only apps signed with APL Launcher's key -->
+        <provider
+            android:name=".HomeButtonProvider"
+            android:authorities="com.knikt.apllauncher.homebutton"
+            android:exported="true"
+            android:permission="com.knikt.apllauncher.permission.HOME_BUTTON" />
+
+        <!-- Sleep Timer -->
+        <receiver android:name=".SleepReceiver" android:exported="false" />
+
+        <!-- The API keys sent by APL Launcher Setup over adb (KeysReceiver.kt). WRITE_SECURE_SETTINGS: only the shell
+             (adb) and the system hold it, so no app on the device can send it. -->
+        <receiver
+            android:name=".KeysReceiver"
+            android:exported="true"
+            android:permission="android.permission.WRITE_SECURE_SETTINGS">
+            <intent-filter>
+                <action android:name="com.knikt.apllauncher.SET_KEYS" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

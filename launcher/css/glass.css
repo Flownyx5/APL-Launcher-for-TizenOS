@@ -28,6 +28,7 @@
 /* The surface itself stops filtering: the pane below it is already soft. */
 body.glass .dock,
 body.glass .status,
+body.glass .search-hint,
 body.glass .cc__t,
 body.glass .scard__art--glass {
     -webkit-backdrop-filter: none;
@@ -49,6 +50,20 @@ body.glass .scard__art--glass {
     transition: none;                    /* a window onto the picture: it never animates itself */
 }
 .cg__glass.is-on { opacity: 1; }
+/* LG, 4K: each pane is a layer of its own, kept for good (glass.js DIRECT). */
+.is-webos .cg__glass { will-change: transform; }
+/* The direct pane: the slice is an image composited from its own small bitmap, the shade a plain layer
+   whose opacity is the shade. A new picture is one src and one opacity: nothing is painted. The pane's
+   round shape clips both. Its ::after keeps the light only (the rules for the tiles and the cards follow). */
+.cg__glass--direct { overflow: hidden; background-image: none; }
+.cg__glass--direct > .cg__pic { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; max-width: none; will-change: transform; }
+.cg__glass--direct > .cg__shade { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: #000;
+    opacity: var(--glass-shade, 0); will-change: opacity; }
+body.glass.theme-light .cg__glass--direct > .cg__shade { background: rgb(246, 246, 250); opacity: var(--glass-veil, 0.5); }
+body.glass .cc__t .cg__glass--direct > .cg__shade { opacity: var(--glass-shade, 0.55); }
+body.glass.theme-light .cc__t .cg__glass--direct > .cg__shade { background: rgb(232, 233, 240); opacity: var(--glass-veil, 0.55); }
+body.glass .scard__art--glass .cg__glass--direct > .cg__shade { background: rgb(6, 8, 14); opacity: var(--glass-shade, 0.7); }
+body.glass.perf .scard__art--glass .cg__glass--direct > .cg__shade { opacity: var(--glass-shade, 0.9); }
 
 /* Nothing moves the picture while the glass is on. The slow pan of the artwork
    and the slide of a new one both drag it under panes that are fixed to the
@@ -70,16 +85,42 @@ body.glass .bg.is-slide > img { animation: none; }
     pointer-events: none;
     background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.42) 18%, rgba(255, 255, 255, 0.42) 82%, rgba(255, 255, 255, 0));
 }
+/* The clock pill is round at both ends: a straight hairline sat above its curves like a stray reflection
+   (an LG G5, drawn twice as thick in 4K). Its rim, which follows the curve, is its light instead. */
+.status .cg__glass::before,
+.search-hint .cg__glass::before { display: none; }
+/* The rim of the dock and the pills (launcher.css, .dock::before) stays above the pane: the pane is an
+   opaque slice, and it hid the rim whenever an app had a picture under the dock, so the outline came and
+   went from one app to the next. The tiles and the time stay above the rim (z-index 1 and 2, later). */
+body.glass .dock::before,
+body.glass .status::before,
+body.glass .search-hint::before { z-index: 1; }
 
-/* 5 % of white, lit from the top edge: the glass, not the picture. */
+/* 5 % of white, lit from the top edge, over a shade: the glass, not the picture.
+   The shade is measured for each pane by glass.js (--glass-shade) from the picture
+   under it, so the text on it reads on a white poster as well as on a dark one:
+   the pane is an opaque slice and hides the surface's own tint, which left the dock
+   and the clock pill white on white. */
 .cg__glass::after {
     content: "";
     position: absolute;
     top: 0; right: 0; bottom: 0; left: 0;
     border-radius: inherit;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02) 46%, rgba(255, 255, 255, 0.01) 100%);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02) 46%, rgba(255, 255, 255, 0.01) 100%),
+        linear-gradient(rgba(0, 0, 0, var(--glass-shade, 0)), rgba(0, 0, 0, var(--glass-shade, 0)));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
+.cg__glass--direct::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02) 46%, rgba(255, 255, 255, 0.01) 100%); }
+/* The light theme has dark text: a pale veil instead (--glass-veil), measured the same way,
+   which keeps a dark picture from turning the clock pill and the dock into black glass. */
+body.glass.theme-light .cg__glass::after {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0.12) 46%, rgba(255, 255, 255, 0.18) 100%),
+        linear-gradient(rgba(246, 246, 250, var(--glass-veil, 0.5)), rgba(246, 246, 250, var(--glass-veil, 0.5)));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+body.glass.theme-light .cg__glass--direct::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0.12) 46%, rgba(255, 255, 255, 0.18) 100%); }
 
 /* The surface's own content stays above the pane: the clock, the app names,
    the Control Center's labels. Without this the pane is an opaque slice over
@@ -87,13 +128,75 @@ body.glass .bg.is-slide > img { animation: none; }
 body.glass .status__clock { position: relative; z-index: 2; }
 body.glass .dock > .row0,
 body.glass .status > :not(.cg__glass),
+body.glass .search-hint > :not(.cg__glass),
 body.glass .cc__t > :not(.cg__glass),
 body.glass .scard__art--glass > :not(.cg__glass) { position: relative; z-index: 1; }
 
-/* The focused tile is a solid plate, as on Apple TV: the pane steps aside so
-   the white card stays white. */
+/* The focused tile is a solid plate, as on Apple TV (the plate itself is drawn
+   on the pane, at the end of this file). */
 body.glass .cc__t.is-focused { background: #f5f5f7; }
-body.glass .cc__t.is-focused .cg__glass { opacity: 0; }
+/* The pane covers the tile's own fill, so that fill has nothing to animate:
+   its 150 ms fade only cost repaints under the glass. And each tile keeps a
+   layer of its own: the screen otherwise drew the two tiles of every move again,
+   pane and shadow, when their scale started and when it ended. Measured on the
+   M8 over 36 moves: 37 to 47 images a second with frames up to 167 ms before,
+   53 to 56 with none above 33 ms after. */
+body.glass .cc__t {
+    transition: transform 220ms var(--spring, ease), color 150ms ease;
+    will-change: transform;
+}
+
+/* The Control Center's tiles are circles and pills: a straight hairline ran past
+   their curve and showed as a white line above each round button (an S90F). Their
+   light follows the edge instead. */
+body.glass .cc__t .cg__glass::before { display: none; }
+
+/* A pane shows the picture as it is behind the page. The Control Center and Sources
+   darken the screen, so their panes carry at least the same shade (.cc__dim,
+   .sources__dim), more where the picture is bright (glass.js), then a little light.
+   Without it every tile was the picture at full strength on a darkened screen: bright
+   red plates over a red backdrop, coloured Sources cards on a dark page (an S90F). */
+body.glass .cc__t .cg__glass::after {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04) 46%, rgba(255, 255, 255, 0.03) 100%),
+        linear-gradient(rgba(0, 0, 0, var(--glass-shade, 0.55)), rgba(0, 0, 0, var(--glass-shade, 0.55)));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), inset 0 0 0 1.5px rgba(255, 255, 255, 0.07);
+}
+body.glass .cc__t .cg__glass--direct::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04) 46%, rgba(255, 255, 255, 0.03) 100%); }
+body.glass.theme-light .cc__t .cg__glass::after {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.35) 46%, rgba(255, 255, 255, 0.42) 100%),
+        linear-gradient(rgba(232, 233, 240, var(--glass-veil, 0.55)), rgba(232, 233, 240, var(--glass-veil, 0.55)));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+body.glass.theme-light .cc__t .cg__glass--direct::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.35) 46%, rgba(255, 255, 255, 0.42) 100%); }
+body.glass .scard__art--glass .cg__glass::after {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02) 46%, rgba(255, 255, 255, 0.01) 100%),
+        linear-gradient(rgba(118, 126, 146, 0.28), rgba(118, 126, 146, 0.28)),
+        linear-gradient(rgba(6, 8, 14, var(--glass-shade, 0.7)), rgba(6, 8, 14, var(--glass-shade, 0.7)));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 0 0 1.5px rgba(255, 255, 255, 0.07);
+}
+body.glass .scard__art--glass .cg__glass--direct::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02) 46%, rgba(255, 255, 255, 0.01) 100%), linear-gradient(rgba(118, 126, 146, 0.28), rgba(118, 126, 146, 0.28)); }
+body.glass.perf .scard__art--glass .cg__glass::after {
+    background:
+        linear-gradient(rgba(118, 126, 146, 0.28), rgba(118, 126, 146, 0.28)),
+        linear-gradient(rgba(6, 8, 14, var(--glass-shade, 0.9)), rgba(6, 8, 14, var(--glass-shade, 0.9)));
+}
+body.glass.perf .scard__art--glass .cg__glass--direct::after { background: linear-gradient(rgba(118, 126, 146, 0.28), rgba(118, 126, 146, 0.28)); }
+/* The white plate of the focused tile, and the colour of a round button that is on
+   (Game Mode green...), are drawn ON the pane instead of the pane being hidden.
+   Hiding it uncovered the tile's own dark fill for the 150 ms the plate took to
+   come in, which was a black flash on every move in the Control Center, and the
+   pane had to be drawn again each time the focus left it. */
+body.glass .cc__t.is-focused .cg__glass::after { background: #f5f5f7; box-shadow: none; }
+body.glass.theme-light .cc__t.is-focused .cg__glass::after { background: #fff; }
+body.glass .cc__t--round.is-on .cg__glass::after { background: var(--tint, #0a84ff); box-shadow: none; }
+body.glass .cc__t--round.is-on.is-focused .cg__glass::after { background: #f5f5f7; }
+/* The same for the focused card in Sources. launcher.css paints its white plate on the
+   card itself, under the pane: since the glass came (1.0.22) the focused card stayed
+   dark glass, and its icon, dark for the white plate, could hardly be seen on it. */
+body.glass .scard.is-focused .scard__art--glass .cg__glass::after { background: #f5f5f7; box-shadow: none; }
 
 /* The screen's light mode (launcher.js applyPerf) no longer hides the pane: the
    glass is a frozen slice baked once per picture, so it costs nothing on the

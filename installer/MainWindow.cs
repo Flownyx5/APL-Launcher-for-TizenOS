@@ -23,7 +23,9 @@ namespace APL.Setup
         /// <summary>True in --shot mode: nothing runs, nothing is asked on the network.</summary>
         internal readonly bool Offline;
 
+        internal readonly PlatformPage Choice;
         internal readonly InstallPage Install;
+        internal readonly DevicePage Webos, Android;
         internal readonly OptimizePage Optimize;
         internal readonly RestorePage Restore;
         internal readonly ToolsPage Tools;
@@ -73,23 +75,31 @@ namespace APL.Setup
             sideTitle = Ui.Find<TextBlock>(Window, "SideTitle");
             sideText = Ui.Find<TextBlock>(Window, "SideText");
 
+            Choice = new PlatformPage(this);
             Install = new InstallPage(this);
+            Webos = new DevicePage(this, "webos");
+            Android = new DevicePage(this, "android");
             Optimize = new OptimizePage(this);
             Restore = new RestorePage(this);
             Tools = new ToolsPage(this);
             About = new AboutPage(this);
             var host = Ui.Find<Grid>(Window, "PageHost");
-            foreach (var p in new Page[] { Install, Optimize, Restore, Tools, About })
+            foreach (var p in new Page[] { Choice, Install, Webos, Android, Optimize, Restore, Tools, About })
             {
                 pages[p.Key] = p;
                 p.View.Visibility = Visibility.Collapsed;
                 host.Children.Add(p.View);
+                if (p == Webos || p == Android) continue;          // reached through Install (InstallKey)
                 var rb = Ui.Find<RadioButton>(Window, "Nav" + char.ToUpperInvariant(p.Key[0]) + p.Key.Substring(1));
                 nav[p.Key] = rb;
                 string key = p.Key;
-                rb.Checked += (s, e) => ShowPage(key);
+                rb.Checked += (s, e) => ShowPage(key == "install" ? InstallKey : key);
             }
-            ShowPage("install");
+            // The TV chosen last time is ready, but the Setup always opens on the choice of TV
+            string savedPlatform; bool savedRooted;
+            if (!Offline && Saved.Platform(out savedPlatform, out savedRooted)) { Choice.Select(savedPlatform, savedRooted); ApplyPlatform(savedPlatform, savedRooted, false); }
+            else ApplyPlatform("tizen", true, false);
+            ShowPage("platform");
 
             Ui.InternalLink = Navigate;
             Ui.Find<Button>(Window, "SheetCancel").Click += (s, e) => CloseSheet(false);
@@ -98,9 +108,49 @@ namespace APL.Setup
             Window.SourceInitialized += (s, e) => DarkTitleBar();
             Window.Closing += OnClosing;
             Window.Loaded += (s, e) => { if (!Offline) Start(); };
-            if (!Offline) Install.Prefill();
+            if (!Offline) { Install.Prefill(); Webos.Prefill(); Android.Prefill(); }
             RefreshSide();
         }
+
+        // ---------- the TV (first page) ----------
+
+        /// <summary>"tizen" (Samsung), "webos" (LG) or "android"; and whether the TV is rooted.</summary>
+        internal string Platform = "tizen";
+        internal bool Rooted = true;
+        private readonly HashSet<string> checkedPlatforms = new HashSet<string>();
+
+        /// <summary>The Install page of the chosen TV.</summary>
+        internal string InstallKey { get { return Platform == "webos" ? "webos" : Platform == "android" ? "android" : "install"; } }
+
+        internal void SetPlatform(string platform, bool rooted, bool save = true) { ApplyPlatform(platform, rooted, save && !Offline); }
+
+        private void ApplyPlatform(string platform, bool rooted, bool save)
+        {
+            Platform = platform;
+            Rooted = rooted;
+            if (save) Saved.SavePlatform(platform, rooted);
+            if (platform == "webos") Webos.SetRooted(rooted);
+            // Optimize, Restore and Tools work through Vetro: Samsung only (LG's debloat comes with its root install)
+            foreach (string k in new[] { "optimize", "restore", "tools" })
+            {
+                RadioButton rb;
+                if (nav.TryGetValue(k, out rb)) Ui.Show(rb, platform == "tizen");
+            }
+            if (Runner.Root != null) RunPlatformCheck();
+            RefreshSide();
+            RefreshActions();
+        }
+
+        /// <summary>What this PC has for that TV, once per run.</summary>
+        private void RunPlatformCheck()
+        {
+            if (Offline || !checkedPlatforms.Add(Platform)) return;
+            if (Platform == "webos") Webos.RunCheck();
+            else if (Platform == "android") Android.RunCheck();
+            else Install.OnScriptsReady();
+        }
+
+        internal static string PlatformName(string p) { return p == "webos" ? "LG webOS" : p == "android" ? "Android TV" : "Samsung Tizen"; }
 
         // ---------- start ----------
 
@@ -116,7 +166,7 @@ namespace APL.Setup
                 Log.Error("payload", ex);
                 ScriptsError = ex.Message;
             }
-            Install.OnScriptsReady();
+            RunPlatformCheck();
             RefreshActions();
         }
 
@@ -126,7 +176,7 @@ namespace APL.Setup
         {
             RadioButton rb;
             if (!nav.TryGetValue(key, out rb)) return;
-            if (rb.IsChecked == true) ShowPage(key); else rb.IsChecked = true;
+            if (rb.IsChecked == true) ShowPage(key == "install" ? InstallKey : key); else rb.IsChecked = true;
         }
 
         private string shown;
@@ -182,7 +232,14 @@ namespace APL.Setup
             }
             SideDetail = null;
             sideTitle.Text = T("Screen");
-            if (!Vetro_IsValidIp())
+            if (Platform != "tizen" && Webos != null && Android != null)
+            {
+                string ip = Platform == "webos" ? Webos.Ip : Android.Ip;
+                sideMark.Children.Add(Ui.Dot(APL.Setup.Vetro.IsIPv4(ip) ? "Green" : "Text3", 9));
+                sideText.Text = PlatformName(Platform) + (Platform == "webos" ? (Rooted ? " · root" : " · " + T("no root")) : "") +
+                                (APL.Setup.Vetro.IsIPv4(ip) ? " · " + ip : "");
+            }
+            else if (!Vetro_IsValidIp())
             {
                 sideMark.Children.Add(Ui.Dot("Text3", 9));
                 sideText.Text = T("Not chosen yet");

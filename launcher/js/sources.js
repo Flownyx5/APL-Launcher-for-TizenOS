@@ -52,6 +52,7 @@
     }
     function readPorts() {
         if (sys.PREVIEW) return Promise.resolve(null);
+        if (APL.platform && APL.platform.readPorts) return APL.platform.readPorts();     // LG: the TV lists its inputs
         var cmd = [1, 2, 3, 4].map(function (n) {
             return "vconftool get memory/sysman/hdmi" + n + "; vconftool get db/Canalysis-service/hdmi" + n + "/manufacturer_name; " +
                    "vconftool get db/Canalysis-service/hdmi" + n + "/model_name";
@@ -169,7 +170,7 @@
 
     function render(focus) {
         cards = inputs().concat(extras());
-        titleEl.textContent = "Sources";
+        titleEl.textContent = APL.t("Sources");
         hintEl.textContent = APL.t("OK: switch to the input · Hold OK: choose the device, or add it to the Home Screen · Back: Home");
         fill(cards, focus);
     }
@@ -226,8 +227,12 @@
 
     function open() {
         if (!root) buildDom();
+        global.clearTimeout(goneAt);
+        var wasGone = root.classList.contains("is-gone");
+        root.classList.remove("is-gone");
         picking = null;
         render(0);
+        if (wasGone) void root.offsetWidth;          // laid out closed first, so it fades in instead of popping
         root.classList.add("is-open");
         document.body.classList.add("has-sources");      // the Home Screen steps back (launcher.css)
         APL.pushNav(nav);
@@ -245,13 +250,14 @@
         return inputs().filter(function (c) { return ids.indexOf(c.id) !== -1; }).map(function (c) {
             return { id: "apl.source." + c.id, name: c.name, virtual: true, accent: "#2c5cc5", eyebrow: "SOURCE",
                      tile: c.device ? asset(c.device.tile) : null,
+                     consoleKey: c.device ? c.device.key : null,         // a console: its trending games on the Top Shelf (liveshelf.js)
                      tileHtml: c.device ? null : '<div class="vtile vtile--sources">' + APL.icon(c.icon, 92, 1.6) + '</div>',
                      shelfHtml: '<div class="brandcard__glyph vtile--sources">' + APL.icon(c.icon, 180, 1.3) + '</div>',
                      run: function () { switchTo(c); } };
         });
     }
     // Once after start-up: the ports and the devices Samsung recognized may have changed since last time
-    setTimeout(function () {
+    if (!APL.ccOverlay) setTimeout(function () {
         refreshPorts().then(function (changed) { if (changed && pinned().length && APL.refreshHome) APL.refreshHome(); });
     }, 20000);
 
@@ -262,7 +268,11 @@
         document.body.classList.remove("has-sources");
         APL.popNav(nav);
         isOpen = false;
+        /* LG: out of the page once faded out, its cards' layers with it (launcher.css is-gone) */
+        global.clearTimeout(goneAt);
+        goneAt = global.setTimeout(function () { if (!isOpen) root.classList.add("is-gone"); }, 400);
     }
+    var goneAt = 0;
 
     APL.sources = { open: open, close: close, isOpen: function () { return isOpen; }, homeTiles: homeTiles };
 })(window);

@@ -1,0 +1,61 @@
+/* APL Launcher for Android TV and Google TV.
+   The launcher itself is the same web app as on Samsung (../../launcher), copied into the assets by
+   tools/make-android.py with the Android layer (../web), which then runs this build.
+   Version: launcher/config.xml (passed as -PaplVersion). */
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+}
+
+def aplVersion = project.findProperty("aplVersion") ?: "1.0.0"
+def parts = aplVersion.tokenize(".").collect { it as int } + [0, 0, 0]
+
+android {
+    namespace "com.knikt.apllauncher"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.knikt.apllauncher"
+        minSdk 21
+        targetSdk 35
+        versionCode parts[0] * 10000 + parts[1] * 100 + parts[2]
+        versionName aplVersion
+    }
+
+    signingConfigs {
+        release {
+            // tools/make-android.py passes the keystore (kept outside the repository, never published);
+            // its password only through the environment, never on a command line or in a log
+            if (project.hasProperty("aplKeystore")) {
+                storeFile file(project.property("aplKeystore"))
+                storePassword System.getenv("APL_KEYSTORE_PASS")
+                keyAlias project.property("aplKeyAlias")
+                keyPassword System.getenv("APL_KEYSTORE_PASS")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Development builds (make-android.py --dev): the page can be inspected from the PC
+            debuggable project.hasProperty("aplDebuggable")
+            // No release key yet: the Android SDK's own debug key, for the emulator and tests only
+            // (make-android.py names that package "-testkey" so it is never published)
+            signingConfig project.hasProperty("aplKeystore") ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}

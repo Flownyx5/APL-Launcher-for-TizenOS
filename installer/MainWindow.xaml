@@ -41,7 +41,8 @@
                 </Border>
 
                 <StackPanel x:Name="Nav">
-                    <RadioButton x:Name="NavInstall" Style="{StaticResource NavItem}" Content="Install" Tag="&#xE896;" Background="{StaticResource Brush.Accent}" IsChecked="True"/>
+                    <RadioButton x:Name="NavPlatform" Style="{StaticResource NavItem}" Content="Your TV" Tag="&#xE7F4;" Background="{StaticResource Brush.Teal}" IsChecked="True"/>
+                    <RadioButton x:Name="NavInstall" Style="{StaticResource NavItem}" Content="Install" Tag="&#xE896;" Background="{StaticResource Brush.Accent}"/>
                     <RadioButton x:Name="NavOptimize" Style="{StaticResource NavItem}" Content="Optimize" Tag="&#xE945;" Background="{StaticResource Brush.Orange}"/>
                     <RadioButton x:Name="NavRestore" Style="{StaticResource NavItem}" Content="Restore" Tag="&#xE777;" Background="{StaticResource Brush.Indigo}"/>
                     <RadioButton x:Name="NavTools" Style="{StaticResource NavItem}" Content="Tools" Tag="&#xE90F;" Background="{StaticResource Brush.Gray}"/>

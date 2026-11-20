@@ -25,7 +25,7 @@
     /* The folder's tile: its first six apps in miniature. */
     function tileHtml(f) {
         var html = members(f).slice(0, 6).map(function (a) {
-            var pic = a.tile || a.icon;
+            var pic = (APL.tileOf ? APL.tileOf(a) : a.tile) || a.icon;
             return pic ? '<i style="background-image:url(\'' + pic + '\')"></i>' : '<i style="background-color:' + (a.accent || "#555") + '"></i>';
         }).join("");
         return '<div class="ftile">' + html + "</div>";

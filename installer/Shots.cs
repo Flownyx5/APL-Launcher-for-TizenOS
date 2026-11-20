@@ -42,6 +42,20 @@ namespace APL.Setup
             var install = main.Install;
             var ok = new VetroInfo { Ip = "192.168.1.42", Version = "1.4.2" };
 
+            // ---------- Your TV (the first page) ----------
+            main.Choice.Select("tizen", true);
+            Shot("00-platform-samsung", true);
+            main.Choice.Select("tizen", false);
+            Shot("00a-platform-samsung-noroot", true);
+            main.Choice.Select("webos", true);
+            Shot("00b-platform-lg-root", true);
+            main.Choice.Select("webos", false);
+            Shot("00c-platform-lg-noroot", true);
+            main.Choice.Select("android", true);
+            Shot("00d-platform-android", true);
+            main.Choice.Select("tizen", true);
+            main.Navigate("install");
+
             // ---------- Install ----------
             install.SetScreen("192.168.1.42", ok);
             install.SetCheck(Json.Parse(@"{""tizen"":""C:\\tizen-studio\\tools\\ide\\bin\\tizen.bat"",""sdb"":""C:\\tizen-studio\\tools\\sdb.exe"",
@@ -144,6 +158,55 @@ namespace APL.Setup
             Shot("19-error");
             main.HideSheet();
 
+            // ---------- LG (webOS) ----------
+            string sshCheck = @"{""ssh"":""C:\\Windows\\System32\\OpenSSH\\ssh.exe"",""sshVersion"":""9.5"",""password"":""C:\\Windows\\System32\\OpenSSH\\ssh.exe"",""version"":""1.0.24""}";
+            main.SetPlatform("webos", true, false);
+            main.Navigate("install");
+            var lgPage = main.Webos;
+            lgPage.SetCheck(Json.Parse(sshCheck));
+            lgPage.SetScreen("192.168.1.15", 3001, 22);
+            Shot("30-lg-root", true);
+            lgPage.ShowScanResults(new List<KeyValuePair<string, Dictionary<int, bool>>>
+            {
+                new KeyValuePair<string, Dictionary<int, bool>>("192.168.1.15", new Dictionary<int, bool> { { 3001, true }, { 22, true }, { 9922, false }, { 9991, false } })
+            });
+            Shot("31-lg-scan");
+            lgPage.ShowScanResults(new List<KeyValuePair<string, Dictionary<int, bool>>>());
+            lgPage.SetScreen("192.168.1.15", 3001);
+            Shot("31b-lg-no-ssh");
+            lgPage.SetScreen("192.168.1.15", 3001, 22);
+            main.Runner.Fake(T("Installing…"));
+            lgPage.BeginProgress();
+            lgPage.SetStep(1, 5);
+            lgPage.FakeLine("APL Launcher 1.0.24: 223 files, 5.9 MB");
+            lgPage.SetStep(2, 5);
+            lgPage.FakeLine("Rooted TV, Homebrew Channel found.");
+            lgPage.SetStep(3, 5);
+            lgPage.FakeLine("Package sent (5.9 MB), checked.");
+            Shot("32-lg-progress");
+            main.Runner.Fake(null);
+            lgPage.ShowFinish();
+            Shot("33-lg-finish", true);
+            lgPage.ShowView("form");
+            main.SetPlatform("webos", false, false);
+            lgPage.SetCheck(Json.Parse(sshCheck));
+            lgPage.SetScreen("192.168.1.15", 3001, 9922);
+            Shot("34-lg-devmode", true);
+            lgPage.ShowFinish();
+            Shot("34b-lg-devmode-finish", true);
+            lgPage.ShowView("form");
+
+            // ---------- Android TV ----------
+            main.SetPlatform("android", true, false);
+            main.Navigate("install");
+            main.Android.SetCheck(Json.Parse(@"{""adb"":null,""apk"":null}"));
+            main.Android.SetScreen("192.168.1.30", 5555);
+            Shot("35-android", true);
+            main.Android.ShowFinish();
+            Shot("36-android-finish", true);
+            main.Android.ShowView("form");
+            main.SetPlatform("tizen", true, false);
+
             // ---------- the smallest window allowed (960 × 640, minus the title bar) ----------
             W = 944;
             H = 600;
@@ -210,7 +273,7 @@ namespace APL.Setup
 
         private static FrameworkElement VisiblePage()
         {
-            foreach (var p in new Page[] { main.Install, main.Optimize, main.Restore, main.Tools, main.About })
+            foreach (var p in new Page[] { main.Choice, main.Install, main.Webos, main.Android, main.Optimize, main.Restore, main.Tools, main.About })
                 if (p.View.Visibility == Visibility.Visible) return p.View;
             return main.Install.View;
         }

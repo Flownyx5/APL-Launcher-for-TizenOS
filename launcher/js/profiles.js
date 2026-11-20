@@ -112,7 +112,8 @@
         recent.forEach(function (a) {
             var t = el("div", "precent");
             var art = el("span", "precent__art");
-            if (a.tile) art.style.background = "#111 center / cover no-repeat url('" + a.tile + "')";
+            var pic = APL.tileOf ? APL.tileOf(a) : a.tile;
+            if (pic) art.style.background = "#111 center / cover no-repeat url('" + pic + "')";
             else if (a.icon) art.innerHTML = '<img alt="" src="' + a.icon + '">';
             else art.textContent = initial(a.name);
             t.appendChild(art);

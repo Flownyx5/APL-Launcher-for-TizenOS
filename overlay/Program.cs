@@ -21,6 +21,8 @@ namespace APL
     {
         private const string Launcher = "APLauncher.Home";
         private const string AquaPlay = "AquaPlay02.AquaPlay", TizenBrew = "xvvl3S1bvH.TizenBrewStandalone";
+        // TizenTube's own app (TizenTube Cobalt): when installed, it is TizenTube (launcher.js, TUBE_APP)
+        private const string TubePackage = "xvvl3S1TT1", TubeApp = TubePackage + ".TizenTubeStandalone";
         private const int WaitLimitMs = 1500;
         private const uint HoldMs = 600, EveryMs = 170, TapMs = 250, RepressMs = 20, StaleMs = 700;
 
@@ -316,6 +318,11 @@ namespace APL
                         else if (pauseInApps && key.Foreground != Launcher && !IsSamsungHome(key.Foreground)) await PlayPause(key);
                         else OpenControlCenter(key);
                         break;
+                    case RemoteKeys.MultiView:
+                        // The Control Center, always: it has Sources, which is what Multi View was for (#47)
+                        if (panel.IsOpen) panel.Close();
+                        else OpenControlCenter(key);
+                        break;
                     case RemoteKeys.TvPlus:
                         if (panel.IsOpen) panel.Close();
                         await ResumeApp(AquaPlay);
@@ -416,11 +423,16 @@ namespace APL
             return Vetro.Exec("/usr/bin/app_launcher -s " + app + " SkipReload Yes >/dev/null 2>&1");
         }
 
-        /// <summary>TizenTube starts through TizenBrew, and the launcher knows how. Already open, it just comes back.</summary>
+        /// <summary>
+        /// TizenTube: its own app when it is installed (TizenTube Cobalt), else through TizenBrew. Already open, it just
+        /// comes back; otherwise the launcher starts it, as its TizenTube tile does (Samsung's YouTube closed first).
+        /// </summary>
         private static async Task OpenTizenTube()
         {
-            string open = await Vetro.Exec("ps -eo args | grep -c 'bin/" + TizenBrew + "[ ]'");
-            if (open.Trim() != "0") await ResumeApp(TizenBrew);
+            string seen = await Vetro.Exec("ls -d /opt/usr/apps/" + TubePackage + " 2>/dev/null; " +
+                                           "ps -eo args | grep -o -E 'bin/(" + TubeApp + "|" + TizenBrew + ") ' | sort -u; true");
+            string app = seen.Contains("/opt/usr/apps/" + TubePackage) ? TubeApp : TizenBrew;
+            if (seen.Contains("bin/" + app + " ")) await ResumeApp(app);
             else OpenLauncher("open:apl.tizentube");
         }
 

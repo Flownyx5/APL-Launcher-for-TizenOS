@@ -20,6 +20,11 @@
     "use strict";
 
     var APL = global.APL, sys = APL.sys, K = APL.KEY;
+    var P = APL.platform;             // another TV system (js/webos-settings.js on LG): its own sound outputs and AirPlay
+    var CC = !!(P && P.ccOverlay);    // drawn over the app in front (LG's Guide button): only this panel on the page
+    /* The slider: the screen's brightness, or what the TV system puts there instead (LG keeps its picture
+       settings from apps: the volume there) */
+    var SLIDER = (P && P.ccSlider) || { id: "backlight", icon: "sun", title: APL.t("Brightness") };
     var root, panel, timeEl, avatarEl, viewport, body, captionEl, nav;
     var items = [], view = "main", lastMainIndex = 1, scrollY = 0;
     var isOpen = false;
@@ -42,7 +47,17 @@
             }, function (e) { APL.toast(e.message); });
         };
     }
-    function openSettings(section) { return function () { close(); APL.settings.open(section); }; }
+    function openSettings(section) {
+        return function () {
+            close();
+            if (CC) { P.toLauncher(section ? "settings:" + section : "settings"); return; }     // over the apps (webos.js)
+            APL.settings.open(section);
+        };
+    }
+    /* A page of the launcher: over the apps (LG's Guide button, webos.js), the launcher is put in front for it */
+    function inLauncher(action, here) {
+        return function () { close(); if (CC) P.toLauncher(action); else here(); };
+    }
 
     function remaining() {
         var at = sys.pref("sleepAt");
@@ -123,10 +138,16 @@
         bt.busy = true;
         APL.toast(APL.t("Connecting to “{name}”…", { name: dev.name }), true);
         // replace_current_bluetooth_speaker returns 0 but does nothing when no device is already connected
-        sys.exec(BT_MGR + "org.tizen.btapp.ApiInterface.buds_switching_connect " + dev.address + " 2>&1").catch(function () {}).then(function () {
-            return btWait(dev.address, true, 10);
+        var failed = null;
+        sys.exec(BT_MGR + "org.tizen.btapp.ApiInterface.buds_switching_connect " + dev.address + " 2>&1").catch(function (e) { failed = e; }).then(function () {
+            // The order never reached the screen (Vetro, its bridge): waiting for the device would only blame it
+            return failed ? null : btWait(dev.address, true, 10);
         }).then(function (now) {
             if (now && now.connected) APL.toast(APL.t("Sound on “{name}”", { name: now.name }), true);
+            /* A soundbar on HDMI (ARC, eARC) already plays the sound without Bluetooth: "isn't responding" read like an
+               error while the sound came out of it (Reddit, a Q soundbar on Tizen 6.0) */
+            else if (failed) APL.toast(APL.t("Couldn't switch the sound: {error}", { error: failed.message || "?" }));
+            else if (dev.kind === "speaker") APL.toast(APL.t("“{name}” didn't connect over Bluetooth. A soundbar on HDMI (ARC) plays the sound without it: check the TV's Sound Output.", { name: dev.name }));
             else APL.toast(APL.t("“{name}” isn't responding: open the case or turn on the headphones, then try again.", { name: dev.name }));
             btDone();
         });
@@ -266,10 +287,43 @@
             if (isOpen) refresh();
             // Game Mode has its own brightness: the slider picks up the screen's
             nav.tiles.forEach(function (t) {
-                if (t._item.type === "backlight") sys.tvItem("backlight").then(function (m) { if (m) drawBacklight(t, m.value, m); }, function () {});
+                if (t._item.type === "backlight") sys.tvItem(SLIDER.id).then(function (m) { if (m) drawBacklight(t, m.value, m); }, function () {});
             });
         }, function (e) {
             gameState.busy = false;
+            APL.toast(e.message);
+        });
+    }
+
+    /* ---------- Adaptive Picture (Samsung's "Intelligent Mode" brightness) ----------
+       The screen dims or brightens the picture with the light in the room. Asked on Reddit: too bright in the
+       morning, so it went on in Samsung's menus every day, then off later. The same AV service setting as
+       Settings › Picture › Adaptive Picture (system.js NATIVE.adaptive), read back after each change. */
+    var adaptState = { on: false, known: false, busy: false };
+    function adaptRefresh() {
+        if (!sys.native) return Promise.resolve();
+        return sys.native.get("adaptive").then(function (v) {
+            adaptState.on = v === 1;
+            adaptState.known = true;
+            if (isOpen && view === "main") refresh();
+        }, function () { adaptState.known = false; });
+    }
+    function adaptToggle() {
+        if (adaptState.busy) return;
+        adaptState.busy = true;
+        var want = adaptState.on ? 0 : 1;
+        sys.native.set("adaptive", want).then(function (v) {
+            adaptState.busy = false;
+            adaptState.on = v === 1;
+            adaptState.known = true;
+            APL.toast(adaptState.on ? APL.t("Adaptive Picture on") : APL.t("Adaptive Picture off"), true);
+            if (isOpen) refresh();
+            // The brightness follows the room now: the slider shows what the screen chose
+            nav.tiles.forEach(function (t) {
+                if (t._item.type === "backlight") sys.tvItem(SLIDER.id).then(function (m) { if (m) drawBacklight(t, m.value, m); }, function () {});
+            });
+        }, function (e) {
+            adaptState.busy = false;
             APL.toast(e.message);
         });
     }
@@ -281,12 +335,18 @@
     }
 
     function outputName() {
+        if (P && P.ccOutputName) return P.ccOutputName();
         var on = (bt.list || []).filter(function (d) { return d.connected; })[0];
         return on ? on.name : APL.t("TV Speakers");
     }
 
     /* ---------- views ---------- */
     function mainItems() {
+        var list = samsungItems();
+        // Another platform keeps the tiles it can do (android.js: no Game Mode, AirPlay, Sources or brightness)
+        return APL.platform && APL.platform.ccItems ? APL.platform.ccItems(list) : list;
+    }
+    function samsungItems() {
         return [
             { cls: "big", icon: "power", title: APL.t("Sleep"),
               select: function () { sys.sleepNow().catch(function (e) { APL.toast(e.message); }); } },
@@ -295,14 +355,16 @@
               on: function () { return sys.network().connected; }, select: openSettings(APL.t("Connection")) },
             { cls: "pill", icon: "moon", title: APL.t("Do Not Disturb"), tint: "#5e5ce6",
               sub: function () { return sys.pref("dnd") ? APL.t("On") : APL.t("Off"); },
-              on: function () { return sys.pref("dnd"); }, select: function () { sys.setPref("dnd", !sys.pref("dnd")); } },
-            { cls: "pill", icon: "airplayAudio", title: "Audio", sub: outputName, select: function () { show("audio"); } },
+              on: function () { return sys.pref("dnd"); },
+              select: function () { sys.setPref("dnd", !sys.pref("dnd")); if (P && P.ccChanged) P.ccChanged(); } },
+            { cls: "pill", icon: "airplayAudio", title: APL.t("Audio"), sub: outputName, select: function () { show("audio"); } },
             { cls: "pill", icon: "timer", title: APL.t("Sleep Timer"), tint: "#ff9f0a", sub: remaining,
               on: function () { return !!sys.pref("sleepAt"); },
               select: function () {
                   var i = TIMERS.indexOf(sys.pref("sleepTimer"));
                   var next = TIMERS[(i + 1) % TIMERS.length];
                   sys.armSleepTimer(next);
+                  if (P && P.ccChanged) P.ccChanged();
                   APL.toast(next ? APL.t("Going to sleep in {n} min", { n: next }) : APL.t("Sleep Timer off"), true);
               } },
             { cls: "round", icon: "gamepad", title: APL.t("Game Mode"), tint: "#30d158",
@@ -310,17 +372,24 @@
               on: function () { return gameState.on; }, select: gameToggle },
             { cls: "round", icon: "access", title: APL.t("Accessibility"), select: openSettings(APL.t("General & Privacy")) },
             { cls: "round", icon: "airplay", title: APL.t("AirPlay and iPhone"), select: function () { show("airplay"); } },
-            { cls: "round", icon: "source", title: "Sources", select: function () { close(); APL.openSources(); } },
-            { cls: "slider", type: "backlight", icon: "sun", title: APL.t("Brightness") },
+            { cls: "round", icon: "source", title: APL.t("Sources"), select: function () { close(); APL.openSources(); } },
+            { cls: "slider", type: "backlight", icon: SLIDER.icon, title: SLIDER.title },
             { cls: "pill", icon: "photo", title: APL.t("Screensaver"), sub: function () { return APL.t("Start"); },
-              select: function () { close(); if (APL.screensaver) APL.screensaver.start(); } },
+              select: inLauncher("screensaver", function () { if (APL.screensaver) APL.screensaver.start(); }) },
             { cls: "pill", icon: "gear", title: APL.t("Settings"), sub: function () { return APL.t("All settings"); },
               select: openSettings() },
-            { cls: "round", icon: "search", title: APL.t("Search"),
-              select: function () { close(); if (APL.search) APL.search.open(); } },
+            { cls: "round", icon: "search", title: APL.t("Search"), start: true,
+              select: inLauncher("search", function () { if (APL.search) APL.search.open(); }) }
+        ].concat(P ? [] : [
+            // Samsung only (the AV service), next to Search
+            { cls: "round", icon: "eye", title: APL.t("Adaptive Picture"), tint: "#ffd60a",
+              sub: function () { return !adaptState.known ? APL.t("Unavailable") : adaptState.on ? APL.t("On") : APL.t("Off"); },
+              on: function () { return adaptState.on; }, select: adaptToggle }
+        ]).concat([
+            // Fork: the phone remote, Good Night and Kids Mode
             { cls: "round", icon: "phone", title: APL.t("Phone Remote"), tint: "#30d158",
               sub: function () { return sys.pref("phoneRemote") ? APL.t("On") : APL.t("Off"); },
-              on: function () { return !!sys.pref("phoneRemote"); }, select: function () { close(); if (APL.phone) APL.phone.open(); } },
+              on: function () { return !!sys.pref("phoneRemote"); }, select: inLauncher("phone", function () { if (APL.phone) APL.phone.open(); }) },
             { cls: "round", icon: "night", title: APL.t("Good Night"), tint: "#5e5ce6",
               sub: function () { return APL.routines && APL.routines.nightOn() ? APL.t("On: press to cancel") : APL.t("Sleep timer, low brightness"); },
               on: function () { return !!(APL.routines && APL.routines.nightOn()); },
@@ -334,11 +403,12 @@
                   else APL.kids.set(true);
                   refreshSoon();
               } }
-        ];
+        ]);
     }
 
     function audioItems() {
-        var list = bt.list || [], out = [{ cls: "head", title: "Audio" }];
+        if (P && P.ccAudioItems) return P.ccAudioItems(function () { if (isOpen && view === "audio") render(); });
+        var list = bt.list || [], out = [{ cls: "head", title: APL.t("Audio") }];
         var phones = list.filter(function (d) { return d.kind === "headphones"; });
         var speakers = list.filter(function (d) { return d.kind === "speaker"; });
         var any = list.some(function (d) { return d.connected; });
@@ -384,6 +454,7 @@
     }
 
     function airplayItems() {
+        if (P && P.ccAirplayItems) return P.ccAirplayItems();
         return [
             { cls: "head", title: APL.t("AirPlay and iPhone") },
             { cls: "section", title: APL.t("From iPhone") },
@@ -412,33 +483,56 @@
     }
 
     /* ---------- rendering ---------- */
+    /* A tile's content is written without touching its glass. innerHTML also wiped
+       the pane glass.js lays in each tile, and the Control Center redraws every
+       tile every 15 s and after each OK: all the buttons showed their plain fill
+       until their panes came back, half a second on the M8. Content that has not
+       changed is not written at all. */
+    function fill(t, html) {
+        if (t.__html === html) return;
+        t.__html = html;
+        var panes = [], i;
+        for (i = 0; i < t.children.length; i++) {
+            if (t.children[i].classList.contains("cg__glass")) panes.push(t.children[i]);
+        }
+        t.innerHTML = html;
+        for (i = panes.length - 1; i >= 0; i--) t.insertBefore(panes[i], t.firstChild);
+    }
+
     function draw(it, t) {
         if (it.cls === "avatar") return;
         var on = it.on && it.on();
         t.classList.toggle("is-on", !!on);
         if (it.tint) t.style.setProperty("--tint", it.tint);
         if (it.cls === "slider") { drawBacklight(t, null, null); return; }
-        if (it.cls === "round") { t.innerHTML = APL.icon(it.icon, 44, 1.9); return; }
+        if (it.cls === "round") { fill(t, APL.icon(it.icon, 44, 1.9)); return; }
         if (it.cls === "big") {
-            t.innerHTML = '<span class="cc__bigico">' + APL.icon(it.icon, 92, 1.7) + '</span><span class="cc__title">' + it.title + '</span>';
+            fill(t, '<span class="cc__bigico">' + APL.icon(it.icon, 92, 1.7) + '</span><span class="cc__title">' + it.title + '</span>');
             return;
         }
         var check = it.check ? '<span class="cc__check">' + (it.check() ? APL.icon("check", 30, 2.6) : "") + '</span>' : "";
-        t.innerHTML = '<span class="cc__ico">' + APL.icon(it.icon, it.cls === "row" ? 32 : 38, 2) + '</span>' +
+        fill(t, '<span class="cc__ico">' + APL.icon(it.icon, it.cls === "row" ? 32 : 38, 2) + '</span>' +
             '<span class="cc__txt"><span class="cc__title">' + it.title + '</span>' +
-            (it.sub ? '<span class="cc__sub">' + it.sub() + '</span>' : '') + '</span>' + check;
+            (it.sub ? '<span class="cc__sub">' + it.sub() + '</span>' : '') + '</span>' + check);
     }
 
     function drawBacklight(t, v, meta) {
         var pct = (v === null || !meta) ? 0 : Math.round(100 * (v - meta.min) / Math.max(1, meta.max - meta.min));
-        t.innerHTML = '<span class="cc__ico">' + APL.icon("sun", 38, 2) + '</span>' +
+        fill(t, '<span class="cc__ico">' + APL.icon(SLIDER.icon, 38, 2) + '</span>' +
             '<span class="cc__bar"><i style="width:' + pct + '%"></i></span>' +
-            '<span class="cc__val">' + (v === null ? "—" : v) + '</span>';
+            '<span class="cc__val">' + (v === null ? "—" : v) + '</span>');
     }
 
+    var renderedKey = "";
     function render() {
         var keep = nav.index;                  // Bluetooth search: the list grows, focus stays in place
         items = view === "main" ? mainItems() : view === "audio" ? audioItems() : view === "pair" ? pairItems() : airplayItems();
+        /* The same tiles as last time (opening the Control Center again): they are kept and only redrawn.
+           Built again, each new tile got a new glass pane to paint, about 100 ms then 2 heavy frames on an LG
+           drawing in 4K. */
+        var key = view + ":" + items.map(function (it) { return it.cls + "|" + (it.title || ""); }).join(",");
+        if (key === renderedKey && view === "main" && body.children.length) { redraw(); return; }
+        renderedKey = key;
         body.innerHTML = "";
         body.className = "cc__body cc__body--" + view;
         scrollY = 0;
@@ -463,6 +557,13 @@
             t._item = it;
             draw(it, t);
             if (it.cls === "round") {
+                // Four circles to a row (the fork adds the phone remote, Good Night and Kids Mode after Search)
+                if (rounds && rounds.children.length >= 4) {
+                    captionEl = el("div", "cc__caption");
+                    captionEl.__group = rounds;
+                    body.appendChild(captionEl);
+                    rounds = null;
+                }
                 if (!rounds) { rounds = el("div", "cc__rounds"); body.appendChild(rounds); }
                 if (it.start) rounds.style.justifyContent = "flex-start";      // Search sits at the left edge
                 rounds.appendChild(t);
@@ -492,14 +593,15 @@
         }
         focusables.forEach(function (t) {
             if (t._item.type === "backlight") {
-                sys.tvItem("backlight").then(function (m) {
+                sys.tvItem(SLIDER.id).then(function (m) {
                     if (m) drawBacklight(t, m.target !== undefined ? m.target : m.value, m);
                 }, function () {});
             }
         });
         if (view === "main") {
             // The avatar at the top right: the household's profiles
-            avatarEl._item = { cls: "avatar", title: APL.t("Profiles"), select: function () { close(); if (APL.profilesUI) APL.profilesUI.open(); } };
+            avatarEl._item = { cls: "avatar", title: APL.t("Profiles"),
+                               select: inLauncher("profiles", function () { if (APL.profilesUI) APL.profilesUI.open(); }) };
             focusables.unshift(avatarEl);
         }
         nav.setTiles(focusables);
@@ -509,6 +611,33 @@
         if (view === "pair" || keepFocus) start = Math.min(keep || 0, focusables.length - 1);
         nav.focus(start);
         paintCaption(nav.current());
+        /* The new tiles get their glass in this same frame: waiting for glass.js
+           to notice them showed their plain fill for a moment as the panel opened. */
+        if (APL.glass && APL.glass.paint) APL.glass.paint(true);
+    }
+    /* render() with the tiles already there: each one gets its fresh item and is drawn again */
+    function redraw() {
+        var tiles = [].slice.call(body.querySelectorAll(".cc__t")), focusables = [], k = 0;
+        items.forEach(function (it) {
+            if (it.cls === "head" || it.cls === "section") return;
+            var t = tiles[k++];
+            if (!t) return;
+            t._item = it;
+            draw(it, t);
+            focusables.push(t);
+            if (it.type === "backlight") {
+                sys.tvItem(SLIDER.id).then(function (m) {
+                    if (m) drawBacklight(t, m.target !== undefined ? m.target : m.value, m);
+                }, function () {});
+            }
+        });
+        focusables.unshift(avatarEl);
+        scrollY = 0;
+        body.style.transform = "translateY(0)";
+        nav.setTiles(focusables);
+        nav.focus(Math.min(lastMainIndex, focusables.length - 1));
+        paintCaption(nav.current());
+        if (APL.glass && APL.glass.paint) APL.glass.paint(true);
     }
 
     function captionOf(it) {
@@ -536,10 +665,34 @@
         if (APL.profilesUI) APL.profilesUI.paint(avatarEl, sys.profiles.current());
     }
 
+    /* Keep the focused tile and the caption under it inside the panel. The panel's
+       own viewport is the only measure that matters: 900 was a guess, and offsetTop
+       is a page coordinate, so the row scrolled up for a tile that was already on
+       screen (Search sits at y 898 in a 1080 screen). */
+    /* Measured in layout space, not with getBoundingClientRect: the body slides
+       on a 260 ms transform, and a rect taken halfway through it reports a
+       place the tile never was — two quick presses read the tile mid-slide and
+       the panel scrolled past it. offsetTop and clientHeight ignore transforms,
+       so the two compare directly, with no scale to divide by. */
     function ensureVisible(t) {
-        var view = 900, top = t.offsetTop, h = t.offsetHeight;
-        if (top + scrollY < 0) scrollY = -top + 10;
-        else if (top + h + scrollY > view) scrollY = view - top - h;
+        if (!viewport || !body) return;
+        function layoutTop(node) {
+            var y = 0;
+            while (node) { y += node.offsetTop; node = node.offsetParent; }
+            return y;
+        }
+        var pad = 8;
+        var top = layoutTop(t) - layoutTop(body);
+        var holder = t.parentNode, next = holder && holder.nextElementSibling;
+        var cap = (next && next.classList && next.classList.contains("cc__caption")) ? next.offsetHeight : 0;
+        /* Both cases are in screen space: the tile sits at top + scrollY, and the
+           scroll has to move it there, not by the distance it is off by. */
+        var view = viewport.clientHeight, bottom = top + scrollY + t.offsetHeight + cap;
+        if (bottom > view - pad) scrollY -= bottom - (view - pad);
+        else if (top + scrollY < pad) scrollY = pad - top;
+        var least = Math.min(0, view - body.scrollHeight);
+        if (scrollY > 0) scrollY = 0;
+        if (scrollY < least) scrollY = least;
         body.style.transform = "translateY(" + scrollY + "px)";
     }
 
@@ -569,7 +722,7 @@
             onSelect: function (i, t) {
                 var it = t._item;
                 if (it.type === "backlight") {
-                    sys.tvItem("backlight").then(function (m) { if (!m || !m.writable) APL.toast(APL.t("Brightness unavailable right now")); },
+                    sys.tvItem(SLIDER.id).then(function (m) { if (!m || !m.writable) APL.toast(APL.t("Brightness unavailable right now")); },
                                                  function (e) { APL.toast(e.message); });
                     return;
                 }
@@ -582,11 +735,12 @@
                 if (view === "pair") { scanStop(); show("audio"); return; }
                 if (view !== "main") { view = "main"; render(); return; }
                 close();
+                if (P && P.ccBack) P.ccBack();          // LG: back to the app it was opened over (webos.js)
             },
             onKey: function (code) {
                 var t = nav.current(), it = t && t._item;
                 if (it && it.type === "backlight" && (code === K.LEFT || code === K.RIGHT)) {
-                    sys.tvAdjust("backlight", code === K.RIGHT ? 2 : -2, function (v, meta) { drawBacklight(t, v, meta); })
+                    sys.tvAdjust(SLIDER.id, code === K.RIGHT ? 2 : -2, function (v, meta) { drawBacklight(t, v, meta); })
                         .catch(function (e) { APL.toast(e.message); });
                     return true;
                 }
@@ -596,7 +750,12 @@
     }
 
     function open() {
+        /* Read again: on Android the platform layer (android.js) is loaded after this file, and the Samsung-only
+           tiles (Adaptive Picture) showed there as Unavailable */
+        P = APL.platform;
         if (!root) buildDom();
+        global.clearTimeout(goneAt);
+        root.classList.remove("is-gone");
         view = "main";
         lastMainIndex = 2;                      // Wi-Fi (after the avatar and Sleep): never "Sleep" by mistake
         render();
@@ -607,6 +766,7 @@
         isOpen = true;
         btRefresh(false).then(function () { if (isOpen && view === "main") refresh(); });
         gameRefresh();
+        if (!P) adaptRefresh();
         sys.readSleepTimer().then(function () { if (isOpen && view === "main") refresh(); });
     }
 
@@ -617,9 +777,14 @@
         document.body.classList.remove("has-cc");
         APL.popNav(nav);
         isOpen = false;
+        /* LG: out of the page once its panel has gone, with its 54 layers (launcher.css is-gone) */
+        global.clearTimeout(goneAt);
+        goneAt = global.setTimeout(function () { if (!isOpen) root.classList.add("is-gone"); }, 450);
+        if (CC && P.ccQuit) P.ccQuit();          // over the apps: the window goes with it
     }
 
     function refreshSoon() { setTimeout(function () { if (isOpen) refresh(); }, 300); }
+    var goneAt = 0;
     setInterval(function () { if (isOpen) refresh(); }, 15000);
 
     APL.controlCenter = {

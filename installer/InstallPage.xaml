@@ -157,7 +157,7 @@
                                 <TextBlock Style="{StaticResource Text.Label}" Text="Also install APL TV"/>
                                 <TextBlock Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextWrapping="Wrap" Text="An IPTV player in the same style, for your own M3U playlists and Xtream accounts. It comes with no channels. Uses the TMDB key above."/>
                             </StackPanel>
-                            <CheckBox x:Name="AplTvToggle" Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="False"/>
+                            <CheckBox x:Name="AplTvToggle" Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="True"/>
                         </Grid>
                         <Border Style="{StaticResource Separator}"/>
 
@@ -167,9 +167,9 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Margin="0,0,20,0" VerticalAlignment="Center">
-                                <TextBlock Style="{StaticResource Text.Label}" Text="Optimize the screen after installing"/>
+                                <TextBlock Style="{StaticResource Text.Label}" Text="Debloat the screen after installing"/>
                                 <TextBlock Style="{StaticResource Text.Secondary}" Margin="0,2,0,0">
-                                    <Run Text="Removes what the screen doesn't need. Restore undoes it."/>
+                                    <Run Text="Optimize removes Samsung's ads, viewing tracking and the apps you don't use. It shows the list first; Restore undoes it."/>
                                     <Hyperlink NavigateUri="apl:optimize"><Run Text="About Optimize"/></Hyperlink>
                                 </TextBlock>
                             </StackPanel>

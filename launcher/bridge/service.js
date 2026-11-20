@@ -54,6 +54,9 @@ var WAKE_FAST_MS = 6000, OTHER_APP_STAYS_MS = 4000;
 /* The Frame: Art Mode hides the launcher but the screen stays on (memory/pm/state 1). Leaving it with the
    power key shows the TV input: watched while Art Mode is in front. */
 var ART_APP = /^org\.tizen\.art-app$/, ART_POLL_MS = 1500;
+/* APL Overlay shows over the app in front and is never the one the user chose: read as no app, like FrontApp in
+   overlay/bridge/Program.cs. In the launcher's package on Tizen 7 and newer, a package of its own on Tizen 6. */
+var OVERLAY_APP = /^(APLauncher\.Overlay|apl\.launcher\.overlay)$/;
 var STATE = "vconftool get memory/pm/state; vconftool get memory/appfw/current_fullscreen_appid; vconftool get memory/system/source_type";
 
 var port = null, idle = null, openedAtBoot = false;
@@ -439,7 +442,8 @@ function vconfValue(out, key) { return (new RegExp(key + ", value = (\\S+)").exe
 /* Screen state, app in front and source in one read: { pm: "1", app: "appId", source: 0 }. */
 function readState(done) {
     shell(STATE, function (out) {
-        done({ pm: vconfValue(out, "memory/pm/state"), app: vconfValue(out, "current_fullscreen_appid"),
+        var app = vconfValue(out, "current_fullscreen_appid");
+        done({ pm: vconfValue(out, "memory/pm/state"), app: app && !OVERLAY_APP.test(app) ? app : undefined,
                source: parseInt(vconfValue(out, "source_type"), 10) });
     });
 }

@@ -1,0 +1,18 @@
+{
+    "id": "com.webos.app.livemenu",
+    "version": "2.0.0",
+    "vendor": "Knikt (Gero Corp.)",
+    "type": "web",
+    "main": "index.html",
+    "title": "Guide",
+    "icon": "icon.png",
+    "transparent": true,
+    "visible": false,
+    "class": {
+        "hidden": true
+    },
+    "defaultWindowType": "overlay",
+    "noSplashOnLaunch": true,
+    "handlesRelaunch": true,
+    "disableBackHistoryAPI": true
+}

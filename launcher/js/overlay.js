@@ -109,7 +109,7 @@
     /* Keys handed to the overlay while it is not there: Home goes back to the launcher, the others to
        Samsung. Only the rules that launch the overlay change (the ones APL Launcher Setup made), and
        the person at the screen is told what changed: nothing happens behind their back. */
-    var KEY_NAMES = { "63": "Home", "244": "⏯", "560": "Samsung TV Plus", "221": "Prime Video" };
+    var KEY_NAMES = { "63": "Home", "244": "⏯", "560": "Samsung TV Plus", "221": "Prime Video", "497": "Multi View" };
     function keyName(rule) {
         var code = rule.trigger && String(rule.trigger.value);
         return KEY_NAMES[code] || APL.t("key {code}", { code: code });
@@ -150,6 +150,7 @@
        are installed and no rule uses those buttons yet. Other rules stay as they are. Then: is Vetro
        intercepting the remote at all? That switch needs the remote to be picked, so it stays in Vetro. */
     var EXTRA_KEYS = [["560", "AquaPlay02.AquaPlay"], ["221", "xvvl3S1bvH.TizenBrewStandalone"]];
+    var MULTI_VIEW = "497";          // Multi View opens the Control Center (overlay/RemoteKeys.cs); not 28, which is OK
     var REMAP_FILE = "/opt/usr/home/owner/share/vetro-remap.json";     // where Vetro keeps its rules and the remote it intercepts
     function setUpButtons() {
         if (sys.PREVIEW) return Promise.resolve({ preview: true });
@@ -181,6 +182,7 @@
             point("63", true);
             if (installed) {
                 point("244", true);
+                point(MULTI_VIEW, false);       // the remotes that have it (#47); a rule already on it stays
                 if (got[1]) point(EXTRA_KEYS[0][0], false);
                 if (got[2]) point(EXTRA_KEYS[1][0], false);
             }
@@ -188,6 +190,13 @@
                 if (!r || r.sent || !r.ok) throw new Error(APL.t("Vetro did not save the buttons"));
             }) : Promise.resolve();
             return saved.then(function () {
+                /* After Give Home Back: what it turned off comes back with the buttons, as its message says */
+                var gave = sys.pref("gaveHome");
+                if (gave) {
+                    sys.setPref("gaveHome", null);
+                    sys.setPref("homeReturn", gave.homeReturn !== false);     // its listener tells APL Overlay
+                    if (gave.homeApp) sys.native.set("homeApp", 1).then(null, function () {});
+                }
                 return sys.exec("cat " + REMAP_FILE).then(function (r) {
                     var store = {};
                     try { store = JSON.parse(r.output || "{}"); } catch (e) {}
@@ -198,6 +207,54 @@
             });
         });
     }
+    /* Settings › Remote and Devices › Give Home Back to Samsung (asked on Reddit): what Restore in APL Launcher
+       Setup does first, from the screen. The Vetro rules that open APL Launcher or APL Overlay go (Home, ⏯, Multi
+       View…; the other rules stay), Start on APL Launcher goes off and Return to the Launcher too, so the screen
+       starts and goes home the Samsung way again. The launcher stays installed, in Samsung's Apps, and Set Up the
+       Remote Buttons brings it all back. Vetro keeps the remote: a key with no rule reaches the screen as before. */
+    function giveHomeBack() {
+        if (sys.PREVIEW) return Promise.resolve({ removed: 0 });
+        return sys.vetroGet("/remap").then(function (r) {
+            var rules = (r && r.rules) || [];
+            var keep = rules.filter(function (rule) {
+                return !(rule.actions || []).some(function (a) {
+                    return a.type === "launch" && (a.appId === LAUNCHER || OVERLAY_IDS.indexOf(a.appId) !== -1);
+                });
+            });
+            var removed = rules.length - keep.length;
+            var saved = removed ? sys.vetroPost("/remap", { rules: keep }).then(function (x) {
+                if (!x || x.sent || !x.ok) throw new Error(APL.t("Vetro did not save the buttons"));
+            }) : Promise.resolve();
+            return saved.then(function () {
+                var wasReturning = !!sys.pref("homeReturn");
+                sys.setPref("homeReturn", false);
+                send();                                     // APL Overlay stops bringing the launcher back
+                return sys.native.get("homeApp").then(function (on) {
+                    // Remembered, so Set Up the Remote Buttons can bring back what was on (setUpButtons)
+                    sys.setPref("gaveHome", { homeApp: on === 1, homeReturn: wasReturning });
+                    return on === 1 ? sys.native.set("homeApp", 0) : 0;
+                }, function () { sys.setPref("gaveHome", { homeApp: false, homeReturn: wasReturning }); return 0; });
+            }).then(function () { return { removed: removed }; });
+        });
+    }
+    function giveHomeBackNow() {
+        APL.alert({
+            title: APL.t("Give Home Back to Samsung?"),
+            message: APL.t("Home and the other buttons open Samsung's own screens again, and the screen starts as before. APL Launcher stays in Samsung's Apps. Set Up the Remote Buttons brings it all back."),
+            focus: 0,
+            buttons: [{ label: APL.t("Cancel") }, { label: APL.t("Give It Back"), destructive: true, run: function () {
+                APL.toast(APL.t("Giving Home back to Samsung…"), true);
+                giveHomeBack().then(function (r) {
+                    APL.alert({ title: APL.t("Home Is Samsung's Again"),
+                                message: APL.t("{n} Vetro rule(s) removed. To come back, open APL Launcher from Samsung's Apps, then Settings › Remote and Devices › Set Up the Remote Buttons.", { n: r.removed }),
+                                buttons: [{ label: APL.t("OK") }] });
+                }, function (e) {
+                    APL.alert({ title: APL.t("Remote Buttons"), message: (e && e.message) || APL.t("Vetro is not responding"), buttons: [{ label: APL.t("OK") }] });
+                });
+            } }]
+        });
+    }
+
     function setUpButtonsNow() {
         APL.toast(APL.t("Setting up the buttons in Vetro…"), true);
         setUpButtons().then(function (r) {
@@ -256,6 +313,7 @@
         refresh: send,
         openSamsungHome: openSamsungHome,
         setUpButtons: setUpButtonsNow,
+        giveHomeBack: giveHomeBackNow,
         isInstalled: function () { return installed; }
     };
 })(window);

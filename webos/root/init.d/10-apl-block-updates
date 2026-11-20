@@ -1,0 +1,19 @@
+#!/bin/sh
+# APL Launcher on a rooted LG TV: LG's system updates stay blocked.
+# Run at every start-up by the Homebrew Channel (/var/lib/webosbrew/init.d, run-parts).
+#
+# The Homebrew Channel's "Block system updates" sends snu, su, su-dev and su-ssl.lge.com nowhere.
+# LG's update program (/usr/sbin/update, firmware 43.21.77) also asks nsu.lge.com and snu-dev.lge.com:
+# all of them go nowhere here, whatever the Homebrew Channel did before. An update would remove the
+# root and everything installed with it, and the TV could not be rooted again.
+H="snu.lge.com snu-dev.lge.com nsu.lge.com su.lge.com su-dev.lge.com su-ssl.lge.com"
+if ! grep -q "nsu.lge.com" /etc/hosts; then
+    cp /etc/hosts /tmp/hosts.apl
+    echo "" >> /tmp/hosts.apl
+    echo "# APL Launcher: LG system updates blocked (webos/root/init.d/10-apl-block-updates)" >> /tmp/hosts.apl
+    echo "127.0.0.1 $H" >> /tmp/hosts.apl
+    echo "::1 $H" >> /tmp/hosts.apl
+    mount --bind /tmp/hosts.apl /etc/hosts
+fi
+# LG's own switch stays the viewer's: Settings › Support › Software Update › Automatic Update, off.
+exit 0

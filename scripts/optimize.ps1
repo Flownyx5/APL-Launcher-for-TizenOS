@@ -65,8 +65,8 @@ try {
 # ---------- what we keep ----------
 # Samsung's YouTube (9Ur5IzDKqV.TizenYouTube, or 111299001912 on older models):
 # never touched by the sorting below; uninstalled only if you ask for it (separate question).
-# Steam Link and Moonlight: kept if they are installed.
-$KEEP = 'TizenYouTube|TizenTube|TizenBrew|xvvl3S1|9Ur5IzDKqV|^111299001912|6YLB5zo9te|HotIptv|^org\.tizen\.browser|^vetrotvapp|^APLauncher|TSLinkTV01|MoonLightS'
+# Steam Link and Moonlight: kept if they are installed. apl.launcher.overlay: APL Overlay's own package on Tizen 6.
+$KEEP = 'TizenYouTube|TizenTube|TizenBrew|xvvl3S1|9Ur5IzDKqV|^111299001912|6YLB5zo9te|HotIptv|^org\.tizen\.browser|^vetrotvapp|^APLauncher|^apl\.launcher\.|TSLinkTV01|MoonLightS'
 # Always kept, whatever the Vetro category: App Store (+ the Samsung account
 # it needs to download), HDMI sources / inputs, Samsung TV Plus and
 # channels, USB playback (My Contents), Alexa and the microphone button dispatcher.

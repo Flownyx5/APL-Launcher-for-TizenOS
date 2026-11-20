@@ -15,8 +15,8 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 rsync -a --exclude bin --exclude obj --exclude icons --exclude hybrid "$ROOT/overlay/" "$WORK/overlay/"
-# The hybrid's manifest: the overlay and the two .NET services in the launcher's package. Setup's
-# separate .tpk keeps overlay/tizen-manifest.xml (apl.launcher.overlay).
+# The hybrid's manifest: the overlay and the two .NET services in the launcher's package. The separate
+# .tpk for Tizen 6 (tools/make-tizen6.py) keeps overlay/tizen-manifest.xml (apl.launcher.overlay).
 cp "$ROOT/overlay/hybrid/tizen-manifest.xml" "$WORK/overlay/tizen-manifest.xml"
 # Same version as the launcher's config.xml: one package, one version.
 VERSION="$(python3 -c 'import re,sys; print(re.search(r"<widget[^>]*\sversion=\"([^\"]+)\"", open(sys.argv[1], encoding="utf-8").read()).group(1))' "$ROOT/launcher/config.xml")"

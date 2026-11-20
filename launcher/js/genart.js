@@ -20,6 +20,10 @@
 (function (global) {
     "use strict";
 
+    /* These canvases are read back (getImageData, toDataURL) and never shown: kept in ordinary memory.
+       On the GPU each read waited for it, 90 ms at a time on an LG G5, in the middle of an animation. */
+    var READ = { willReadFrequently: true };
+
     var APL = global.APL, sys = APL.sys;
     var VERSION = 3, PREFIX = "apl.gen.";        // 3: sheets in the logo's own colors, made again
     var TILE_W = 500, TILE_H = 300, BG_W = 1920, BG_H = 1080;
@@ -63,7 +67,12 @@
             i.src = src;
         });
     }
-    function slug(name) { return String(name || "").toLowerCase().replace(/\+/g, "-plus").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
+    /* The icon sets name their files without accents: "Lecteur multimédia" was looked up as lecteur-multim-dia */
+    function slug(name) {
+        var s = String(name || "").toLowerCase();
+        if (s.normalize) s = s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+        return s.replace(/\+/g, "-plus").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    }
 
     function firstGood(list, minSize) {
         return list.reduce(function (chain, src) {
@@ -73,14 +82,15 @@
             });
         }, Promise.resolve(null));
     }
-    function findLogo(app, art) {
+    /* offline: Find Logos and Artwork Online is off, only the app's own icon on the screen (no icon sets) */
+    function findLogo(app, art, offline) {
         var own = app.icon && !/^https?:/.test(app.icon) ? app.icon : null;
         var name = slug(app.name);
-        var sets = name.length >= 4 ? ICON_SETS.map(function (s) { return s + name + ".png"; }) : [];
+        var sets = name.length >= 4 && !offline ? ICON_SETS.map(function (s) { return s + name + ".png"; }) : [];
         return firstGood([own], GOOD_ICON).then(function (i) {
             return i || firstGood([art && art.exact && art.icon, art && art.providerLogo].concat(sets), 96);
         }).then(function (i) {
-            return i || firstGood([own, app.icon], 32);
+            return i || firstGood(offline ? [own] : [own, app.icon], 32);
         });
     }
 
@@ -90,7 +100,7 @@
         var w = 96, h = Math.round(96 * img.naturalHeight / img.naturalWidth);
         if (h > 96) { w = Math.round(96 * 96 / h); h = 96; }
         h = Math.max(h, 8); w = Math.max(w, 8);
-        var c = canvas(w, h), x = c.getContext("2d");
+        var c = canvas(w, h), x = c.getContext("2d", READ);
         x.drawImage(img, 0, 0, w, h);
         var d = x.getImageData(0, 0, w, h).data, ring = [], px, py, i;
         for (py = 0; py < h; py++) {
@@ -159,7 +169,7 @@
         var mx = Math.max(1, Math.round(nw * 0.012)), my = Math.max(1, Math.round(nh * 0.012));
         var sx = Math.max(0, Math.floor(s.box.x * nw) - mx), sy = Math.max(0, Math.floor(s.box.y * nh) - my);
         var sw = Math.min(nw - sx, Math.ceil(s.box.w * nw) + 2 * mx), sh = Math.min(nh - sy, Math.ceil(s.box.h * nh) + 2 * my);
-        var c = canvas(sw, sh), x = c.getContext("2d");
+        var c = canvas(sw, sh), x = c.getContext("2d", READ);
         x.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
         if (!s.transparent) {
             var im = x.getImageData(0, 0, sw, sh), p = im.data, i;
@@ -237,7 +247,7 @@
 
     /* ---------- tile ---------- */
     function paintTile(base, logo) {
-        var c = canvas(TILE_W, TILE_H), x = c.getContext("2d"), g = x.createLinearGradient(0, 0, TILE_W, TILE_H), up = lum(base) > 200 ? 0 : 10;
+        var c = canvas(TILE_W, TILE_H), x = c.getContext("2d", READ), g = x.createLinearGradient(0, 0, TILE_W, TILE_H), up = lum(base) > 200 ? 0 : 10;
         g.addColorStop(0, rgb({ r: base.r + up, g: base.g + up, b: base.b + up }));
         g.addColorStop(1, rgb({ r: base.r - 6, g: base.g - 6, b: base.b - 6 }));
         x.fillStyle = g;
@@ -250,7 +260,7 @@
     /* Large Logo: dark, with a soft halo in the app's color behind the logo, the style of the old
        catalog cards, now drawn here for every app. */
     function paintBg(logo, hue, sat) {
-        var c = canvas(BG_W, BG_H), x = c.getContext("2d"), a = hslToRgb(hue, sat, 50), cy = BG_H * 0.44;
+        var c = canvas(BG_W, BG_H), x = c.getContext("2d", READ), a = hslToRgb(hue, sat, 50), cy = BG_H * 0.44;
         var o = "rgba(" + Math.round(a.r) + "," + Math.round(a.g) + "," + Math.round(a.b) + ",";
         x.fillStyle = "#07080c";
         x.fillRect(0, 0, BG_W, BG_H);
@@ -321,7 +331,7 @@
         return { pts: pts, close: close };
     }
     function covered(list) {
-        var c = canvas(SW / 8, SH / 8), x = c.getContext("2d"), on = 0, i;
+        var c = canvas(SW / 8, SH / 8), x = c.getContext("2d", READ), on = 0, i;
         x.scale(1 / 8, 1 / 8);
         list.forEach(function (s) { sheetPath(x, s); x.fill(); });
         var d = x.getImageData(0, 0, c.width, c.height).data;
@@ -329,7 +339,7 @@
         return on / (d.length / 4);
     }
     function pointIn(s, r) {
-        var x = canvas(1, 1).getContext("2d"), i;
+        var x = canvas(1, 1).getContext("2d", READ), i;
         sheetPath(x, s);
         for (i = 0; i < 30; i++) { var p = [0.1 + r() * 0.8, 0.1 + r() * 0.8]; if (x.isPointInPath(p[0] * SW, p[1] * SH)) return p; }
         return null;
@@ -370,7 +380,7 @@
        Wide ones at a quarter size: canvas caps the blur radius (and it is cheaper). */
     function falloff(s, blur, times, k) {
         k = k || 1;
-        var o = canvas(SW * k, SH * k), x = o.getContext("2d"), i;
+        var o = canvas(SW * k, SH * k), x = o.getContext("2d", READ), i;
         x.scale(k, k);
         x.save();
         x.translate(-SW * 4, 0);
@@ -381,7 +391,7 @@
         x.restore();
         x.globalCompositeOperation = "destination-in"; sheetPath(x, s); x.fill();
         if (k === 1) return o;
-        var big = canvas(SW, SH), g = big.getContext("2d");
+        var big = canvas(SW, SH), g = big.getContext("2d", READ);
         if ("imageSmoothingQuality" in g) g.imageSmoothingQuality = "high";
         g.drawImage(o, 0, 0, SW, SH);
         g.globalCompositeOperation = "destination-in"; sheetPath(g, s); g.fill();   // the edge stays crisp
@@ -399,20 +409,20 @@
        turned yellow olive, orange brown and cyan teal. */
     function sheetLight(l) { return l === undefined || l === null ? 38 : clamp(l, 34, 52); }
     function paintSheets(list, sat, light, lit) {
-        var c = canvas(SW, SH), x = c.getContext("2d");
+        var c = canvas(SW, SH), x = c.getContext("2d", READ);
         x.fillStyle = light ? hsl(warm(list[0].h, true), Math.min(sat, 45) * 0.6, 84) : "#000";
         x.fillRect(0, 0, SW, SH);
         list.forEach(function (s) {
             if (light) {
                 // Light theme: a soft shadow just outside the sheet, on what lies below
-                var sh = canvas(SW, SH), y = sh.getContext("2d");
+                var sh = canvas(SW, SH), y = sh.getContext("2d", READ);
                 y.save(); y.translate(-SW * 4, 0); sheetPath(y, s); y.translate(SW * 4, 0);
                 y.shadowOffsetX = SW * 4 + SW * 0.004; y.shadowOffsetY = SW * 0.006; y.shadowBlur = SW * 0.035;
                 y.shadowColor = hsl(s.h, (s.sat === undefined ? sat : clamp(s.sat, 55, 92)) * 0.6, 28, 0.38); y.fill(); y.restore();
                 y.globalCompositeOperation = "destination-out"; sheetPath(y, s); y.fill();
                 x.drawImage(sh, 0, 0);
             }
-            var body = canvas(SW, SH), b = body.getContext("2d");
+            var body = canvas(SW, SH), b = body.getContext("2d", READ);
             var ss = s.sat === undefined ? sat : clamp(s.sat, 55, 92), sl = s.lit === undefined ? lit : sheetLight(s.lit);
             b.drawImage(falloff(s, SW * 0.012, 1), 0, 0);
             b.drawImage(falloff(s, SW * 0.32, 2, 0.25), 0, 0);
@@ -429,7 +439,7 @@
                 pg.addColorStop(1, "rgba(0,0,0,0)");
                 b.fillStyle = pg; b.fillRect(0, 0, SW, SH);
             });
-            var rim = canvas(SW, SH), q = rim.getContext("2d");                      // the pale rim where the light falls
+            var rim = canvas(SW, SH), q = rim.getContext("2d", READ);                      // the pale rim where the light falls
             q.drawImage(falloff(s, SW * 0.008, 1), 0, 0);
             q.drawImage(falloff(s, SW * 0.05, 2), 0, 0);
             lightMask(q, s.l, [[0, 1], [0.45, 0.25], [0.8, 0]]);
@@ -445,7 +455,7 @@
     }
     /* Blur by a share of the width: canvas filter at half size, else smooth down- and up-scaling. */
     function blurred(src, share) {
-        var w = SW / 2, h = SH / 2, half = canvas(w, h), x = half.getContext("2d"), out = canvas(SW, SH), o = out.getContext("2d");
+        var w = SW / 2, h = SH / 2, half = canvas(w, h), x = half.getContext("2d", READ), out = canvas(SW, SH), o = out.getContext("2d", READ);
         if ("imageSmoothingQuality" in o) o.imageSmoothingQuality = "high";
         if ("filter" in x) {
             var m = w * share * 2;
@@ -457,7 +467,7 @@
         var cur = src, size = [SW, SH];
         while (size[0] > SW * share * 2) {
             size = [Math.max(2, Math.round(size[0] / 2)), Math.max(2, Math.round(size[1] / 2))];
-            var next = canvas(size[0], size[1]), n = next.getContext("2d");
+            var next = canvas(size[0], size[1]), n = next.getContext("2d", READ);
             if ("imageSmoothingQuality" in n) n.imageSmoothingQuality = "high";
             n.drawImage(cur, 0, 0, size[0], size[1]);
             cur = next;
@@ -494,7 +504,8 @@
     var WORKER_FNS = [clamp, hsl, hueGap, sheetRandom, edgePoint, sheetPath, sheetLine, covered, pointIn, sheetPlan,
                       falloff, lightMask, warm, sheetLight, paintSheets, blurred, secondColour, sheetCanvases];
     function workerSource() {
-        return '"use strict";\nvar SW = ' + SW + ", SH = " + SH + ", EDGE = " + EDGE + ", CORNERS = " + JSON.stringify(CORNERS) + ";\n" +
+        return '"use strict";\nvar SW = ' + SW + ", SH = " + SH + ", EDGE = " + EDGE + ", CORNERS = " + JSON.stringify(CORNERS) +
+            ", READ = " + JSON.stringify(READ) + ";\n" +
             "function canvas(w, h) { return new OffscreenCanvas(w, h); }\n" +
             WORKER_FNS.map(String).join("\n") + "\n" +
             "function url(c) { return c.convertToBlob({ type: 'image/jpeg', quality: 0.9 }).then(function (b) {\n" +
@@ -661,7 +672,7 @@
     }
 
     /* One app: find its logo and paint, only once. */
-    function make(app, art) {
+    function make(app, art, offline) {
         if (!missing(app)) return Promise.resolve(false);
         // Tile and color known (catalog): the sheets need no logo, nothing to search
         // (its tile is still read, for the logo's second color)
@@ -671,7 +682,7 @@
         if (sys.PREVIEW && !tileOnly && !ownTile) return Promise.resolve(false);      // the preview searches nothing online
         var r = stored(app);
         if (r) return Promise.resolve(use(app, r));
-        var logoP = tileOnly ? Promise.resolve(null) : ownTile ? load(app.tile) : findLogo(app, art);
+        var logoP = tileOnly ? Promise.resolve(null) : ownTile ? load(app.tile) : findLogo(app, art, offline);
         var tileP = tileOnly && app.tile ? load(app.tile) : Promise.resolve(null);
         return Promise.all([logoP, tileP]).then(function (got) {
             return paint(app, got[0], got[1]);
@@ -696,4 +707,52 @@
 
     APL.genArt = { make: make, applyCached: applyCached, missing: missing, clear: clear, undo: undo, retheme: retheme,
                    where: function () { return workerOk === true ? "worker" : workerOk === false ? (APL.genArtWhere || "main") : "not used yet"; } };
+})(window);
+
+/* ---------- Wallpapers: Settings › Appearance › Top Shelf › Wallpaper ----------
+   One picture or colour gradient behind every app (launcher.js walled()). The pictures are the Home app's
+   drawn backdrops (images/backdrops, tools/make-backdrops.py) and the ones install-via-vetro.py --backdrops
+   adds (APL_KEYS.ha.backdrops, the same list home-app.js offers). The gradients run top to bottom, as the
+   glass draws a gradient (glass.js gradImage), so the dock reads the same colours. */
+(function (global) {
+    "use strict";
+
+    var APL = global.APL = global.APL || {};
+    var PICTURES = [["dusk", "Dusk"], ["linen", "Linen"], ["forest", "Forest"], ["night", "Night"]];
+    var GRADIENTS = [
+        ["blue", "Blue Gradient", ["#2a5cb8", "#0b1a3d"]],
+        ["sunset", "Sunset Gradient", ["#f0965a", "#8e3b74", "#221338"]],
+        ["mint", "Mint Gradient", ["#2f8f78", "#0c2f2c"]],
+        ["purple", "Purple Gradient", ["#7a4fc4", "#1c1238"]],
+        ["graphite", "Graphite Gradient", ["#4a4a52", "#121215"]]
+    ];
+    var DEFAULT = "pic:dusk";
+
+    function t(s) { return APL.t ? APL.t(s) : s; }
+
+    function list() {
+        var out = [], i, b, extra = ((global.APL_KEYS && global.APL_KEYS.ha) || {}).backdrops;
+        for (i = 0; i < PICTURES.length; i++) {
+            out.push({ id: "pic:" + PICTURES[i][0], name: t(PICTURES[i][1]), url: "images/backdrops/" + PICTURES[i][0] + ".jpg" });
+        }
+        if (extra && typeof extra.length === "number") {
+            for (i = 0; i < extra.length; i++) {
+                b = extra[i] || {};
+                if (b.id && b.file) out.push({ id: "pic:" + String(b.id), name: String(b.name || b.id), url: String(b.file) });
+            }
+        }
+        for (i = 0; i < GRADIENTS.length; i++) {
+            out.push({ id: "grad:" + GRADIENTS[i][0], name: t(GRADIENTS[i][1]), stops: GRADIENTS[i][2],
+                       css: "linear-gradient(180deg, " + GRADIENTS[i][2].join(", ") + ")" });
+        }
+        return out;
+    }
+
+    function current() {
+        var want = (APL.sys && APL.sys.pref("shelfWall")) || DEFAULT, all = list(), i;
+        for (i = 0; i < all.length; i++) if (all[i].id === want) return all[i];
+        return all[0];
+    }
+
+    APL.wallpapers = { list: list, current: current };
 })(window);

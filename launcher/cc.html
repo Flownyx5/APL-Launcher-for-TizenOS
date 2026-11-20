@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Control Center</title>
+<!-- LG, rooted TV: the Control Center drawn over the apps (the Guide button). webos/root/bin/apl-home.sh puts
+     APL Launcher's own app info in RAM over an LG app that draws a see-through window over the app in front and
+     that the TV never opens once set up (com.webos.app.firstuse-overlay, webos/root/cchost), pointing here. The
+     launcher's service opens it when Guide is pressed over an app (webos/service, "the Guide button").
+     This page takes the launcher's settings from the service (its storage is that app's, not the launcher's),
+     then opens the launcher's own page in Control Center mode (?apl=cc, js/webos.js): the panel over the app,
+     its video still playing; Back closes it and the app has the remote again. -->
+<style>html, body { margin: 0; height: 100%; background: transparent; }</style>
+</head>
+<body>
+<script>
+(function () {
+    "use strict";
+    var PAGE = "file:///media/developer/apps/usr/palm/applications/com.knikt.apllauncher/index.html?apl=cc";
+    var live = [], done = false;
+    function go(m) {
+        if (done) return;
+        done = true;
+        try {
+            if (m && m.store) {
+                Object.keys(m.store).forEach(function (k) { window.localStorage.setItem(k, m.store[k]); });
+                window.localStorage.setItem("apl.ccSeen", JSON.stringify(m.store));     // js/webos.js, when opened again
+            }
+        } catch (e) {}
+        window.location.replace(PAGE);
+    }
+    try {
+        var b = new window.PalmServiceBridge();
+        live.push(b);
+        b.onservicecallback = function (txt) {
+            var m = null;
+            try { m = JSON.parse(txt); } catch (e) {}
+            go(m && m.returnValue !== false ? m : null);
+        };
+        b.call("luna://com.knikt.apllauncher.service/ccState", "{}");
+    } catch (e) { go(null); }
+    // No answer: the panel all the same, with the settings it was given last time
+    setTimeout(function () { go(null); }, 2000);
+})();
+</script>
+</body>
+</html>

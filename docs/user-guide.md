@@ -13,7 +13,7 @@ The interface is in French, so labels are given here in French with their Englis
 | **Home** (Vetro) | opens the launcher; pressed twice: open apps; held: Control Center | |
 | **⏯** or red key | Control Center, over any app (⏯ no longer pauses videos, unless *Settings › Remote and Devices › Play/Pause Button* is set to *Play and Pause*) | |
 | **Samsung TV Plus** | AquaPlay | |
-| **Prime Video** | TizenTube | |
+| **Prime Video** | TizenTube (its own app, TizenTube Cobalt, when it is installed; else through TizenBrew) | |
 
 ## Home screen
 
@@ -34,6 +34,7 @@ Hold **OK** on an app for half a second:
 | Choice | Effect |
 |---|---|
 | **Edit Home Screen** | The app jiggles. Move it with the arrows, then press OK or Back to drop it. The layout is saved. |
+| **Change Icon** | Another tile for the app, among the launcher's own logos: TizenTube with YouTube's logo, for example. *Original* gives the app its own tile back. |
 | **Hide App** | Removes it from the Home Screen. Bring it back in *Settings › Home Screen › Show on Home Screen*. |
 | **Delete App** | Asks for confirmation (*Cancel* is selected by default), then uninstalls through Vetro. System apps cannot be deleted from here. |
 
@@ -66,6 +67,33 @@ Open it with **⏯**, by holding **Home**, or with the red key. Glass tiles appe
 | ○ **Sources** | the Sources screen |
 | **Brightness** | ◀ ▶ changes the real backlight (needs Vetro) |
 | **Screensaver** / **Settings** | starts the screen saver / opens Settings |
+
+## Home app (Home Assistant)
+
+The Home app shows your Home Assistant house as tiles: rooms down the side,
+categories above the grid. It asks for the address once, on the TV, and keeps
+whatever it is given.
+
+**One way in: a long-lived access token.** In Home Assistant: your profile,
+the Security tab, Long-lived access tokens, Create token. Paste it into the
+Token field. Nothing has to be set on the server for it: the token is checked
+over a WebSocket, and a WebSocket is not subject to the cross-origin rule that
+stops a page reading another site's answer. The REST calls that follow (the
+states, the service calls) are the one part that would need this screen in
+`http: cors_allowed_origins`, so on a stock install the launcher keeps to the
+socket. If that list is set for something else, `- "*"` is accepted - an
+earlier version of this page said a wildcard does not work, and that was wrong
+(checked on a Frame).
+
+The password sign-in this guide used to describe was removed: it needed this
+screen's origin in `http: cors_allowed_origins`, and on the TV the launcher's
+origin is not an address that can be listed.
+
+Once inside, **Edit Layout** in the sidebar rearranges the house: move an
+accessory to another room, make a room or a category, step an accessory up or
+down inside its room, or take it off the house with **Remove from Home**. What
+was taken off is listed under **Hidden**, and can be put back from there. The
+arrangement is stored on the TV and is never written back to Home Assistant.
 
 ## Settings
 

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Boot hook (/var/lib/webosbrew/init.d, run-parts by the Homebrew Channel): Home opens APL Launcher and the
+# TV starts on it (apl-home.sh, RAM only).
+# LG's Home instead: touch /media/developer/apl-debloat/OFF-home (then restart), or apl-home-undo.sh for now.
+[ -e /media/developer/apl-debloat/OFF ] && exit 0
+[ -e /media/developer/apl-debloat/OFF-home ] && exit 0
+(sh /media/developer/apl-debloat/apl-home.sh) </dev/null >/dev/null 2>&1 &
+exit 0

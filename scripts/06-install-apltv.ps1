@@ -17,7 +17,7 @@ param(
     [string]$TizenCli,
     [string]$Sdb,
     [string]$Wgt,
-    [string]$Repo = "Knikt/APL-TV-for-TizenOS",
+    [string]$Repo = "Knikt/APL-TV",
     [string]$LauncherDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "launcher"),
     [string]$AppDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "apltv\app"),
     [switch]$FromRelease,

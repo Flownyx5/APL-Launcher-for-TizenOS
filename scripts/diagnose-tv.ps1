@@ -45,8 +45,8 @@ try {
     $js = ($st | ConvertTo-Json -Depth 3 -Compress) -replace '"(token|secret|nonce)":"[^"]*"', '"$1":"…"'
     Add ((Tr "Vetro: " "Vetro : ") + $js.Substring(0, [Math]::Min(600, $js.Length)))
 } catch { Add (Tr "Could not read Vetro /status" "Vetro /status illisible") }
-Add (Run "pkgcmd -l 2>/dev/null | grep -i 'APLauncher'; true")
-Add (Run "app_launcher -l 2>/dev/null | grep -i 'APLauncher'; true")
+Add (Run "pkgcmd -l 2>/dev/null | grep -i -E 'APLauncher|apl[.]launcher'; true")
+Add (Run "app_launcher -l 2>/dev/null | grep -i -E 'APLauncher|apl[.]launcher'; true")
 Add ((Tr "Starting the relay: " "Démarrage du relais : ") + (Run "app_launcher -s APLauncher.Bridge 2>&1; sleep 2; ps -ef 2>/dev/null | grep -i 'APLauncher' | grep -v grep; true"))
 
 # ---------- 2. screen settings (D-Bus avoc) ----------
@@ -101,6 +101,9 @@ Add ((Tr "Key tool: " "Outil de touches : ") + (Run "ls -l /usr/bin/input_keyeve
 Add ((Tr "TV app: " "App TV : ") + (Run "app_launcher -l 2>/dev/null | grep -iE 'tv-viewer|org.tizen.menu' ; true" 15))
 Add ((Tr "Stores: " "Boutiques : ") + (Run "app_launcher -l 2>/dev/null | grep -iE 'store|samsungapps|volt' ; true" 15))
 Add ((Tr "Model: " "Modèle : ") + (Run "cat /etc/info.ini 2>/dev/null | grep -iE 'model|version' | head -5; true" 10))
+# Tizen 6.0 or 6.5 (APL Launcher Setup installs a different APL Overlay on each): what Get-ScreenPlatform reads
+$p = Get-ScreenPlatform $base
+if ($p) { Add ((Tr "Platform: " "Plateforme : ") + "Tizen $($p.Tizen), version '$($p.Version)', Tizen 6 '$($p.Tizen6)', .NET 6: $($p.DotNet6)") }
 
 $file = Join-Path $Root "diagnostic-tv.txt"
 [IO.File]::WriteAllLines($file, [string[]](@((Tr "APL Launcher - what the screen can do" "APL Launcher - ce que l'écran sait faire"), (Get-Date).ToString('s')) + $out), (New-Object Text.UTF8Encoding($true)))

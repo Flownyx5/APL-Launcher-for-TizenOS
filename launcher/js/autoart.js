@@ -191,10 +191,17 @@
 
     /* All the apps, one after another, in the background. onChange: redraw. */
     var running = false;
+    /* LG (APL.platform.directGlass) draws in 4K: each redraw of the Home Screen costs much more there, and a
+       2022 LG answered a key in 5 s during this pass (#55). It goes slower there, with fewer redraws. */
+    var SLOW = !!(APL.platform && APL.platform.directGlass);
+    /* Find Logos and Artwork Online off: nothing is searched, but the Sheets of Light and the Large Logos are
+       still painted, from the catalog's tile or the app's own icon, as the setting says. Before, nothing ran at
+       all and every app without artwork kept its icon and name on a glow (an S95D, #66). */
     function run(apps, onChange) {
-        if (running || !sys.pref("autoArt")) return;
+        if (running) return;
         if (sys.PREVIEW) { previewArt(apps, onChange); return; }
         running = true;
+        var online = !!sys.pref("autoArt");
         var queue = apps.filter(wanted), dirty = false, n = 0;
         (function next() {
             if (!queue.length) {
@@ -204,14 +211,14 @@
             }
             var app = queue.shift();
             var needArt = !app.tile && !app.tileHtml || !app.bg;
-            lookup(app, needArt).then(function (art) {
+            (online ? lookup(app, needArt) : Promise.resolve(null)).then(function (art) {
                 if (apply(app, art)) dirty = true;
-                return APL.genArt ? APL.genArt.make(app, art) : false;
+                return APL.genArt ? APL.genArt.make(app, art, !online) : false;
             }).then(function (made) {
                 if (made) dirty = true;
             }, function () {}).then(function () {
-                if (dirty && ++n % 6 === 0) { onChange(); dirty = false; }
-                setTimeout(next, 250);           // gently: the screen stays smooth
+                if (dirty && ++n % (SLOW ? 12 : 6) === 0) { onChange(); dirty = false; }
+                setTimeout(next, SLOW ? 700 : 250);           // gently: the screen stays smooth
             });
         })();
     }

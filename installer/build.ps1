@@ -44,7 +44,7 @@ try {
     Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
     $oldEnc = [Console]::OutputEncoding
     try { [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false) } catch {}   # git prints UTF-8 file names
-    try { $files = @(git -C $Root -c core.quotepath=off ls-files -- launcher scripts overlay LICENSE) }
+    try { $files = @(git -C $Root -c core.quotepath=off ls-files -- launcher scripts overlay webos LICENSE) }
     finally { try { [Console]::OutputEncoding = $oldEnc } catch {} }
     if ($LASTEXITCODE -ne 0 -or $files.Count -eq 0) { throw "git ls-files failed: is git installed and is this a clone of the repository?" }
     # Belt and braces: private files stay out even if someone tracked them by mistake.

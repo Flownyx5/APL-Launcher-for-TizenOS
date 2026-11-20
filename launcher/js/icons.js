@@ -59,6 +59,13 @@
         backspace:  '<path d="M8.5 5.5H20a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5H8.5L2.5 12z"/><path d="M11.5 9.5l5 5M16.5 9.5l-5 5"/>',
         sun:        '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>',
         eye:        '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+        /* Weather (weather.js): one cloud, drawn from three arcs, in each */
+        cloud:      '<path d="M7 18.5h10.2a3.8 3.8 0 0 0 .3-7.6 5.6 5.6 0 0 0-10.8 1.2A3.2 3.2 0 0 0 7 18.5z"/>',
+        cloudSun:   '<path d="M8 2.8v1.4M2.8 8h1.4M4.3 4.3l1 1M11.7 4.3l-1 1"/><path d="M5.6 10.6a3 3 0 0 1 5.3-3.6"/><path d="M9.5 20h8a3.3 3.3 0 0 0 .3-6.6 4.9 4.9 0 0 0-9.4 1A2.8 2.8 0 0 0 9.5 20z"/>',
+        rain:       '<path d="M7 15h10.2a3.8 3.8 0 0 0 .3-7.6 5.6 5.6 0 0 0-10.8 1.2A3.2 3.2 0 0 0 7 15z"/><path d="M8.5 18l-1 2.5M12.5 18l-1 2.5M16.5 18l-1 2.5"/>',
+        snow:       '<path d="M7 15h10.2a3.8 3.8 0 0 0 .3-7.6 5.6 5.6 0 0 0-10.8 1.2A3.2 3.2 0 0 0 7 15z"/><circle cx="8.5" cy="19" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="20.6" r="1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="19" r="1" fill="currentColor" stroke="none"/>',
+        storm:      '<path d="M7 15h10.2a3.8 3.8 0 0 0 .3-7.6 5.6 5.6 0 0 0-10.8 1.2A3.2 3.2 0 0 0 7 15z"/><path d="M12.8 15.5l-2.2 3.4h3l-2.2 3.4"/>',
+        fog:        '<path d="M4 8.5h16M6.5 12.5h11M4 16.5h16"/>',
         split:      '<rect x="2.5" y="5" width="19" height="14" rx="2.2"/><path d="M12 5v14"/>',
         folder:     '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/>',
         mouse:      '<rect x="7" y="3" width="10" height="18" rx="5"/><path d="M12 3v6"/>',

@@ -4,7 +4,10 @@
 #   apl-launcher-v<version>.wgt        the launcher and its web bridge, as APL Launcher Setup builds it
 #   apl-launcher-full-v<version>.wgt   with --overlay: one hybrid package for Apps2Samsung, the launcher
 #                                      + APL Overlay and its .NET bridge and start-up service
-#   SHA256SUMS-wgt.txt                 both, whichever are in the output folder
+#   SHA256SUMS-wgt.txt                 every apl-launcher-*.wgt and apl-overlay-*.tpk in the output folder
+#
+# The Tizen 6 packages (the launcher and APL Overlay in two packages, for 6.0 and 6.5) are made from the
+# full one afterwards by tools/make-tizen6.py, which writes SHA256SUMS-wgt.txt again.
 #
 # The package is signed with the Tizen SDK's default certificate. A retail screen only accepts a
 # package signed with a certificate that embeds its own DUID, so it does NOT install as is:
@@ -14,7 +17,9 @@
 #   - js/keys.local.js is keys.example.js with empty keys. Apps2Samsung asks for the TMDB,
 #     YouTube and Fanart.tv keys and writes them in before re-signing
 #     (packaging/apps2samsung/, user_settings). Personal websites stay empty.
-#   - no Memoji or custom avatars, no SF Pro fonts, no personal sounds (never published).
+#   - no custom avatars and no SF Pro fonts (Apple's license). The launcher's own sounds are in, and the
+#     profiles' Memoji, downloaded here from wimell/tapback-memojis (MIT, tools/memoji.py), as APL
+#     Launcher Setup and the Android and LG packages have them.
 #
 # The Overlay .tpk comes from tools/make-overlay.sh (package APLauncher, like the launcher).
 # Inside a hybrid package the web bridge never runs on the screen (its on-boot is dropped, and not
@@ -57,8 +62,10 @@ rsync -a \
     --exclude '*.local.js' --exclude 'keys.example.js' \
     --exclude 'images/avatars/custom/' --exclude 'images/avatars/memoji/' \
     --exclude 'fonts/*.otf' --exclude 'fonts/*.OTF' --exclude 'fonts/*.ttf' --exclude 'fonts/*.TTF' \
-    --exclude 'sounds/*.wav' --exclude '.DS_Store' \
+    --exclude '.DS_Store' \
     "$ROOT/launcher/" "$WORK/ui/"
+# The Memoji of the profiles, and js/avatars.local.js listing them (none without network: the 3D faces then)
+python3 "$ROOT/tools/memoji.py" "$WORK/ui/images/avatars/memoji" "$WORK/ui/js/avatars.local.js"
 
 # Full package: the .NET bridge in the Overlay's .tpk (overlay/bridge) takes the web one's id,
 # APLauncher.Bridge, so the web service is dropped from config.xml. The plain package keeps it.
@@ -133,5 +140,5 @@ fi
 for f in $FILES; do
     grep -q " $f\$" <<<"$LIST" || { echo "$f is missing from $NAME" >&2; exit 1; }
 done
-(cd "$OUT" && sha256sum apl-launcher-*.wgt > SHA256SUMS-wgt.txt)
+(cd "$OUT" && shopt -s nullglob && sha256sum apl-launcher-*.wgt apl-overlay-*.tpk > SHA256SUMS-wgt.txt)
 ls -l "$OUT"

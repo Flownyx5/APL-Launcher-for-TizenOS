@@ -5,12 +5,17 @@
     <meta name="viewport" content="width=1920, height=1080, user-scalable=no">
     <title>APL Launcher</title>
     <link id="apl-css" rel="stylesheet" href="css/launcher.css">
+    <!-- The Home app's own screen (js/home-app.js) -->
+    <link id="home-app-css" rel="stylesheet" href="css/home-app.css">
     <link id="apl-glass-css" rel="stylesheet" href="css/glass.css">
 </head>
 <body class="mode-shelf">
     <!-- Top Shelf: full-frame artwork of the selected app (2 layers for the fade) -->
     <div id="bgA" class="bg"></div>
     <div id="bgB" class="bg"></div>
+    <!-- A trailer over the full-screen artwork (js/trailer.js): its own layer, so
+         a change of picture never takes the video away with it -->
+    <div id="trailerLayer" class="trailerlayer" aria-hidden="true"></div>
     <!-- Blurred grid background: a small pre-blurred image, nothing computed live -->
     <div id="bgBlur" class="bgblur"></div>
     <div class="scrim"></div>
@@ -25,6 +30,7 @@
     <div id="shelfInfo" class="shelfinfo">
         <div id="shelfTitle" class="shelfinfo__title"></div>
         <div id="shelfMeta" class="shelfinfo__meta"></div>
+        <div id="shelfDesc" class="shelfinfo__desc"></div>
     </div>
 
     <!-- "Press ▲ for full screen" (launcher.js puts in the translated text) -->
@@ -39,8 +45,20 @@
         <div id="rows" class="rows"></div>
     </main>
 
+    <!-- CleanFrame Home: the house as an app, drawn by js/home-app.js.
+         Hidden until the Home tile opens it. -->
+    <div id="homeApp" class="home-app" hidden></div>
+
     <div id="toast" class="toast" aria-live="polite"></div>
-    <div id="boot" class="boot"></div>
+    <!-- Start-up: the mark and a thin line while the settings, the profiles and
+         the apps are read. Plain black before, which read as a fault - and a
+         screen that has to put its settings back shows this while it does. -->
+    <div id="boot" class="boot" aria-hidden="true">
+        <div class="boot__mark">
+            <span class="boot__a">APL</span>
+            <span class="boot__bar"><i></i></span>
+        </div>
+    </div>
 
     <!-- Samsung API (productinfo, network, avinfo): provided by the screen -->
     <script src="$WEBAPIS/webapis/webapis.js"></script>

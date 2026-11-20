@@ -16,7 +16,8 @@
      Nuvio       keeps its progress (watchProgressItems), most recent first: the
                  same, from the IMDb ID
      APL TV      writes its own Top Shelf (/tmp/apltv-shelf.json): what you were
-                 watching at its minute, and the last channel; OK opens it there
+                 watching at its minute, and the last channel; OK opens it there.
+                 On LG too (com.knikt.apltv), read by the launcher's service
      Hot Player  keeps only the episode and the progress, without the name of the
                  series or of the channel: a "Continue" card with the app's
                  artwork, no "Last Channel" card
@@ -37,6 +38,7 @@
     var CACHE_MS = 10 * 60000, DONE_AT = 0.95;          // watched to 95%: it is finished
     var ART_KEY = "apl.wdg.art2";             // 2: pictures with the title drawn on them (liveshelf.js keyArt)
     var root = null, row = null, shownFor = null, shownApp = null, cache = {}, pending = {};
+    var MAX_CARDS = 6;                                   // a row that slides past two (slideTo)
 
     /* ---------- names and pictures: kept on the screen, they don't change ---------- */
     var art = {};
@@ -306,7 +308,7 @@
     function stremioCards() {
         return sys.exec("export LC_ALL=C; cat '" + STREMIO_STORE + "'/*.log 2>/dev/null | tr -d '[:cntrl:]' | grep -a 'library_recent' | sed -E 's/.*_file:..library_recent//' | " +
                         "grep -a -o -E '" + STREMIO_FIELDS + "' | head -c 120000").then(function (r) {
-            return Promise.all(stremioRecent(readable(r.output)).slice(0, 2).map(stremioCard));
+            return Promise.all(stremioRecent(readable(r.output)).slice(0, MAX_CARDS).map(stremioCard));
         });
     }
     /* A record starts at its "_id". Like Stremio: partly watched, not removed, most recent first. */
@@ -348,7 +350,7 @@
             // Cut at the array's end ("}]"): what the app wrote after it (its account, for one) stays on the screen
             return sys.exec("export LC_ALL=C; cat '" + store + "'/*.log 2>/dev/null | tr -d '[:cntrl:]' | grep -a 'watchProgressItems' | " +
                             "sed -E 's/.*watchProgressItems//' | sed -E 's/[}][]].*/}]/' | head -c 30000").then(function (r) {
-                return Promise.all(nuvioRecent(readable(r.output)).slice(0, 2).map(nuvioCard));
+                return Promise.all(nuvioRecent(readable(r.output)).slice(0, MAX_CARDS).map(nuvioCard));
             });
         };
     }
@@ -408,29 +410,60 @@
     /* APL TV writes its Top Shelf itself, in /tmp/apltv-shelf.json (APL TV's helper service, js/app.js
        pushShelf): titles, pictures, progress and the data to open each one in APL TV. No addresses and no
        account in it. Read as it is; OK on a card opens APL TV at that title or channel (app control
-       "resume" / "channel"). */
-    var APLTV = "APLTVMedia.TV";
-    function apltvCards() {
+       "resume" / "channel"). On Android, APL TV keeps it for APL Launcher only (its ShelfProvider), read
+       through sys.appShelf (android/web/android.js). */
+    var APLTV = "APLTVMedia.TV", APLTV_LG = "com.knikt.apltv";
+    function apltvShelf() {
+        // LG: no shell there, the launcher's own service hands the file over (webos/service, "shelf"); Android: APL TV's ShelfProvider
+        if (sys.appShelf) return sys.appShelf();
         return sys.exec("head -c 60000 /tmp/apltv-shelf.json 2>/dev/null").then(function (r) {
-            var shelf;
-            try { shelf = JSON.parse(String(r.output || "")); } catch (e) { throw new Error("nothing to read"); }
-            if (!shelf || shelf.app !== APLTV) throw new Error("nothing to read");
-            var cards = [];
-            (shelf.continueWatching || []).slice(0, 1).forEach(function (c) {
-                if (!c || !c.title) return;
-                cards.push({ kind: "video", label: APL.t("Continue Watching"), title: String(c.title), image: safeUrl(c.image) || safeUrl(c.poster),
-                             sub: String(c.sub || ""), progress: c.progress > 0 ? Math.min(1, Number(c.progress)) : undefined, launch: pick(c.data, "resume") });
+            try { return JSON.parse(String(r.output || "")); } catch (e) { throw new Error("nothing to read"); }
+        });
+    }
+    function apltvCards() {
+        return apltvShelf().then(function (shelf) {
+            if (!shelf || (shelf.app !== APLTV && shelf.app !== APLTV_LG)) throw new Error("nothing to read");
+            var c = (shelf.continueWatching || [])[0], last = shelf.lastChannel;
+            return (c && c.title ? apltvArt(c) : Promise.resolve(null)).then(function (a) {
+                var cards = [];
+                if (a) cards.push({ kind: "video", label: APL.t("Continue Watching"), title: String(c.title), image: a.image, images: a.images, titled: !!a.titled, logo: a.logo || "",
+                                    sub: String(c.sub || ""), progress: c.progress > 0 ? Math.min(1, Number(c.progress)) : undefined, launch: pick(c.data, "resume") });
+                if (last && last.name) cards.push({ kind: "channel", label: APL.t("Last Channel"), title: String(last.name), image: safeUrl(last.logo),
+                                                    sub: String(last.now || ""), progress: last.progress > 0 ? Math.min(1, Number(last.progress)) : undefined, launch: pick(last.data, "channel") });
+                return cards;
             });
-            var last = shelf.lastChannel;
-            if (last && last.name) cards.push({ kind: "channel", label: APL.t("Last Channel"), title: String(last.name), image: safeUrl(last.logo),
-                                                sub: String(last.now || ""), progress: last.progress > 0 ? Math.min(1, Number(last.progress)) : undefined, launch: pick(last.data, "channel") });
-            return cards;
+        });
+    }
+    /* The picture of what you were watching. APL TV gives a wide picture when its provider has one: shown
+       as it is. Many titles only come with their poster, a tall picture that a wide card cuts through the
+       middle: then the title's wide artwork from TMDB, with its title on it, like the other apps' cards
+       (found once from the title and the year, then kept). The poster stays the last resort. */
+    function apltvArt(c) {
+        var own = safeUrl(c.image), poster = safeUrl(c.poster);
+        function file(u) { return u.split("?")[0].split("/").pop(); }
+        if (own && (!poster || file(own) !== file(poster))) return Promise.resolve({ image: own });
+        var title = String(c.title), year = /^(19|20)[0-9]{2}$/.test(String(c.sub || "")) ? String(c.sub) : "";
+        var key = "apltv:" + title + (year ? " " + year : "");
+        var found = art[key] ? Promise.resolve(art[key])
+            : APL.live && APL.live.searchArt ? APL.live.searchArt(title, year).then(function (a) { return a ? saveArt(key, a) : null; }, function () { return null; })
+            : Promise.resolve(null);
+        return found.then(function (a) {
+            var tall = own || poster;
+            return a && a.image ? { image: a.image, images: [a.image, tall].filter(Boolean), titled: !!a.titled, logo: a.logo || "" } : { image: tall };
         });
     }
     function safeUrl(u) { return /^https?:\/\/[^\s'"<>]+$/.test(String(u || "")) ? String(u) : ""; }
     function pick(data, key) { var v = data && data[key]; return v && /^[A-Za-z0-9_.:|-]{1,80}$/.test(String(v)) ? { key: key, value: String(v) } : null; }
     /* Opens the app with one piece of app control data (APL TV: resume=<title>, channel=<channel>) */
     function launchWith(app, launch) {
+        // LG: the same data as launch parameters ({"resume": "…"}, {"channel": "…"}); Android: as an Intent extra
+        if ((sys.platform === "webos" || sys.platform === "android") && APL.platform && APL.platform.launch) {
+            var params = {};
+            params[launch.key] = launch.value;
+            if (APL.sys.profiles) APL.sys.profiles.noteLaunch(app.id);
+            APL.platform.launch(app.id, params).catch(function () { APL.openApp(app); });
+            return;
+        }
         try {
             var T = global.tizen;
             var ctl = new T.ApplicationControl("http://tizen.org/appcontrol/operation/default", null, null, null,
@@ -443,10 +476,13 @@
     /* ---------- cards ---------- */
     var READERS = {};
     READERS[APLTV] = apltvCards;
+    READERS[APLTV_LG] = apltvCards;
     READERS[AQUA] = aquaCards;
     READERS[HOT] = hotCards;
     READERS[STREMIO] = stremioCards;
     Object.keys(NUVIO_APPS).forEach(function (id) { READERS[id] = nuvioReader(NUVIO_APPS[id]); });
+    /* Another platform's cards for any app (android.js: what the app put in Android TV's Watch Next row) */
+    function readerOf(id) { return READERS[id] || (APL.platform && APL.platform.cardsReader ? APL.platform.cardsReader(id) : null); }
 
     /* The cards show at once, in their last known version. Reading the data takes only
        10 to 30 ms, but goes through the relay (bridge/service.js): stopped after 15 min without requests,
@@ -483,7 +519,7 @@
         var c = cache[id];
         if (c && Date.now() - c.at < CACHE_MS) return Promise.resolve(c.cards);
         if (pending[id]) return pending[id];
-        pending[id] = READERS[id]().then(function (cards) {
+        pending[id] = readerOf(id)().then(function (cards) {
             cache[id] = { cards: cards, at: Date.now() };
             delete pending[id];
             remember(id, cards);
@@ -493,7 +529,7 @@
     }
 
     function cardsFor(id) {
-        if (!READERS[id] || sys.PREVIEW) return Promise.resolve([]);
+        if (!readerOf(id) || sys.PREVIEW) return Promise.resolve([]);
         var read = readCards(id), last = lastKnown(id);
         return last ? Promise.resolve(last) : read.then(function (cards) { return cards || []; });
     }
@@ -513,23 +549,25 @@
         else pic.innerHTML = APL.icon("photo", 96, 1.4);
         card.appendChild(pic);
         var images = c.images || (c.image ? [c.image] : []);
+        // A card is about a quarter of the screen wide: TMDB's 1280 px picture, never its 4K original
+        var sized = images.map(function (u) { return APL.artSize ? APL.artSize(u, "w1280") : u; });
         (function next(i) {
             if (i >= images.length) return;
             var probe = new global.Image();
             probe.onload = function () {
                 pic.innerHTML = "";
-                pic.style.backgroundImage = "url('" + images[i].replace(/'/g, "%27") + "')";
+                pic.style.backgroundImage = "url('" + sized[i].replace(/'/g, "%27") + "')";
                 // The title is already on the picture: it isn't written a second time
                 if (c.titled && images[i] === c.image) card.classList.add("is-titled");
             };
             probe.onerror = function () { next(i + 1); };
-            probe.src = images[i];
+            probe.src = sized[i];
         })(0);
         if (c.logo) {
             var logo = el("img", "wdg__logo");
             logo.onload = function () { card.classList.add("is-titled"); };
             logo.onerror = function () { if (logo.parentNode) logo.parentNode.removeChild(logo); };
-            logo.src = c.logo;
+            logo.src = APL.artSize ? APL.artSize(c.logo, "w500") : c.logo;
             card.appendChild(logo);
         }
         var txt = el("div", "wdg__txt");
@@ -549,20 +587,49 @@
     /* Blurred background, like on tvOS: the picture is drawn once into a tiny canvas that the screen
        stretches. No blur is recomputed while navigating. */
     var blur = null, blurToken = 0;
+    /* The dock, the clock pill and the Control Center are glass cut from the picture behind them (glass.js).
+       With the cards up, the picture on screen is the cards' own blurred one, not the Top Shelf's: the glass
+       is given that picture, then the Top Shelf's back when the cards go. It kept the app before's picture
+       behind Nuvio's cards on a Frame (#57). */
+    var glassSrc = "";
+    function glassFollow(src) {
+        if (!APL.glass || !APL.glass.setSource) return;
+        if (src) {
+            if (src !== glassSrc) { glassSrc = src; APL.glass.setSource(src); }
+        } else if (glassSrc) {
+            glassSrc = "";
+            APL.glass.release();
+        }
+    }
+    /* LG, 4K: the blurred picture is opaque (its margin covers the canvas), so the screen draws it without
+       blending, and once it has faded in, the gradient under it stops being drawn (launcher.css, wdg--blurred) */
+    var LG = !!(APL.platform && APL.platform.directGlass), blurredAt = 0;
+    var blurShown = "";          /* the picture the cards' blur shows now, for the glass */
     function paintBlur(src, soft) {
         var token = ++blurToken;
         blur.style.opacity = "0";
-        if (!src) return;
+        blurShown = "";
+        global.clearTimeout(blurredAt);
+        if (root) root.classList.remove("wdg--blurred");
+        if (!src) { glassFollow(""); return; }
         var img = new global.Image();
+        /* Drawn into 192 x 108: TMDB's 300 px copy. Its 4K original was decoded whole by the page
+           itself when the canvas was drawn, 0.4 s with nothing moving on an LG G5 */
+        if (APL.artSize) src = APL.artSize(src, "w300");
         img.onload = function () {
             if (token !== blurToken) return;
-            var ctx = blur.getContext("2d"), w = blur.width, h = blur.height, m = 14;
+            var ctx = LG ? blur.getContext("2d", { alpha: false }) : blur.getContext("2d"), w = blur.width, h = blur.height, m = 14;
             ctx.clearRect(0, 0, w, h);
             if ("filter" in ctx) ctx.filter = "blur(" + (soft ? 16 : 5) + "px) saturate(150%) brightness(0.85)";
             var r = Math.max((w + 2 * m) / img.naturalWidth, (h + 2 * m) / img.naturalHeight);
             var dw = img.naturalWidth * r, dh = img.naturalHeight * r;
             ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
             blur.style.opacity = "1";
+            blurShown = src;
+            if (LG) blurredAt = global.setTimeout(function () {
+                if (token === blurToken && root) root.classList.add("wdg--blurred");
+            }, 300);                                        // after its 240 ms fade
+            if (root && root.classList.contains("is-on")) glassFollow(src);
         };
         img.src = src;
     }
@@ -580,6 +647,7 @@
         // Below the clock and the dock, above the Top Shelf picture and its gradient
         var scrim = document.querySelector(".scrim");
         scrim.parentNode.insertBefore(root, scrim.nextSibling);
+        watchFade();
     }
 
     function addCard(c) {
@@ -611,6 +679,9 @@
         // A blurred logo shows nothing: for a channel, the colours of the app's background
         paintBlur(video ? video.image : (shownApp && shownApp.bg) || (cards[0] && cards[0].image), !video);
         setShown(cards.length > 0);
+        row.style.transform = "";
+        rowShift = 0;
+        markOut(0);
     }
 
     /* On the Home Screen: the cards of the selected app, and of it alone. We wait for the focus to
@@ -628,7 +699,8 @@
         clearTimeout(showTimer);
         clearTimeout(readTimer);
         if (!same) setShown(false);
-        if (!READERS[id] || sys.PREVIEW) return;
+        if (!readerOf(id) || sys.PREVIEW) return;
+        if ((sys.pref("continueStyle") || "cards") !== "cards") { setShown(false); return; }   // on the wall, or off (#56, #66)
         showTimer = setTimeout(function () {
             var last = lastKnown(id);
             if (last) paint(id, last);
@@ -640,7 +712,13 @@
     /* Same cards as on screen: nothing is redrawn. While on the cards, nothing moves under the focus. */
     function paint(id, cards) {
         var text = id + JSON.stringify(cards.map(light));
-        if (text === painted) { setShown(cards.length > 0); return; }
+        if (text === painted) {
+            setShown(cards.length > 0);
+            /* The same cards back (from the grid, or after an app without any): setShown(false) gave the glass
+               the Top Shelf's picture, so it takes the cards' own again (#57) */
+            if (cards.length && blurShown) glassFollow(blurShown);
+            return;
+        }
         if (focused) return;
         painted = text;
         render(cards);
@@ -649,18 +727,33 @@
         trendCard().then(function (c) {
             if (!c || painted !== text || document.hidden) return;
             addCard(c);
+            markOut(rowShift);
             // The background follows the movie, unless the app has its own movie picture to show
             if (!cards.some(function (x) { return x.kind === "video" && x.image && !x.appArt; })) paintBlur(c.image);
         });
     }
     function setShown(on) {
         root.classList.toggle("is-on", on);
+        if (!on) glassFollow("");                           // the Top Shelf's picture is behind the glass again
         document.body.classList.toggle("has-wdg", on);      // instead of the Top Shelf and its hint
+        if (!on) document.body.classList.remove("wdg-solid");
+    }
+    /* LG: once faded in, the cards' opaque background covers the screen whole, and the backdrop and its scrim
+       under it stop being drawn (launcher.css). Their fade (wdgIn) starts again each time the cards come back
+       on screen, from the grid too, and the backdrop is drawn again for the length of it. */
+    function watchFade() {
+        if (!LG) return;
+        root.addEventListener("animationstart", function (e) {
+            if (e.target === root) document.body.classList.remove("wdg-solid");
+        });
+        root.addEventListener("animationend", function (e) {
+            if (e.target === root && root.classList.contains("is-on")) document.body.classList.add("wdg-solid");
+        });
     }
 
     /* Back from an app: what was just watched counts right away. */
     document.addEventListener("visibilitychange", function () {
-        if (document.hidden || !READERS[shownFor]) return;
+        if (document.hidden || APL.ccOverlay || !readerOf(shownFor)) return;
         delete cache[shownFor];
         trendN++;
         painted = "";
@@ -680,7 +773,8 @@
                     if (a && c && c.launch) launchWith(a, c.launch); else if (a) APL.openApp(a);
                 },
                 onBack: leaveCards,
-                onEdge: function (dir) { if (dir === "down") leaveCards(); }
+                onEdge: function (dir) { if (dir === "down") leaveCards(); },
+                onFocus: function (i, t) { slideTo(t); }
             });
         }
         nav.setTiles(tiles);
@@ -690,8 +784,32 @@
         focused = true;
         return true;
     }
+    /* More than two cards (Nuvio, Stremio, Android TV's Play Next: up to MAX_CARDS): the third one peeks at the
+       right edge, and the row slides so the card in focus is whole on screen (asked on Reddit: "only two"). */
+    var SAFE_RIGHT = 1830;                               // the stage is 1920 wide, the row starts at 90
+    var rowShift = 0;            /* how far the row has slid left, for markOut */
+    function slideTo(card) {
+        var item = card && card.parentNode;
+        if (!item || !row) return;
+        var right = 90 + item.offsetLeft + item.offsetWidth, shift = Math.max(0, right - SAFE_RIGHT);
+        row.style.transform = shift ? "translateX(" + (-shift) + "px)" : "";
+        rowShift = shift;
+        markOut(shift);
+    }
+    /* A card cut by the edge of the screen keeps its picture, not its heading: at the right edge the heading
+       ran under the clock pill (seen on the M8 with Stremio). */
+    function markOut(shift) {
+        if (!row) return;
+        [].forEach.call(row.children, function (item) {
+            var left = 90 + item.offsetLeft - shift, right = left + item.offsetWidth;
+            item.classList.toggle("is-out", left < 0 || right > SAFE_RIGHT + 1);
+        });
+    }
     function leaveCards() {
         if (!focused) return false;
+        if (row) row.style.transform = "";
+        rowShift = 0;
+        markOut(0);                  // the row is back in place: the headings of the cards on screen again
         focused = false;
         var c = nav.current();
         if (c) c.classList.remove("is-focused");
@@ -700,8 +818,14 @@
         return true;
     }
 
+    /* OK on a Continue Watching title shown full screen on the wall (liveshelf.js continueSource) */
+    function resume(app, c) {
+        if (app && c && c.launch) launchWith(app, c.launch); else if (app) APL.openApp(app);
+    }
+
     APL.widgets = {
-        show: show, cardsFor: cardsFor, cardEl: cardEl, focusCards: focusCards, leaveCards: leaveCards,
+        show: show, cardsFor: cardsFor, cardEl: cardEl, focusCards: focusCards, leaveCards: leaveCards, resume: resume,
+        hasCards: function (id) { return !!readerOf(id); },
         isShowing: function () { return !!root && root.classList.contains("is-on"); }
     };
 })(window);

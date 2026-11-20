@@ -12,6 +12,9 @@
     var levels = [];
     var listY = 0;
     var isOpen = false;
+    /* LG: the focused row's white plate is one layer that slides from row to row (launcher.css .srow__plate),
+       as on tvOS. A row turning white repainted its whole layer on every frame of the change. */
+    var PLATE = !!(APL.platform && APL.platform.focusLayers), plate = null;
 
     function el(tag, cls, html) {
         var e = document.createElement(tag);
@@ -99,8 +102,10 @@
                 // The other screen settings of the menu too: one switch can change another (Start on APL Launcher, Autorun)
                 var slot = row.querySelector(".srow__value");
                 if (slot) slot.textContent = "…";                         // the screen is being asked: shown at once
-                sys.native.set(item.id, next[0]).then(function () { refreshNativeRows(row); },
-                                                      function (e) { APL.toast(e.message); refreshNativeRows(row); });
+                // Any failure says so, even one thrown before the write starts: "…" must never stay on its own
+                Promise.resolve().then(function () { return sys.native.set(item.id, next[0]); })
+                    .then(function () { refreshNativeRows(row); },
+                          function (e) { APL.toast((e && e.message) || APL.t("The screen refused this setting for now")); refreshNativeRows(row); });
                 return;
             }
             var at = 0;
@@ -174,7 +179,10 @@
         var slot = row.querySelector(".srow__value");
         if (v && typeof v.then === "function") {
             slot.textContent = "…";
-            v.then(function (txt) { slot.innerHTML = txt; });
+            v.then(function (txt) {
+                slot.innerHTML = txt;
+                if (nav && nav.current() === row) describe(row);      // arrived while the row is selected
+            });
         } else {
             slot.innerHTML = v === undefined || v === null ? "" : v;
         }
@@ -207,6 +215,7 @@
         listEl.innerHTML = "";
         listY = 0;
         listEl.style.transform = "translateY(0)";
+        if (PLATE) { plate = el("i", "srow__plate"); listEl.appendChild(plate); }
         // Section titles ("VIDEO", "AUDIO"…): shown, never selectable
         var rows = [];
         node.children.forEach(function (item) {
@@ -244,12 +253,36 @@
         listEl.style.transform = "translateY(" + listY + "px)";
     }
 
+    /* The plate under the focused row: in place at once the first time, then sliding */
+    function placePlate(row) {
+        if (!plate || plate.parentNode !== listEl) return;
+        var first = !plate.classList.contains("is-on");
+        if (first) plate.style.transition = "none";
+        plate.style.height = row.offsetHeight + "px";
+        // the row's place in the list (the list, being moved by a transform, is the row's offset parent in Chromium)
+        var y = row.offsetParent === listEl ? row.offsetTop : row.offsetTop - listEl.offsetTop;
+        plate.style.transform = "translate3d(0," + y + "px,0) scale(1.04)";
+        if (first) { void plate.offsetWidth; plate.style.transition = ""; plate.classList.add("is-on"); }
+    }
+
     function onFocus(i, row) {
         cur().index = i;
         ensureVisible(row);
-        var item = row._item;
-        descEl.textContent = item.desc || (item.type === "menu" ? "" : "");
+        placePlate(row);
+        describe(row);
         pathEl.style.display = "none";
+    }
+
+    /* The row's description, under the big icon. An information row whose value the column cuts
+       (Link to Vetro and its reason, a long model name) also shows the whole value there: the column
+       stops at 380 px, and "Bridge: Vetro refused (450 ms, …" hid the reason (Reddit, S95C). */
+    function describe(row) {
+        var item = row._item, slot = row.querySelector(".srow__value");
+        descEl.textContent = item.desc || "";
+        if (item.type !== "info" || !slot || slot.scrollWidth <= slot.clientWidth + 1) return;
+        var full = el("span", "settings__full");
+        full.textContent = slot.textContent;
+        descEl.appendChild(full);
     }
 
     function refreshRow(row) { fillValue(row); row.querySelector(".srow__acc").innerHTML = accessory(row._item); }
@@ -345,12 +378,21 @@
                 APL.services.toggle(item.group).then(function () { refreshRow(row); });
                 break;
             case "action":
-                item.run();
+                // done(): the rows of this page show their new values (Android: the keys removed)
+                item.run(function () {
+                    var rows = row.parentNode ? row.parentNode.children : [];
+                    for (var r = 0; r < rows.length; r++) if (rows[r]._item) refreshRow(rows[r]);
+                });
+                // Fork: a row whose value the action changes, without calling back (Diagnostic, Good Night…)
                 if (item.value) setTimeout(function () { if (row.parentNode) refreshRow(row); }, 400);
                 break;
             case "check":
                 item.set(!item.get());
                 refreshRow(row);
+                break;
+            case "info":
+                // A value row that can be changed on some platforms (Android: the API keys, typed on the TV)
+                if (item.run) item.run(function () { refreshRow(row); });
                 break;
             default: break;
         }
@@ -421,5 +463,11 @@
         isOpen = false;
     }
 
-    APL.settings = { open: open, close: close, isOpen: function () { return isOpen; } };
+    /* The values on screen read again (weather.js after a city is picked: City and Show the Weather changed
+       behind the open page) */
+    function refreshAll() {
+        if (!isOpen || !listEl) return;
+        [].forEach.call(listEl.querySelectorAll(".srow"), function (row) { if (row._item) refreshRow(row); });
+    }
+    APL.settings = { open: open, close: close, isOpen: function () { return isOpen; }, refresh: refreshAll };
 })(window);
