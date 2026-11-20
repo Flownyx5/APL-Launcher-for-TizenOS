@@ -50,6 +50,8 @@
                 call("onevent", "TRACKS", a && a.tracks);
                 if (a && a.noAudio && global.TV && TV.toast) TV.toast(TV.t("This device cannot play the sound of this video ({format}). Try another version if there is one.", { format: a.noAudio }), true);
                 break;
+            // the sound goes on, the picture stays still (Player.java): js/live.js takes a lower quality
+            case "videostall": if (global.TV && TV.player && TV.player.onVideoStall) TV.player.onVideoStall(a); break;
             case "seeked": var cb = seekCbs[a]; delete seekCbs[a]; if (cb) { clearTimeout(cb.t); if (cb.ok) cb.ok(); } break;
         }
     };

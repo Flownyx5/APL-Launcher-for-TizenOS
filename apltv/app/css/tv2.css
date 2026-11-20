@@ -230,10 +230,10 @@
 .osd__seek.is-scrubbing .bar u { transform: scale(1.4); }
 
 /* ---------- 7. Search: the list moves inside a full-screen frame ---------- */
-.search__results { top: 0; padding-top: 540px; box-sizing: border-box; }
+.search__results { top: 0; padding-top: 290px; box-sizing: border-box; }
 .search__in { will-change: transform; }
-.search__field, .kb { transition: transform 360ms var(--glide), opacity 240ms ease; }
-.is-results .kb { opacity: 0; transform: translateY(-30px); }
+.search__field { transition: transform 360ms var(--glide), opacity 240ms ease, box-shadow 200ms ease; }
+.search__field.is-focused { box-shadow: 0 0 0 4px #fff, 0 20px 44px rgba(0,0,0,0.5); transform: scale(1.015); }
 .is-results .search__field { transform: translateY(-110px) scale(0.9); transform-origin: left center; opacity: 0.85; }
 .in-results .top { opacity: 0; transform: translateY(-40px); }
 .search__in .row { transition: opacity 240ms ease; }
@@ -295,9 +295,28 @@
 .osd__popitem.is-focused small { color: #6e6e73; }
 .osd__popitem em { font-style: normal; font-size: 23px; color: rgba(255,255,255,0.6); flex: none; }
 .osd__popitem.is-focused em { color: #6e6e73; }
+/* Stream Info: a small table that stays current */
+.osd__pop.is-info { width: 780px; }
+/* timeshift: how far behind live */
+.osd__ts { display: flex; align-items: center; gap: 16px; margin-top: 14px; font-size: 24px; }
+.osd__ts .bar { flex: 1; }
+.osd__ts .bar i { background: #ff9f0a; }
+.osd__ts b { color: #ff9f0a; font-variant-numeric: tabular-nums; min-width: 110px; text-align: right; }
+.osd__tsicon { display: flex; color: #ff9f0a; }
+.osd__tshint { margin-top: 6px; font-size: 18px; color: rgba(255,255,255,0.55); }
+.pv__btn--text { width: auto; padding: 0 26px 0 20px; gap: 10px; font-size: 22px; font-weight: 600; white-space: nowrap; }
+.osd__pop.is-info .osd__popcheck { display: none; }
+.osd__pop.is-info .osd__popitem { padding: 8px 18px; font-size: 23px; }
+.osd__pop.is-info .osd__poptxt b { font-weight: 500; color: rgba(255,255,255,0.7); }
+.osd__pop.is-info .osd__popitem em { color: #fff; font-variant-numeric: tabular-nums; max-width: 470px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.osd__pop.is-info .osd__popitem.is-focused b, .osd__pop.is-info .osd__popitem.is-focused em { color: #1c1c1e; }
 .osd__sync { display: flex; align-items: center; justify-content: center; gap: 34px; padding: 18px 0 14px; font-size: 46px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .osd__sync span { font-size: 28px; opacity: 0.55; }
 .osd__pophint { padding: 0 30px 6px; font-size: 19px; line-height: 1.35; color: rgba(255,255,255,0.55); text-align: center; }
+/* Sync to a Line: the words to wait for, between ◀ ▶ */
+.osd__line { display: flex; align-items: center; justify-content: center; gap: 24px; padding: 18px 26px 14px; }
+.osd__line b { flex: 1; min-height: 72px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 28px; font-weight: 600; line-height: 1.3; }
+.osd__line span { flex: none; font-size: 28px; opacity: 0.55; }
 /* "next episode": the series' picture, never the episode's */
 .osd__nextcard { position: absolute; right: 96px; bottom: 330px; width: 540px; border-radius: 28px; overflow: hidden; display: none;
     background: rgba(30,32,40,0.94); box-shadow: 0 30px 70px rgba(0,0,0,0.55), inset 0 0 0 1.5px rgba(255,255,255,0.10); }
@@ -382,6 +401,8 @@
 .no-gap .qr__state > .dot { margin-left: calc(14px + 14px); }
 .no-gap .step > * + * { margin-left: 26px; }
 .no-gap .step > .dot { margin-left: calc(14px + 26px); }
+.no-gap .steps__btns > * + * { margin-left: 24px; }
+.no-gap .steps__btns > .dot { margin-left: calc(14px + 24px); }
 .no-gap .search__field > * + * { margin-left: 20px; }
 .no-gap .search__field > .dot { margin-left: calc(14px + 20px); }
 .no-gap .menu__item > * + * { margin-left: 40px; }
@@ -392,6 +413,71 @@
 .no-gap .boot__logo > .dot { margin-left: calc(14px + 14px); }
 .no-gap .setup__row > * + * { margin-left: 24px; }
 .no-gap .setup__row > .dot { margin-left: calc(14px + 24px); }
+.no-gap .sports__bar > * + * { margin-left: 14px; }
+.no-gap .sports__bar > .dot { margin-left: calc(14px + 14px); }
+.no-gap .match__kicker > * + * { margin-left: 14px; }
+.no-gap .match__kicker > .dot { margin-left: calc(14px + 14px); }
+.no-gap .match__board > * + * { margin-left: 60px; }
+.no-gap .match__board > .dot { margin-left: calc(14px + 60px); }
+.no-gap .match__score > * + * { margin-left: 28px; }
+.no-gap .match__score > .dot { margin-left: calc(14px + 28px); }
+.no-gap .match__st > * + * { margin-left: 12px; }
+.no-gap .match__st > .dot { margin-left: calc(14px + 12px); }
+.no-gap .match__btns > * + * { margin-left: 24px; }
+.no-gap .match__btns > .dot { margin-left: calc(14px + 24px); }
+.no-gap .sfav__steps > * + * { margin-left: 34px; }
+.no-gap .sfav__steps > .dot { margin-left: calc(14px + 34px); }
+.no-gap .sfav__step > * + * { margin-left: 12px; }
+.no-gap .sfav__step > .dot { margin-left: calc(14px + 12px); }
+.no-gap .sfav__chips > * + * { margin-left: 14px; }
+.no-gap .sfav__chips > .dot { margin-left: calc(14px + 14px); }
+.no-gap .sfav__find > * + * { margin-left: 10px; }
+.no-gap .sfav__find > .dot { margin-left: calc(14px + 10px); }
+.no-gap .sfav__tiles > * + * { margin-left: 22px; }
+.no-gap .sfav__tiles > .dot { margin-left: calc(14px + 22px); }
+.no-gap .sfav__field > * + * { margin-left: 18px; }
+.no-gap .sfav__field > .dot { margin-left: calc(14px + 18px); }
+.no-gap .sfav__tile > * + * { margin-top: 14px; }
+.no-gap .sfav__foot > * + * { margin-left: 22px; }
+.no-gap .sfav__foot > .dot { margin-left: calc(14px + 22px); }
+.no-gap .mc__badge > * + * { margin-left: 8px; }
+.no-gap .mc__badge > .dot { margin-left: calc(14px + 8px); }
+.no-gap .mc__sub > * + * { margin-left: 10px; }
+.no-gap .mc__sub > .dot { margin-left: calc(14px + 10px); }
+.no-gap .mc__tv > * + * { margin-left: 6px; }
+.no-gap .mc__tv > .dot { margin-left: calc(14px + 6px); }
+.no-gap .sh__cap > * + * { margin-left: 14px; }
+.no-gap .sh__cap > .dot { margin-left: calc(14px + 14px); }
+.no-gap .sh__ours > * + * { margin-left: 8px; }
+.no-gap .sh__ours > .dot { margin-left: calc(14px + 8px); }
+.no-gap .sh__team > * + * { margin-left: 22px; }
+.no-gap .sh__team > .dot { margin-left: calc(14px + 22px); }
+.no-gap .sh__kicker > * + * { margin-left: 12px; }
+.no-gap .sh__kicker > .dot { margin-left: calc(14px + 12px); }
+.no-gap .sh__tv > * + * { margin-left: 10px; }
+.no-gap .sh__tv > .dot { margin-left: calc(14px + 10px); }
+.no-gap .sh__btns > * + * { margin-left: 20px; }
+.no-gap .sh__btns > .dot { margin-left: calc(14px + 20px); }
+.no-gap .sh__dots > * + * { margin-left: 10px; }
+.no-gap .sh__dots > .dot { margin-left: calc(14px + 10px); }
+.no-gap .sh__score > * + * { margin-left: 16px; }
+.no-gap .sh__score > .dot { margin-left: calc(14px + 16px); }
+.no-gap .match__tabs > * + * { margin-left: 14px; }
+.no-gap .match__tabs > .dot { margin-left: calc(14px + 14px); }
+.no-gap .mev__l > * + * { margin-left: 12px; }
+.no-gap .mev__l > .dot { margin-left: calc(14px + 12px); }
+.no-gap .mev__r > * + * { margin-left: 12px; }
+.no-gap .mev__r > .dot { margin-left: calc(14px + 12px); }
+.no-gap .mst__row > * + * { margin-left: 24px; }
+.no-gap .mst__row > .dot { margin-left: calc(14px + 24px); }
+.no-gap .mst__bar > * + * { margin-left: 6px; }
+.no-gap .mst__bar > .dot { margin-left: calc(14px + 6px); }
+.no-gap .mlu > * + * { margin-left: 60px; }
+.no-gap .mlu > .dot { margin-left: calc(14px + 60px); }
+.no-gap .mlu__head > * + * { margin-left: 14px; }
+.no-gap .mlu__head > .dot { margin-left: calc(14px + 14px); }
+.no-gap .mlu__p > * + * { margin-left: 16px; }
+.no-gap .mlu__p > .dot { margin-left: calc(14px + 16px); }
 .no-gap .lv__brand > * + * { margin-left: 22px; }
 .no-gap .lv__brand > .dot { margin-left: calc(14px + 22px); }
 .no-gap .lv__meta > * + * { margin-left: 18px; }
@@ -416,13 +502,17 @@
 .no-gap .pv__tabs > .dot { margin-left: calc(14px + 16px); }
 .no-gap .osd__popitem > * + * { margin-left: 12px; }
 .no-gap .osd__popitem > .dot { margin-left: calc(14px + 12px); }
+.no-gap .osd__ts > * + * { margin-left: 16px; }
+.no-gap .osd__ts > .dot { margin-left: calc(14px + 16px); }
 .no-gap .osd__sync > * + * { margin-left: 34px; }
 .no-gap .osd__sync > .dot { margin-left: calc(14px + 34px); }
+.no-gap .osd__line > * + * { margin-left: 24px; }
+.no-gap .osd__line > .dot { margin-left: calc(14px + 24px); }
 .no-gap .osd__nextbtn > * + * { margin-left: 10px; }
 .no-gap .osd__nextbtn > .dot { margin-left: calc(14px + 10px); }
 .no-gap .age > * + * { margin-left: 6px; }
 .no-gap .age > .dot { margin-left: calc(14px + 6px); }
 .no-gap .pv__subline > * + * { margin-left: 14px; }
 .no-gap .pv__subline > .dot { margin-left: calc(14px + 14px); }
-.no-gap .pv__end, .no-gap .osd__liveicons { margin-left: auto !important; }
+.no-gap .sfav__count, .no-gap .pv__end, .no-gap .osd__liveicons { margin-left: auto !important; }
 /* ---- end of the generated spacing ---- */

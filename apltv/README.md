@@ -3,7 +3,7 @@
 APL TV is the IPTV player in APL Launcher's style made by **Knikt (Gero Corp.)**, MIT License (see `LICENSE`).
 Original project: [Knikt/APL-TV-for-TizenOS](https://github.com/Knikt/APL-TV-for-TizenOS).
 
-This folder is APL TV 1.0.10 (commit `0cfe9a2`) with the fork's changes, numbered 1.0.11 and up:
+This folder is APL TV 1.4.7 (commit `d25626d`) with the fork's changes, numbered 1.5.0 (1.0.11 was the same changes on 1.0.10):
 
 - **Home loads in one go.** Each piece of information arriving at start-up (the catalog, the trending titles, the
   hidden themes, the genres) used to draw every row of Home again, pictures included. Rows that did not change are

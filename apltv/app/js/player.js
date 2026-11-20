@@ -123,12 +123,20 @@
        A live stream that stops moving for 10 s (a movie for 20 s), or that breaks, is opened again by itself,
        up to 5 times in a row (0.8, 2, 4, 6, 8 s apart), a movie at the place it had reached. After a minute
        of good playback the count starts again. Nothing is reopened while the picture moves. */
-    var tickAt = 0, started = false, attempts = 0, goodSince = 0, stallTimer = null, retryTimer = null;
+    var tickAt = 0, started = false, attempts = 0, goodSince = 0, stallTimer = null, retryTimer = null, bufAt = 0, userPaused = false;
     var DELAYS = [800, 2000, 4000, 6000, 8000];
+    /* A stream given up: Samsung's player is closed at once, never left open behind the message. A player left in
+       error could keep the TV's decoder, and every app failed to play until the TV was restarted (#27). */
+    function fail(why) {
+        if (cur) cur.failed = true;
+        clearTimeout(watchdog); clearTimeout(retryTimer);
+        closeAv();
+        emit("onError", why);
+    }
     function reconnect(why) {
         if (!cur) return;
         var c = cur;
-        if (attempts >= DELAYS.length) { TV.log("giving up after " + attempts + " reconnections (" + why + ")"); emit("onError", why); return; }
+        if (attempts >= DELAYS.length) { TV.log("giving up after " + attempts + " reconnections (" + why + ")"); fail(why); return; }
         var wait = DELAYS[attempts++];
         TV.log("reconnecting (" + why + "), attempt " + attempts + " in " + wait + " ms");
         emit("onReconnect", attempts);
@@ -144,7 +152,19 @@
     function watchStall() {
         clearInterval(stallTimer);
         stallTimer = setInterval(function () {
-            if (!cur || !started) return;
+            // hidden (another app, standby): the player is paused, no picture is expected (it reopened the channel in the background)
+            if (!cur || !started || document.hidden) return;
+            /* The spinner itself: on, without the picture moving, for 15 s (a movie 30 s), the stream is opened again,
+               whatever the TV says. An LG UR7500 kept a channel "buffering" for good on a black screen while its
+               player said the video was paused or seeking, which the check below leaves alone (#30). Never after
+               a pause of yours. */
+            var now = Date.now();
+            bufAt = buffering ? bufAt || now : 0;
+            if (bufAt && !userPaused && now - Math.max(bufAt, tickAt) > (cur.opts.live ? 15000 : 30000)) {
+                reconnect("spinner for " + Math.round((now - bufAt) / 1000) + " s");
+                bufAt = 0;
+                return;
+            }
             if (useAv) { var st = "NONE"; try { st = av.getState(); } catch (e) {} if (st !== "PLAYING") return; }
             else if (!video || video.paused || video.ended || video.seeking) return;
             var limit = cur.opts.live ? 10000 : 20000;
@@ -155,9 +175,16 @@
     /* 4K: Samsung's player wants to be told before it prepares a UHD stream */
     var uhdPanel = null;
     function canUhd() {
-        if (uhdPanel === null) { try { uhdPanel = !!global.webapis.productinfo.isUdPanelSupported(); } catch (e) { uhdPanel = true; } }
+        if (uhdPanel === null) {
+            /* Android: the package says it (a 4K screen mode and a decoder for it); an older package, or a picture that
+               already froze in 4K here ("no4k"): FHD first. Samsung: its panel. LG: 4K. */
+            if (TV.ANDROID) { try { uhdPanel = !TV.load("no4k", 0) && !!(global.APLAndroid && global.APLAndroid.canUhd && global.APLAndroid.canUhd()); } catch (e) { uhdPanel = false; } }
+            else { try { uhdPanel = !!global.webapis.productinfo.isUdPanelSupported(); } catch (e) { uhdPanel = true; } }
+        }
         return uhdPanel;
     }
+    TV.canUhd = canUhd;
+    TV.noUhd = function () { TV.save("no4k", 1); uhdPanel = false; };
     function streamInfo() {
         try {
             var info = av.getCurrentStreamInfo() || [];
@@ -179,29 +206,61 @@
     function rememberHls(url) { var m = TV.load("hlsOnly", {}) || {}, k = Object.keys(m); if (k.length > 400) delete m[k[0]]; m[fp(url)] = 1; TV.save("hlsOnly", m); }
     function play(url, opts) {
         opts = opts || {};
-        // A Stalker portal's channel or movie: its real link is asked first (it lasts a short time only)
-        if (/^stalker:/.test(url) && TV.stalker) {
+        loggedTracks = false;
+        // A Stalker portal's channel or movie, a media server's (Jellyfin, Emby, Plex), a Stremio title or a public
+        // domain movie: its real link is asked first (a portal's lasts a short time only; a server's carries its key;
+        // Stremio's addons are asked for their streams, chosen in a list)
+        var via = /^stalker:/.test(url) ? TV.stalker : /^media:/.test(url) ? TV.media : /^stremio:/.test(url) ? TV.stremio : /^free:/.test(url) ? TV.freeFilms : null;
+        if (via) {
             var my = ++token;
             clearTimeout(watchdog); clearTimeout(retryTimer);
+            opts._via = url;                                   // a portal's link is asked again after a while in the background (unshelve)
             cur = { url: url, opts: opts, token: my };
             buffering = true; emit("onBuffering", true);
-            TV.stalker.resolve(url).then(function (real) { if (cur && cur.token === my) play(real, opts); },
-                function (e) { if (cur && cur.token === my) { TV.log("stalker link: " + e.message); emit("onError", e.message); } });
+            via.resolve(url).then(function (real) { if (cur && cur.token === my) play(real, opts); },
+                function (e) { if (cur && cur.token === my) { TV.log("link: " + e.message); emit("onError", e.cancel ? "cancelled" : e.message); } });
             return;
         }
         attempts = 0;
         if (!opts.uhd && knownUhd(url)) opts.uhd = true;
         if (TV.WEBOS && /\.ts(\?|$)/i.test(url) && knownHls(url)) { opts._hls = true; url = toHls(url); }
+        // A movie or an episode in .mkv: its tracks' languages and names read from the file first, the player closed
+        // meanwhile, so the provider sees one connection at a time (js/mkv.js, #34)
+        if (useAv && TV.mkv && TV.mkv.wanted(url, opts)) {
+            var mine = ++token;
+            clearTimeout(watchdog); clearTimeout(retryTimer);
+            closeAv();
+            cur = { url: url, opts: opts, token: mine };
+            buffering = true; emit("onBuffering", true);
+            TV.mkv.read(url).then(function () { if (cur && cur.token === mine) open(url, opts, false); });
+            return;
+        }
         open(url, opts, false);
+    }
+    /* A movie that showed nothing in 40 s: what its link answers, in the log (#30: a portal's movies on an LG ended in
+       "start timeout" with nothing to say why). Only the status and the first line, never the address. */
+    function probeLink(url, opts) {
+        // an HLS playlist only (a few lines): a film's own file would be downloaded whole
+        if (!/^https?:\/\/[^?#]+\.m3u8([?#]|$)/i.test(String(url)) || !TV.fetchText) return;
+        TV.fetchText(url, { timeout: 10000 }).then(function (t) {
+            TV.log("start timeout: the link answers, " + String(t || "").length + " characters, first line: " + TV.redact(String(t || "").split(/\r?\n/)[0]).slice(0, 80));
+        }, function (e) {
+            TV.log("start timeout: the link answers " + (e && e.status ? "HTTP " + e.status : (e && e.message) || "nothing") + (e && e.body ? ": " + TV.redact(String(e.body)).slice(0, 80) : ""));
+            /* A portal's movie refused to the TV's own player, without the helper's relay (installed before 1.4.6): the new
+               install is what plays it (#30) */
+            if (e && e.status === 403 && /^stalker:/.test((opts && opts._via) || "") && String(url).indexOf("/px/f/") < 0)
+                TV.toast(TV.t("This portal's movies only open for a MAG box. Install the latest APL TV once (LG: the .ipk or the Homebrew Channel; Samsung: APL Launcher Setup), then they play."), true);
+        });
     }
     function open(url, opts, again) {
         if (TV.mark) TV.mark("player");
         var my = ++token;
         clearTimeout(watchdog); clearTimeout(retryTimer);
         closeAv();
+        shelved = null;
         cur = { url: url, opts: opts, token: my };
         if (!again) lastTime = 0;
-        buffering = true; started = false; tickAt = Date.now(); goodSince = 0;
+        buffering = true; started = false; tickAt = Date.now(); goodSince = 0; bufAt = 0; userPaused = false;
         setVideoState();
         emit("onBuffering", true);
         TV.log((again ? "reopen " : "play ") + (opts.live ? "live " : "") + (opts.uhd ? "4K " : "") + url.replace(/^(https?:\/\/[^\/]+).*?([^\/]*)$/, "$1/…/$2"));
@@ -209,6 +268,7 @@
         watchdog = setTimeout(function () {
             if (cur && cur.token === my && !started) {
                 TV.log("start timeout");
+                if (!opts.live) probeLink(url, opts);
                 if (again || opts.live) reconnect("start timeout"); else emit("onError", "timeout");
             }
         }, opts.live ? 25000 : 40000);                     // a movie or an episode: some providers are slow to start them
@@ -230,6 +290,9 @@
         }
         try {
             av.open(url);
+            // A server that only lets some players in (core.js remembered which): the same name for its streams
+            var ua = TV.uaFor ? TV.uaFor(url) : "";
+            if (ua || TV.ANDROID) { try { av.setStreamingProperty("USER_AGENT", ua); } catch (e) { TV.log("user agent: " + e.message); } }
             av.setListener({
                 onbufferingstart: function () { if (cur && cur.token === my) { buffering = true; emit("onBuffering", true); } },
                 onbufferingprogress: function () {},
@@ -250,6 +313,8 @@
                             return;
                         }
                         if (si && si.w >= 3000) rememberUhd(url);
+                        // opened again after the background while it was paused: paused again on its first picture
+                        if (opts._paused) { opts._paused = false; userPaused = true; try { av.pause(); } catch (e) {} }
                     }
                     if (ms !== lastTime) tickAt = Date.now();
                     lastTime = ms; emit("onTime", ms);
@@ -258,7 +323,7 @@
                 onerror: function (type) {
                     if (!cur || cur.token !== my) return;
                     TV.log("avplay error " + type);
-                    if (started || opts.live) reconnect(String(type)); else { clearTimeout(watchdog); emit("onError", String(type)); }
+                    if (started || opts.live) reconnect(String(type)); else fail(String(type));
                 },
                 onevent: function (type, data) { if (type !== "PLAYER_MSG_RESOLUTION_CHANGED") TV.log("avplay event " + type + " " + (data || "")); },
                 onsubtitlechange: function (dur, text) { if (cur && cur.token === my) emit("onSubtitle", { text: text, dur: +dur || 0 }); },
@@ -282,13 +347,13 @@
                 if (!cur || cur.token !== my) return;
                 if (opts.start && !opts.live) { try { av.seekTo(Math.floor(opts.start * 1000)); } catch (e) {} }
                 emit("onReady");                                   // audio tracks and subtitles are known now
-                try { av.play(); emit("onPlaying"); } catch (e) { emit("onError", "play: " + e.message); }
+                try { av.play(); emit("onPlaying"); } catch (e) { fail("play: " + e.message); }
             }, function (err) {
                 if (!cur || cur.token !== my) return;
                 var why = String(err && (err.name || err.message) || err);
                 TV.log("prepare failed " + why);
                 // a movie that cannot open: its error stays, the start timer does not add a "timeout" later
-                if (again || opts.live) reconnect("prepare " + why); else { clearTimeout(watchdog); emit("onError", why); }
+                if (again || opts.live) reconnect("prepare " + why); else fail(why);
             });
         } catch (e) {
             TV.log("open failed " + e.message);
@@ -300,6 +365,7 @@
         token++;
         clearTimeout(watchdog); clearTimeout(retryTimer); clearInterval(stallTimer);
         closeAv();
+        shelved = null;
         if (video) {
             video._token = 0; textOff(); lgShow(false);
             try { video.pause(); video.removeAttribute("src"); while (video.firstChild) video.removeChild(video.firstChild); video.load(); } catch (e) {}
@@ -313,8 +379,8 @@
         if (useAv) { try { return av.getState(); } catch (e) { return "NONE"; } }
         return video && !video.paused ? "PLAYING" : "PAUSED";
     }
-    function pause() { try { if (useAv) av.pause(); else video.pause(); } catch (e) {} }
-    function resume() { try { if (useAv) av.play(); else video.play(); } catch (e) {} }
+    function pause() { userPaused = true; try { if (useAv) av.pause(); else video.pause(); } catch (e) {} }
+    function resume() { userPaused = false; try { if (useAv) av.play(); else video.play(); } catch (e) {} }
     function toggle() { if (state() === "PLAYING") { pause(); return false; } resume(); return true; }
     function position() { return lastTime / 1000; }
     function duration() {
@@ -348,7 +414,7 @@
        draws them (luna://com.webos.media). Their list comes from its "sourceInfo"; the video's id changes
        while it opens, so each new id is listened to. Until the list comes (4 s at most) the app waits to
        choose the tracks, so your subtitle language is found there too. */
-    var lgSubs = [], lgOn = -1, lgId = null, lgBridges = [], lgWatch = null, lgPending = false;
+    var lgSubs = [], lgOn = -1, lgId = null, lgBridges = [], lgWatch = null, lgPending = false, lgInfo = {};
     function lgCall(method, p) {
         if (!lgId) return;
         p = p || {}; p.mediaId = lgId;
@@ -357,7 +423,7 @@
     function lgListen(my) {
         clearInterval(lgWatch);
         lgBridges.forEach(function (b) { try { b.cancel(); } catch (e) {} });
-        lgSubs = []; lgOn = -1; lgId = null; lgBridges = []; lgPending = false;
+        lgSubs = []; lgOn = -1; lgId = null; lgBridges = []; lgPending = false; lgInfo = {};
         if (!TV.WEBOS || !video || !global.PalmServiceBridge) return;
         var old = video.mediaId, last = null, n = 0;
         lgPending = true;
@@ -368,6 +434,11 @@
             if (!id || id === old || id === last || String(id).charAt(0) === "<") return;
             last = id;
             lgBridges.push(TV.luna("luna://com.webos.media/subscribe", { mediaId: id, subscribe: true }, function (m) {
+                // what Stream Info shows: the picture as LG decodes it, and the file's tracks
+                if (m && cur && cur.token === my) {
+                    if (m.videoInfo) lgInfo.video = m.videoInfo;
+                    if (m.sourceInfo) { lgInfo.prog = (m.sourceInfo.programInfo || [])[0] || {}; lgInfo.container = m.sourceInfo.container || ""; }
+                }
                 if (!m || !m.sourceInfo || !cur || cur.token !== my) return;
                 clearInterval(lgWatch);
                 lgId = id;
@@ -383,10 +454,10 @@
     function htmlTracks() {
         if (lgPending) return [];
         var out = [], a = video && video.audioTracks, t = video && video.textTracks, i, n = 0;
-        for (i = 0; a && i < a.length; i++) out.push({ index: i, type: "AUDIO", lang: a[i].language || a[i].label || "", codec: "", channels: "" });
-        for (i = 0; t && i < t.length; i++) if (t[i].kind === "subtitles" || t[i].kind === "captions") { out.push({ index: i, type: "TEXT", lang: t[i].language || t[i].label || "", codec: "", channels: "" }); n++; }
+        for (i = 0; a && i < a.length; i++) out.push({ index: i, type: "AUDIO", lang: a[i].language || "", name: a[i].label || "", codec: "", channels: "" });
+        for (i = 0; t && i < t.length; i++) if (t[i].kind === "subtitles" || t[i].kind === "captions") { out.push({ index: i, type: "TEXT", lang: t[i].language || "", name: t[i].label || "", codec: "", channels: "" }); n++; }
         // LG's own: numbered after the page's (100, 101…), drawn by the TV
-        if (!n) lgSubs.forEach(function (s, j) { out.push({ index: 100 + j, type: "TEXT", lang: s.lang || s.label, codec: "", channels: "", tv: true }); });
+        if (!n) lgSubs.forEach(function (s, j) { out.push({ index: 100 + j, type: "TEXT", lang: s.lang || "", name: s.label || "", codec: "", channels: "", tv: true }); });
         return out;
     }
     function htmlCurrent(type) {
@@ -419,15 +490,30 @@
         return true;
     }
 
-    /* Audio tracks and subtitles: [{ index, type: "AUDIO"|"TEXT", lang }] */
+    /* A track's details: JSON as Samsung's player documents it, or its pairs read one by one when a TV gives
+       something that is not quite JSON (issue #9: subtitles named "Track 1, 2" on a QE65S90C) */
+    var loggedTracks = false;
+    function trackInfo(raw) {
+        if (raw && typeof raw === "object") return raw;
+        try { return JSON.parse(raw || "{}") || {}; } catch (e) {}
+        var x = {}, re = /"?([A-Za-z_]+)"?\s*[:=]\s*"?([^",}]*)"?/g, m;
+        while ((m = re.exec(String(raw || "")))) x[m[1]] = m[2].trim();
+        return x;
+    }
+    /* Audio tracks and subtitles: [{ index, type: "AUDIO"|"TEXT", lang, name }] */
     function tracks() {
         if (!cur) return [];
         if (!useAv) { try { return htmlTracks(); } catch (e) { return []; } }
         try {
-            return (av.getTotalTrackInfo() || []).filter(function (t) { return t.type === "AUDIO" || t.type === "TEXT"; }).map(function (t) {
-                var x = {}; try { x = JSON.parse(t.extra_info || "{}"); } catch (e) {}
-                return { index: t.index, type: t.type, lang: x.language || x.track_lang || "", codec: x.fourCC || "", channels: x.channels || "" };
+            var list = (av.getTotalTrackInfo() || []).filter(function (t) { return t.type === "AUDIO" || t.type === "TEXT"; });
+            if (!loggedTracks && list.length) { loggedTracks = true; TV.log("tracks as the TV gives them: " + list.map(function (t) { return t.type + " " + String(t.extra_info || "").slice(0, 160); }).join(" | ")); }
+            var out = list.map(function (t) {
+                var x = trackInfo(t.extra_info);
+                return { index: t.index, type: t.type, lang: x.language || x.track_lang || x.lang || x.Language || "", name: x.label || x.track_name || x.name || x.title || "",
+                         codec: x.fourCC || "", channels: x.channels || "" };
             });
+            // What the TV leaves empty, from the .mkv file itself (#34: no subtitle languages on a QE65S90C)
+            return TV.mkv ? TV.mkv.fill(out, cur.url) : out;
         } catch (e) { return []; }
     }
     function currentTrack(type) {
@@ -462,16 +548,182 @@
     }
     TV.onPref(function (k) { if (/^sub(Size|Color|Pos|Bg)$/.test(k)) lgStyle(); });
 
+    /* ---------- Stream Info: the picture, the sound and the connection, as the player sees them ----------
+       Each value may be missing (each TV says different things). */
+    function formatOf(url) {
+        var u = String(url || "").toLowerCase().split("?")[0];
+        return /\.m3u8$|\/hls\//.test(u) || /format=m3u8/.test(String(url)) ? "HLS" : /\.mpd$/.test(u) ? "DASH" : /\.mkv$/.test(u) ? "MKV" : /\.(mp4|m4v)$/.test(u) ? "MP4" :
+               /\.avi$/.test(u) ? "AVI" : /\.ts$/.test(u) || /\/live\//.test(u) ? "MPEG-TS" : "";
+    }
+    function stats() {
+        if (!cur) return null;
+        var s = { format: formatOf(cur.url), engine: TV.ANDROID ? "ExoPlayer" : useAv ? "Samsung AVPlay" : TV.WEBOS ? "LG webOS" : "HTML5" };
+        var B = global.APLAndroid;
+        // the Android app from 1.0.11 tells everything (the connection, the buffer, the lost frames)
+        if (TV.ANDROID && B && typeof B.stats === "function") {
+            try { var a = JSON.parse(B.stats() || "{}"); for (var k in a) if (a.hasOwnProperty(k)) s[k] = a[k]; return s; } catch (e) {}
+        }
+        if (useAv) {
+            try {
+                (av.getCurrentStreamInfo() || []).forEach(function (t) {
+                    var x = {}; try { x = JSON.parse(t.extra_info || "{}"); } catch (e) {}
+                    if (t.type === "VIDEO") { s.w = +x.Width || 0; s.h = +x.Height || 0; s.fps = +x.FrameRate || 0; s.vcodec = x.fourCC || ""; s.vbitrate = +x.Bit_rate || 0; }
+                    if (t.type === "AUDIO") { s.acodec = x.fourCC || ""; s.channels = +x.channels || 0; s.rate = +x.sample_rate || 0; s.abitrate = +x.bit_rate || 0; }
+                });
+            } catch (e) {}
+            if (s.fps > 1000) s.fps = s.fps / 1000;
+            try { s.bandwidth = +av.getStreamingProperty("CURRENT_BANDWIDTH") || 0; } catch (e) {}
+            return s;
+        }
+        if (video) {
+            s.w = video.videoWidth || 0; s.h = video.videoHeight || 0;
+            try { var q = video.getVideoPlaybackQuality && video.getVideoPlaybackQuality(); if (q) { s.dropped = q.droppedVideoFrames; s.frames = q.totalVideoFrames; } } catch (e) {}
+            try { var b = video.buffered; if (b && b.length) s.buffered = Math.max(0, b.end(b.length - 1) - video.currentTime); } catch (e) {}
+            var v = lgInfo.video, p = lgInfo.prog, vt = p && (p.videoTrackInfo || [])[0], at = p && (p.audioTrackInfo || [])[0];
+            if (v) { s.w = v.width || s.w; s.h = v.height || s.h; s.fps = v.frameRate || 0; if (v.hdrType && v.hdrType !== "NONE") s.hdr = v.hdrType; }
+            if (vt) { s.vcodec = vt.codec || ""; s.vbitrate = vt.bitRate || 0; if (!s.fps) s.fps = vt.frameRate || 0; }
+            if (at) { s.acodec = at.codec || ""; s.channels = at.channels || 0; s.rate = at.sampleRate || 0; s.abitrate = at.bitRate || 0; }
+            if (!s.format && lgInfo.container) s.format = lgInfo.container;
+        }
+        return s;
+    }
+
+    /* ---------- Quality: the qualities of a stream that has several ----------
+       Android (the app from 1.0.11): its own player's list, changed without a break. Elsewhere, an HLS stream's
+       master playlist is read once; a quality chosen plays that quality's own playlist (a movie where it was).
+       Not offered when the sound comes in separate playlists (it would be lost). */
+    var qCache = {};
+    function absUrl(base, rel) {
+        if (/^[a-z][a-z0-9+.-]*:\/\//i.test(rel)) return rel;
+        var m = /^([a-z][a-z0-9+.-]*:\/\/[^\/?#]+)([^?#]*)/i.exec(base);
+        if (!m) return rel;
+        return rel.charAt(0) === "/" ? m[1] + rel : m[1] + m[2].replace(/[^\/]*$/, "") + rel;
+    }
+    function parseMaster(text, base, known) {
+        if (!/#EXT-X-STREAM-INF/i.test(text) || /#EXT-X-MEDIA:[^\n]*TYPE=AUDIO[^\n]*URI=/i.test(text)) return null;
+        var lines = String(text).split(/\r?\n/), out = [], byH = {};
+        for (var i = 0; i < lines.length; i++) {
+            var m = /^#EXT-X-STREAM-INF:(.*)$/i.exec(lines[i].trim());
+            if (!m) continue;
+            var j = i + 1;
+            while (j < lines.length && (!lines[j].trim() || lines[j].trim().charAt(0) === "#")) j++;
+            if (j >= lines.length) break;
+            var uri = lines[j].trim(), res = /RESOLUTION=(\d+)x(\d+)/i.exec(m[1]) || [], bw = +((/(?:^|,)BANDWIDTH=(\d+)/i.exec(m[1]) || [])[1] || 0);
+            if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(uri) && !known) return null;      // a relative address, but where the master really is is not known
+            var q = { url: absUrl(base, uri), w: +res[1] || 0, h: +res[2] || 0, bw: bw };
+            var key = q.h ? "h" + q.h : "b" + bw;                                  // one per height: the best of each
+            if (byH[key] && byH[key].bw >= bw) continue;
+            if (byH[key]) out.splice(out.indexOf(byH[key]), 1);
+            byH[key] = q; out.push(q);
+        }
+        out.sort(function (a, b) { return (b.h - a.h) || (b.bw - a.bw); });
+        out.forEach(function (q, k) { q.id = k; });
+        return out.length > 1 ? out : null;
+    }
+    function readMaster(url) {
+        return TV.http(url, { timeout: 8000 }).then(function (r) {
+            if (r.status >= 200 && r.status < 300 && r.text) return parseMaster(r.text, r.url || url, true);
+            if (r.status === 0 && TV.helper) return TV.helper.fetch(url, 8000).then(function (t) { return parseMaster(t, url, false); });
+            return null;
+        }).catch(function () { return null; });
+    }
+    function qualities() {
+        if (!cur) return Promise.resolve(null);
+        var c = cur, B = global.APLAndroid;
+        if (TV.ANDROID && B && typeof B.videoTracks === "function") {
+            try {
+                var v = JSON.parse(B.videoTracks() || "{}");
+                if (v.list && v.list.length > 1) return Promise.resolve({ native: true, current: v.override >= 0 ? v.override : "auto",
+                    list: v.list.map(function (t) { return { id: t.index, w: t.w, h: t.h, bw: t.bitrate }; }).sort(function (a, b) { return (b.h - a.h) || (b.bw - a.bw); }) });
+            } catch (e) {}
+        }
+        var master = c.opts._master || c.url;
+        if (adaptiveKind(master) !== "m3u8") return Promise.resolve(null);
+        var got = qCache[master] !== undefined ? Promise.resolve(qCache[master]) : readMaster(master).then(function (l) { qCache[master] = l; return l; });
+        return got.then(function (l) {
+            if (!l || cur !== c) return null;
+            return { native: false, current: c.opts._variant !== undefined ? c.opts._variant : "auto", list: l };
+        });
+    }
+    function setQuality(id) {
+        if (!cur) return;
+        var o = cur.opts, B = global.APLAndroid;
+        if (TV.ANDROID && B && typeof B.selectVideo === "function" && o._master === undefined) {
+            B.selectVideo(id === "auto" ? -1 : id | 0);
+            TV.log("quality " + id);
+            return;
+        }
+        var master = o._master || cur.url, l = qCache[master];
+        if (!l) return;
+        if (!o.live) o.start = position();
+        if (id === "auto" || !l[id]) { delete o._master; delete o._variant; TV.log("quality: automatic"); open(master, o, true); }
+        else { o._master = master; o._variant = id; TV.log("quality " + (l[id].h ? l[id].h + "p" : l[id].bw)); open(l[id].url, o, true); }
+    }
+
     /* The video plane under the page: setting the window does not restart the stream */
     function setRect(r) { if (cur) cur.opts.rect = r; place(r); }
 
+    /* Android: a live channel back from standby, or from another app after a while, starts again live. The stream
+       paused for minutes or hours came back as a still picture, and the frozen picture made APL TV take HLS for the
+       whole account (a KickPi box on Android TV 14, whose provider has no HLS). */
+    var hiddenAt = 0, aliveAt = Date.now(), backAt = 0;
+    function backLive(gap) {
+        backAt = Date.now();
+        if (!TV.ANDROID || !cur || !cur.opts.live || cur.opts.onHide) return false;
+        TV.log("back after " + Math.round(gap / 1000) + " s: the channel starts again live");
+        open(cur.url, cur.opts, true);
+        return true;
+    }
+    // the page's timers stop while the box sleeps: a gap between two ticks is the box waking up
+    if (TV.ANDROID) setInterval(function () {
+        var now = Date.now(), gap = now - aliveAt;
+        aliveAt = now;
+        if (gap > 30000 && !document.hidden && now - backAt > 10000) backLive(gap);
+    }, 5000);
+
+    /* Samsung: in the background or in standby the player is closed, not only suspended. A suspended player kept the
+       TV's decoder, and restored hours later, or after an error, it could leave Samsung's player stuck for every app
+       until the TV was restarted (#27, a 2021 AU7000 on Tizen 6.0). Back in front, the video opens again where it
+       was, paused if it was; a channel starts again live; a portal's link is asked again. */
+    var shelved = null;
+    function shelve() {
+        var st = "NONE";
+        try { st = av.getState(); } catch (e) {}
+        clearTimeout(watchdog); clearTimeout(retryTimer);
+        if (cur.failed) { closeAv(); return; }            // given up: nothing to open again
+        if (!cur.opts.live && lastTime > 0) cur.opts.start = lastTime / 1000;
+        shelved = { paused: st === "PAUSED" || userPaused };
+        closeAv();
+        TV.log("in the background: player closed");
+    }
+    function unshelve() {
+        var s = shelved, c = cur;
+        shelved = null;
+        if (!c) return;
+        TV.log("back in front: the " + (c.opts.live ? "channel" : "video") + " opens again");
+        attempts = 0;
+        c.opts._paused = s.paused;
+        emit("onReconnect", 0);
+        /* a link still being asked for (Stremio's app opened for its engine hides APL TV for a few seconds) is asked
+           again; a portal's link, which lasts a short time only, too */
+        var again = /^(stalker|media|stremio|free):/.test(c.url) ? c.url : /^stalker:/.test(c.opts._via || "") ? c.opts._via : "";
+        if (again) play(again, c.opts);
+        else open(c.url, c.opts, true);
+    }
+
     document.addEventListener("visibilitychange", function () {
+        var now = Date.now();
+        if (document.hidden) hiddenAt = now;
+        else tickAt = now;                  // the picture is given time to come back before "no picture" counts
         if (document.hidden && cur) {
             if (cur.opts.onHide) emit("onHide");
+            else if (useAv && TV.TIZEN) shelve();
             else if (useAv) { try { av.suspend(); } catch (e) {} }
             else if (video && TV.WEBOS) { try { video.pause(); } catch (e) {} }
-        } else if (!document.hidden && cur && useAv) {
-            try { av.restore(); } catch (e) {}
+        } else if (!document.hidden && cur && useAv && shelved) {
+            unshelve();
+        } else if (!document.hidden && cur && useAv && !TV.TIZEN) {
+            if (!(hiddenAt && now - hiddenAt > 30000 && now - backAt > 10000 && backLive(now - hiddenAt))) { try { av.restore(); } catch (e) {} }
         } else if (!document.hidden && cur && video && TV.WEBOS) {
             // Back in front on LG: a channel starts again live, a movie goes on where it was
             if (cur.opts.live) open(cur.url, cur.opts, true);
@@ -483,6 +735,8 @@
         play: play, stop: stop, state: state, pause: pause, resume: resume, toggle: toggle, position: position, duration: duration, seekTo: seekTo,
         tracks: tracks, currentTrack: currentTrack, selectTrack: selectTrack, subtitlesOff: subtitlesOff, subtitleDelay: subtitleDelay, setRect: setRect, setPicture: setPicture,
         current: function () { return cur; }, isBuffering: function () { return buffering; }, FULL: FULL, native: useAv,
-        streamInfo: function () { return useAv && cur ? streamInfo() : null; }
+        backAt: function () { return backAt; },
+        streamInfo: function () { return useAv && cur ? streamInfo() : null; },
+        stats: stats, qualities: qualities, setQuality: setQuality
     };
 })(window);

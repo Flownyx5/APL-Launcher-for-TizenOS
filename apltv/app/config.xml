@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://apl.tv/app" version="1.0.11" viewmodes="maximized">
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://apl.tv/app" version="1.5.0" viewmodes="maximized">
     <!--
       APL TV: an IPTV player for your own M3U playlists and Xtream accounts, in the style of APL Launcher.
       package id = APLTVMedia   (Tizen requires EXACTLY 10 characters [0-9A-Za-z])
@@ -53,5 +53,7 @@
     </tizen:service>
 
     <access origin="*" subdomains="true"/>
+    <!-- frames from the app's own service (the video summaries' player, http://127.0.0.1:8765/yt) -->
+    <tizen:allow-navigation>*</tizen:allow-navigation>
     <tizen:content-security-policy>default-src * file: data: blob: 'unsafe-inline'; script-src * file: data: blob: 'unsafe-inline'; style-src * file: data: 'unsafe-inline'; img-src * file: data: blob:; media-src * file: blob:; connect-src *; font-src * file: data:</tizen:content-security-policy>
 </widget>

@@ -8,8 +8,17 @@
     "use strict";
 
     var TV = global.TV;
-    var SERVICE_ID = "APLTVMedia.Helper", PORT = 8765;
-    var bases = null, baseIndex = 0, starting = null;
+    var PORT = 8765;
+    var bases = null, baseIndex = 0, starting = null, lastAnswer = "";
+
+    /* Samsung: the service is "<package>.Helper". Apps2Samsung can give the package another id on a TV (#22: an id
+       blocked there, or taken by another app) and rewrites it in the installed files, not in the code that comes
+       later through the automatic updates: the id is the running app's own. */
+    function serviceId() {
+        try { var p = global.tizen.application.getCurrentApplication().appInfo.packageId; if (p) return p + ".Helper"; } catch (e) {}
+        return "APLTVMedia.Helper";
+    }
+    function why(e) { return e ? (e.name && e.name !== "Error" ? e.name + ": " : "") + (e.message || e) : "?"; }
 
     function hosts() {
         if (bases) return bases;
@@ -36,28 +45,43 @@
     }
     function startService() {
         if (starting) return starting;
+        lastAnswer = "";
         starting = new Promise(function (resolve) {
             if (TV.WEBOS) { startWebos(resolve); return; }
             // Android: the helper is part of the app (Helper.java), started with it
             if (TV.ANDROID) { try { global.APLAndroid.startHelper(); } catch (e) {} resolve(); return; }
             var T = global.tizen;
             if (!T || !T.application) { resolve(); return; }
-            function plain() { try { T.application.launch(SERVICE_ID, resolve, resolve); } catch (e) { resolve(); } }
-            try { T.application.launchAppControl(new T.ApplicationControl("http://tizen.org/appcontrol/operation/service"), SERVICE_ID, resolve, plain); }
-            catch (e) { plain(); }
+            var id = serviceId();
+            function plain(e) {
+                if (e) TV.log("helper " + id + ": " + why(e));
+                try { T.application.launch(id, resolve, function (e2) { TV.log("helper " + id + " not started: " + why(e2)); lastAnswer = why(e2); resolve(); }); }
+                catch (e3) { TV.log("helper " + id + " not started: " + why(e3)); lastAnswer = why(e3); resolve(); }
+            }
+            try { T.application.launchAppControl(new T.ApplicationControl("http://tizen.org/appcontrol/operation/service"), id, resolve, plain); }
+            catch (e) { plain(e); }
         }).then(function () { return waitUp(Date.now() + 12000); });
         starting.then(function () { starting = null; }, function () { starting = null; });
         return starting;
     }
+    /* /ping answers 200 from APL TV's helper. Any other answer is another app on the port (#22: Tizenfy's phone page
+       listens on 8765 too), said in the error. */
     function ping(base) {
-        return TV.http(base + "/ping", { timeout: 1500 }).then(function (r) { if (r.status !== 200) throw new Error("no"); return base; });
+        return TV.http(base + "/ping", { timeout: 1500 }).then(function (r) {
+            if (r.status !== 200) { if (r.status) lastAnswer = "port " + PORT + ": HTTP " + r.status + ", another app?"; throw new Error("no"); }
+            return base;
+        });
     }
     function waitUp(until) {
         return new Promise(function (resolve, reject) {
             (function again() {
                 var list = hosts(), i = 0;
                 (function tryNext() {
-                    if (i >= list.length) { if (Date.now() > until) reject(new Error("helper unavailable")); else setTimeout(again, 400); return; }
+                    if (i >= list.length) {
+                        if (Date.now() > until) { TV.log("helper unavailable" + (lastAnswer ? ": " + lastAnswer : "")); reject(new Error("helper unavailable" + (lastAnswer ? ", " + lastAnswer : ""))); }
+                        else setTimeout(again, 400);
+                        return;
+                    }
                     var b = list[i++];
                     ping(b).then(function () { baseIndex = list.indexOf(b); resolve(); }, tryNext);
                 })();
@@ -86,25 +110,37 @@
            An installed helper from before 1.0.7 does not know it: "needs the new install". */
         sget: function (url, headers, timeout) {
             return call("/sget", { method: "POST", body: JSON.stringify({ url: url, headers: headers || {}, t: timeout || 60000 }), timeout: (timeout || 60000) + 5000 }).then(function (r) {
-                if (r.status === 404) { var n = new Error("helper too old"); n.old = true; throw n; }
+                // a helper from before 1.0.7 answers its own "not found"; any other 404 is the server's
+                if (r.status === 404 && /^\s*\{\s*"error"\s*:\s*"not found"\s*\}\s*$/.test(r.text || "")) { var n = new Error("helper too old"); n.old = true; throw n; }
                 if (r.status >= 200 && r.status < 300) return r.text;
-                var e = new Error("HTTP " + r.status); e.status = r.status; throw e;
+                var e = new Error("HTTP " + r.status); e.status = r.status; e.body = r.text; throw e;
+            });
+        },
+        /* A Stalker portal's movie through the helper, asked with the portal's headers (#30: its server refused the TV's
+           own player, HTTP 403). Gives the address to play; a helper from before 1.4.6 doesn't have it (e.old). */
+        relay: function (url, id, headers) {
+            return call("/px/hd", { method: "POST", body: JSON.stringify({ id: id, headers: headers || {} }), timeout: 5000 }).then(function (r) {
+                if (r.status === 404) { var n = new Error("helper too old"); n.old = true; throw n; }
+                if (r.status !== 200) throw new Error("relay: HTTP " + r.status);
+                var name = String(url).split(/[?#]/)[0].split("/").pop().replace(/[^A-Za-z0-9._-]/g, "").slice(-60) || "x";     // index.m3u8: HLS to the player
+                return hosts()[baseIndex] + "/px/f/" + name + "?h=" + encodeURIComponent(id) + "&u=" + encodeURIComponent(url);
             });
         },
         fetch: function (url, timeout) {
             return call("/fetch?u=" + encodeURIComponent(url) + "&t=" + (timeout || 120000), { timeout: (timeout || 120000) + 5000 }).then(function (r) {
                 if (r.status >= 200 && r.status < 300) return r.text;
-                var e = new Error("HTTP " + r.status); e.status = r.status; throw e;
+                var e = new Error("HTTP " + r.status); e.status = r.status; e.body = r.text; throw e;
             });
         },
         epg: function (url, ids, from, to, names) {
-            return call("/epg", { method: "POST", timeout: 300000, body: JSON.stringify({ url: url, ids: ids, from: from, to: to, names: !!names }) }).then(function (r) {
+            // ua: the player's name this server lets in, when it refused the screen's own requests (core.js)
+            return call("/epg", { method: "POST", timeout: 300000, body: JSON.stringify({ url: url, ids: ids, from: from, to: to, names: !!names, ua: TV.uaFor(url) }) }).then(function (r) {
                 if (r.status !== 200) throw new Error("guide: " + (json(r).error || r.status));
                 return json(r);
             });
         },
         epgMatch: function (url, names, from, to) {
-            return call("/epg/match", { method: "POST", timeout: 240000, body: JSON.stringify({ url: url, names: names, from: from, to: to }) }).then(function (r) {
+            return call("/epg/match", { method: "POST", timeout: 240000, body: JSON.stringify({ url: url, names: names, from: from, to: to, ua: TV.uaFor(url) }) }).then(function (r) {
                 if (r.status !== 200) throw new Error("guide: " + (json(r).error || r.status));
                 return json(r);
             });
@@ -117,6 +153,34 @@
             });
         },
         session: function () { return call("/session", { method: "POST", body: "{}" }).then(json); },
+        /* Stremio's torrent engine started by the service (Samsung): { ok, base } (an older service: not known) */
+        stremioEngine: function () {
+            return call("/stremio/engine", { timeout: 32000 }).then(function (r) {
+                if (r.status === 404) return { ok: false, old: true };
+                return json(r);
+            });
+        },
+        /* The phone editor (1.0.11): the playlist goes to the helper, the phone's changes come back */
+        editStart: function (data) {
+            return call("/edit/start", { method: "POST", timeout: 30000, body: JSON.stringify(data) }).then(function (r) {
+                if (r.status === 404) { var n = new Error("helper too old"); n.old = true; throw n; }
+                if (r.status !== 200) { var e2 = new Error("HTTP " + r.status); e2.status = r.status; throw e2; }
+                return json(r);
+            });
+        },
+        editPending: function (token) { return call("/edit/pending?k=" + encodeURIComponent(token), { timeout: 8000 }).then(json); },
+        editClose: function () { return call("/edit/close", { timeout: 5000 }).catch(function () {}); },
+        /* Timeshift (1.0.11): the service keeps the channel; the player reads it back from tsUrl */
+        tsStart: function (url) {
+            return call("/ts/start", { method: "POST", timeout: 30000, body: JSON.stringify({ url: url }) }).then(function (r) {
+                if (r.status === 404) { var n = new Error("helper too old"); n.old = true; throw n; }
+                if (r.status !== 200) { var e; try { e = new Error(JSON.parse(r.text).error); } catch (x) { e = new Error("HTTP " + r.status); } throw e; }
+                return json(r);
+            });
+        },
+        tsInfo: function (id) { return call("/ts/info?id=" + encodeURIComponent(id), { timeout: 6000 }).then(function (r) { if (r.status !== 200) throw new Error("none"); return json(r); }); },
+        tsStop: function () { return call("/ts/stop", { timeout: 5000 }).catch(function () {}); },
+        tsUrl: function (id, t) { return hosts()[baseIndex] + "/ts/stream.ts?id=" + encodeURIComponent(id) + "&t=" + Math.floor(t); },
         pending: function (token) { return call("/pending?k=" + encodeURIComponent(token), { timeout: 8000 }).then(json); },
         close: function () { return call("/session/close", { timeout: 5000 }).catch(function () {}); },
         shelf: function (data) { return call("/shelf", { method: "POST", timeout: 8000, body: JSON.stringify(data) }).catch(function () {}); },
@@ -158,7 +222,17 @@
         if (!TV.DEV || TV.PREVIEW) return;
         call("/dev/keys", { timeout: 3000 }).then(function (r) {
             var j = json(r);
-            if (j.keys && j.keys.length) { j.keys.forEach(function (k) { keyQueue.push(typeof k === "number" ? [k, 0] : k); }); pumpKeys(); }
+            if (!j.keys || !j.keys.length) return;
+            // development builds: "js:…" runs a test in the app, its answer goes to the log
+            j.keys = j.keys.filter(function (k) {
+                if (typeof k !== "string" || k.indexOf("js:") !== 0) return true;
+                // a script element (the page's rules allow inline scripts, not eval)
+                var sc = document.createElement("script");
+                sc.text = "(function(){try{var __o=(function(){" + k.slice(3) + ";})();TV.log('dev js: '+(typeof __o==='object'?JSON.stringify(__o):String(__o)).slice(0,6000));}catch(e){TV.log('dev js error: '+e.message);}})();";
+                document.head.appendChild(sc); document.head.removeChild(sc);
+                return false;
+            });
+            if (j.keys.length) { j.keys.forEach(function (k) { keyQueue.push(typeof k === "number" ? [k, 0] : k); }); pumpKeys(); }
         }).catch(function () {});
     }, 400);
 
@@ -166,8 +240,9 @@
     var sent = 0;
     setInterval(function () {
         if (!TV.DEV) return;
-        var lines = TV.logs.slice(sent > TV.logs.length ? 0 : sent);
-        sent = TV.logs.length;
+        // counted over the app's life: the list keeps its last 300 lines, its length stops moving
+        var fresh = (TV.logTotal || 0) - sent, lines = fresh > 0 ? TV.logs.slice(-Math.min(fresh, TV.logs.length)) : [];
+        sent = TV.logTotal || 0;
         if (lines.length) TV.helper.sendLog(lines, true);
     }, 3000);
 })(window);

@@ -11,20 +11,31 @@
     "use strict";
 
     var TV = global.TV, el = TV.el, esc = TV.esc, T = TV.t, D = TV.data;
-    TV.VERSION = "1.0.11";
+    TV.VERSION = "1.5.0";
     TV.DONATE = "https://ko-fi.com/knikt";     // the Ko-fi page for donations (Settings > About, README, .github/FUNDING.yml)
-    var TABS = [
+    var BASE = [
         { id: "home", label: T("Home") },
         { id: "live", label: T("Live TV") },
         { id: "guide", label: T("Guide") },
+        { id: "sports", label: T("Sports") },
         { id: "movies", label: T("Movies") },
         { id: "series", label: T("Series") },
         { id: "search", icon: "search", label: T("Search") },
         { id: "settings", icon: "gear", label: T("Settings") }
     ];
+    var TABS = BASE.slice(), mediaIds = "";
     var tabEls = [], tabIndex = 0, focusOn = "tabs", current = null;
 
+    /* The tabs, with one per media server (Plex, Jellyfin, Emby: js/library.js) after Series */
     function buildTabs() {
+        var media = TV.library ? TV.library.tabs() : [];
+        mediaIds = media.map(function (t) { return t.id + "=" + t.label; }).join(",");
+        // Settings > Display > Sports Tab off (#25): no Sports tab, and nothing of Sports ever loads (it loads when shown)
+        var base = BASE.filter(function (t) { return t.id !== "sports" || TV.pref("sportsTab") !== false; });
+        // little memory (core.js TV.SMALL): the TV guide off takes its tab away too
+        if (TV.SMALL && TV.pref("tvGuide") === false) base = base.filter(function (t) { return t.id !== "guide"; });
+        var after = base.map(function (t) { return t.id; }).indexOf("series") + 1;
+        TABS = base.slice(0, after).concat(media, base.slice(after));
         var nav = TV.$("tabs");
         nav.innerHTML = "";
         tabEls = TABS.map(function (t) {
@@ -108,10 +119,28 @@
         TV.alert({ title: T("Quit APL TV?"), buttons: [{ label: T("Quit"), run: function () { TV.player.stop(); TV.exit(); } }, { label: T("Cancel") }], focus: 1 });
     }
 
+    // a media server added or removed: its tab comes or goes
+    D.onChange(function () {
+        if (!TV.library || !tabEls.length) return;
+        var now = TV.library.tabs().map(function (t) { return t.id + "=" + t.label; }).join(",");
+        if (now === mediaIds) return;
+        retab();
+    });
+    /* The tabs drawn again (a media server, the Sports tab switched on or off); the one you were on stays focused */
+    function retab() {
+        var was = TABS[tabIndex] && TABS[tabIndex].id;
+        buildTabs();
+        var ids = TABS.map(function (t) { return t.id; });
+        if (current && ids.indexOf(current) < 0) { go("home"); return; }
+        tabIndex = Math.max(0, ids.indexOf(was));
+        paintTabs();
+    }
+
     TV.shell = {
         screen: screen, go: go, toTabs: toTabs, toView: toView,
         focusOn: function () { return focusOn; },
         current: function () { return current; },
+        retab: function () { if (tabEls.length) retab(); },
         refreshView: function () { if (current && TV.topNav() === screen) { var v = viewOf(current); if (v.show) v.show(); if (focusOn === "view") v.enter(); else v.blur(); paintTabs(); } }
     };
 
@@ -128,6 +157,8 @@
         try {
             var m = {};
             if (TV.WEBOS) m = webosParams(params);
+            // Android: the Intent's extras, kept by MainActivity.java until read (once)
+            else if (TV.ANDROID) { var a = global.APLAndroid; m = (a && a.request && JSON.parse(a.request() || "{}")) || {}; }
             else {
                 var req = global.tizen.application.getCurrentApplication().getRequestedAppControl();
                 var data = (req && req.appControl && req.appControl.data) || [];
@@ -143,6 +174,8 @@
                 return true;
             }
             if (m.tab && TV.views[m.tab]) { go(m.tab, true); return true; }
+            // a page of Settings to add a source (APL Launcher, a test): settings=phone|media|plex|jellyfin|stremio
+            if (m.settings && TV.setup && /^(phone|media|plex|jellyfin|stremio)$/.test(m.settings)) { TV.setup.media(m.settings); return true; }
             // A search asked from outside (voice, APL Launcher): search=<words>
             if (m.search && TV.voice) { TV.voice.search(String(m.search).slice(0, 80)); return true; }
             if (m.play === "last") { var last = D.channel(TV.pref("lastChannel")); if (last) { TV.live.play(last); return true; } }
@@ -166,7 +199,12 @@
        What you were watching and your channels, with the data to open each one here (app control
        "resume", "title", "channel"). Sent when you leave APL TV and every few minutes. */
     function pushShelf() {
-        if (!TV.TIZEN || !D.catalog() || !TV.helper || !TV.helper.shelf) return;     // APL Launcher is on Samsung screens
+        // APL Launcher: Samsung and LG screens through the helper service (/tmp/apltv-shelf.json), Android through
+        // the app itself (ShelfProvider.java, a new .apk: an older one has no Bridge.shelf and gets nothing)
+        var A = global.APLAndroid;
+        var send = TV.ANDROID ? (A && A.shelf ? function (o) { A.shelf(JSON.stringify(o)); } : null)
+                 : (TV.TIZEN || TV.WEBOS) && TV.helper && TV.helper.shelf ? TV.helper.shelf : null;
+        if (!send || !D.catalog()) return;
         try {
             var cont = D.continueWatching().slice(0, 12).map(function (x) {
                 var it = x.item, r = x.resume;
@@ -181,12 +219,13 @@
             var watched = D.recentlyWatched().slice(0, 12).map(function (it) { return { title: it.title || it.name, kind: it.kind, poster: TV.sized(it.poster || "", "w342"), data: { title: it.id } }; });
             var lc = D.channel(TV.pref("lastChannel")), ln = lc && TV.epg.now(lc), lcur = ln && ln.cur;
             var last = lc ? { name: lc.name, num: lc.num, logo: lc.logo || "", now: lcur ? lcur[2] : "", progress: lcur ? Math.round(TV.epg.progress(lcur) * 100) / 100 : 0, data: { channel: lc.id } } : null;
-            TV.helper.shelf({ v: 1, app: "APLTVMedia.TV", at: Date.now(), lang: TV.lang, continueWatching: cont, lastChannel: last, channels: chans, recentlyWatched: watched,
-                              favorites: !!D.favChannels().length });
+            send({ v: 1, app: "APLTVMedia.TV", at: Date.now(), lang: TV.lang, continueWatching: cont, lastChannel: last, channels: chans, recentlyWatched: watched,
+                   favorites: !!D.favChannels().length });
         } catch (e) { TV.log("shelf: " + e.message); }
     }
     setInterval(function () { if (!document.hidden) pushShelf(); }, 5 * 60 * 1000);
     TV.pushShelf = function () { clearTimeout(shelfSoon); shelfSoon = setTimeout(pushShelf, 1500); };
+    TV.shelfNow = pushShelf;      // Android: MainActivity.java, when APL TV goes to the background
     var shelfSoon = null;
     var themesBuilt = false;
     D.onChange(function (w) { if (w === "catalog" && !themesBuilt && D.catalog()) { themesBuilt = true; setTimeout(D.buildThemes, 1500); } });
@@ -237,11 +276,15 @@
         D.start(function (m) { bootMsg.textContent = m; }).then(function () {
             var hasData = D.sources().length && D.catalog() && (D.catalog().live.chans.length || D.catalog().movies.items.length);
             var tab = TV.pref("startTab") || "home";
-            if (tab === "settings" || tab === "search" || !TV.views[tab]) tab = "home";
+            if (tab === "settings" || tab === "search" || !TV.views[tab] || !TABS.some(function (t) { return t.id === tab; })) tab = "home";
             go(hasData ? tab : "home", true);
             // the first start (or the first after this update): how to show the playlist, then the rest
-            if (TV.pref("setupDone") !== 1 && TV.playlistSetup) setTimeout(function () { TV.playlistSetup(function () { if (hasData) setTimeout(offerResume, 800); }); }, 700);
-            else if (hasData) setTimeout(offerResume, 1200);
+            function offers() {
+                if (TV.pref("setupDone") !== 1 && TV.playlistSetup) setTimeout(function () { TV.playlistSetup(function () { if (hasData) setTimeout(offerResume, 800); }); }, 700);
+                else if (hasData) setTimeout(offerResume, 1200);
+            }
+            // a stop without warning last time (js/crash.js): its box comes first
+            if (TV.crash) TV.crash.check(offers); else offers();
             setTimeout(function () { TV.$("boot").classList.add("is-hidden"); document.body.classList.remove("is-booting"); global.TV_BOOT_OK = true; }, 150);
             readRequest();
             if (TV.voice) TV.voice.start();
@@ -259,11 +302,12 @@
     /* Dev builds: smoothness meter. Every 10 s while keys are pressed: frames drawn, frames over 34 ms (a
        visible hitch at 60 Hz), the worst one, how long presses took to show, and the JavaScript memory. */
     if (TV.DEV) (function () {
-        var last = 0, frames = 0, slow = 0, worst = 0, keys = [], active = 0, marks = [], causes = {}, slowList = [];
+        var last = 0, frames = 0, slow = 0, worst = 0, keys = [], active = 0, marks = [], causes = {}, slowList = [], win = null;
         TV.mark = function (name) { marks.push([Date.now(), name]); if (marks.length > 40) marks.shift(); };
         function frame(t) {
             if (last) {
                 var d = t - last; frames++; if (d > worst) worst = d;
+                if (win) { win.frames++; if (d > win.worst) win.worst = d; if (d > 34) { win.slow++; if (win.list.length < 16) win.list.push(Math.round(d) + "@" + (Date.now() - (TV.keyAt || 0)) + (TV.perfTag || "")); } }
                 if (d > 34) {
                     slow++;
                     var now = Date.now(), why = "idle";
@@ -276,6 +320,14 @@
         }
         requestAnimationFrame(frame);
         TV.perf = { key: function (ms) { keys.push(ms); active = Date.now(); } };
+        // a test's own measure: frames drawn between begin and end, the slow ones (over 34 ms) and the worst
+        TV.perf.begin = function (label) { win = { label: label, t: performance.now(), frames: 0, slow: 0, worst: 0, list: [] }; };
+        TV.perf.end = function () {
+            if (!win) return "";
+            var dur = performance.now() - win.t, s = "perfwin " + win.label + ": " + Math.round(win.frames * 1000 / Math.max(1, dur)) + " fps (" + win.frames + " frames, " + Math.round(dur) + " ms), " +
+                win.slow + " slow, worst " + Math.round(win.worst) + " ms" + (win.list.length ? " [" + win.list.join(" ") + "]" : "");
+            win = null; TV.log(s); return s;
+        };
         var longN = 0, longMs = 0, longList = [], clockGap = Date.now() - performance.now();
         try {
             new PerformanceObserver(function (l) { l.getEntries().forEach(function (e) { longN++; longMs += e.duration; if (longList.length < 20) { var at = Math.round(e.startTime + clockGap - TV.keyAt), lastMark = ""; for (var q = marks.length - 1; q >= 0; q--) if (marks[q][0] <= e.startTime + clockGap + 5) { lastMark = marks[q][1] + (Math.round(e.startTime + clockGap - marks[q][0])); break; } longList.push(Math.round(e.duration) + "@" + at + "(" + lastMark + ")"); } }); }).observe({ entryTypes: ["longtask"] });

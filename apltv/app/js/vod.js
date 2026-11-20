@@ -1,7 +1,7 @@
 /* ============================================================
    vod.js: Movies and Series.
-   A row of categories at the top (New, Top Rated, My List, then the
-   provider's, your language first), the covers below in 7 columns, with
+   A row at the top (Sort, New, Top Rated, My List, then the genres and the
+   provider's categories in one list), the covers below in 7 columns, with
    the IMDb rating on each cover as soon as it is known. OK opens the
    title's page, OK held adds it to My List.
    ============================================================ */
@@ -12,7 +12,7 @@
 
     function make(kind, viewId) {
         var root, chipsEl, chipStrip, gridClip, countEl, grid, chips = [], chipEls = [], chipIndex = 0, chipScroll = 0, zone = "grid", visible = false, catId = null, loadTimer = null, dirty = true;
-        var genreList = null, providerMode = false, coverStale = false;
+        var genreList = null, coverStale = false;
         var SORTS = [["default", T("Default Order")], ["added", T("Recently Added")], ["az", T("A to Z")], ["year", T("Year, Newest First")], ["rating", T("Rating, Best First")]];
         var key = kind === "movies" ? "movies" : "series";
 
@@ -34,34 +34,61 @@
             TV.meta.lookup(it).then(function (m) { if (m && m.backdrop && grid.current() === it && visible) TV.bg(m.backdrop, "dark"); });
         }, 500);
 
-        /* Genres (TMDB) after New, Top Rated and My List; the provider's own categories behind the last chip */
+        /* Sort, New, Top Rated, My List, then ONE chip for the rest: the genres (TMDB) and the provider's categories in a
+           vertical list, like Live TV's Categories (a row of 30 chips to scroll through was too long). The chip shows
+           the genre or category you are on. */
+        function inList(id) { return !!id && ["sort", "recent", "top", "mylist", "watched", "genres"].indexOf(String(id)) < 0; }
+        // one of the provider's categories of THIS kind (a movie category and a series one can share their number)
+        function catIn(id) {
+            var cat = D.catalog(), l = cat ? cat[key].cats : [];
+            for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i];
+            return null;
+        }
+        function nameOf(id) {
+            if (String(id).indexOf("g:") === 0) { var g = (genreList || []).filter(function (x) { return "g:" + x.id === id; })[0]; return g ? g.name : ""; }
+            if (id === "all") return T("All");
+            var c = catIn(id);
+            return c && c.name ? c.name : "";
+        }
+        // a category that is still there and shown (a genre always is; one of the provider's may have gone or been hidden)
+        function exists(id) { var c; return !inList(id) || String(id).indexOf("g:") === 0 || id === "all" || !!((c = catIn(id)) && c.name && !c.off); }
         function buildChips() {
-            var cat = D.catalog(), adult = TV.pref("showAdult");
             var sort = sortNow(), sortName = sort === "default" ? T("Sort") : SORTS.filter(function (s) { return s[0] === sort; })[0][1];
-            if (providerMode) {
-                chips = [{ id: "sort", name: sortName }, { id: "back", name: "‹ " + T("Genres") }, { id: "all", name: T("All") }];
-                (cat ? cat[key].cats : []).forEach(function (c) { if ((adult || !c.adult) && !c.off && !D.catNameHidden(c.name)) chips.push(c); });
-            } else {
-                chips = [{ id: "recent", name: T("New") }, { id: "top", name: T("Top Rated") }, { id: "mylist", name: T("My List") }];
-                if (D.recentlyWatched(key).length) chips.push({ id: "watched", name: T("Recently Watched") });
-                (genreList || []).forEach(function (g) { chips.push({ id: "g:" + g.id, name: g.name }); });
-                chips.push({ id: "provider", name: T("Provider's Categories") + " ›" });
-                chips.unshift({ id: "sort", name: sortName });
-                if (!genreList) TV.meta.genres(kind === "movies" ? "movie" : "tv").then(function (l) { genreList = l; if (l.length && visible) { var keep = chips[chipIndex] && chips[chipIndex].id; buildChips(); selectChip(keep); paintChips(); } });
-            }
+            chips = [{ id: "sort", name: sortName }, { id: "recent", name: T("New") }, { id: "top", name: T("Top Rated") }, { id: "mylist", name: T("My List") }];
+            if (D.recentlyWatched(key).length) chips.push({ id: "watched", name: T("Recently Watched") });
+            var cur = TV.pref(key + "Cat"), here = inList(cur) ? nameOf(cur) : "";
+            chips.push({ id: "genres", name: here || (genreList && genreList.length ? T("Genres") : T("Categories")) });
+            if (!genreList) TV.meta.genres(kind === "movies" ? "movie" : "tv").then(function (l) { genreList = l; if (visible) { var keep = chips[chipIndex] && chips[chipIndex].id; buildChips(); selectChip(keep); paintChips(); } });
             chipStrip.innerHTML = "";
             chipEls = chips.map(function (c) {
-                var e = el("div", "chip" + (c.id === "sort" && sort !== "default" ? " is-on" : ""), (c.id === "sort" ? TV.icon("sort", 24) + "&nbsp;&nbsp;" : "") + (c.tag ? "<span class='lrow__flag'>" + esc(c.tag) + "</span>" : "") + esc(c.name) + (c.count ? "<span class='chip__n'>" + c.count + "</span>" : ""));
+                var e = el("div", "chip" + (c.id === "sort" && sort !== "default" ? " is-on" : ""),
+                    (c.id === "sort" ? TV.icon("sort", 24) + "&nbsp;&nbsp;" : c.id === "genres" ? TV.icon("list", 24) + "&nbsp;&nbsp;" : "") + esc(c.name));
                 chipStrip.appendChild(e);
                 return e;
             });
             selectChip(TV.pref(key + "Cat") || "recent");
         }
         function selectChip(want) {
-            // by default the first category: not Sort, not "‹ Genres" (that would leave the provider's categories)
-            chipIndex = 0;
-            while (chipIndex < chips.length - 1 && (chips[chipIndex].id === "sort" || chips[chipIndex].id === "back")) chipIndex++;
+            if (inList(want)) want = "genres";                 // a genre or a category: its chip is the list's
+            chipIndex = 1;                                     // by default New, never Sort
             for (var i = 0; i < chips.length; i++) if (chips[i].id === want && want !== "sort") { chipIndex = i; break; }
+        }
+        /* The list: the genres, then the provider's categories (by country when there are many, as in Live TV) */
+        function openGenres() {
+            var cur = catId;
+            function pick(id) {
+                load(id); buildChips(); paintChips();
+                if (grid.items.length) { zone = "grid"; grid.setActive(true); paintChips(); }
+            }
+            function provider() {
+                TV.live.pickCategory(cur, function (c) { pick(c.id); }, [{ id: "all", name: T("All") }], key, T("Provider's Categories"));
+            }
+            if (!genreList || !genreList.length) { provider(); return; }
+            var mine = String(cur).indexOf("g:") === 0;
+            TV.menu(T("Genres"), genreList.map(function (g) {
+                var id = "g:" + g.id;
+                return { label: g.name, check: id === cur, focus: id === cur, run: function () { pick(id); } };
+            }).concat([{ label: T("Provider's Categories"), icon: "list", focus: inList(cur) && !mine, run: provider }]));
         }
 
         /* Sort (first chip): the same titles in another order, for every category. Remembered for Movies and Series apart. */
@@ -94,7 +121,7 @@
         function paintChips() {
             chipEls.forEach(function (e, i) {
                 e.classList.toggle("is-focused", i === chipIndex && zone === "chips" && TV.shell.focusOn() === "view");
-                e.classList.toggle("is-current", chips[i].id === catId);
+                e.classList.toggle("is-current", chips[i].id === catId || (chips[i].id === "genres" && inList(catId)));
             });
             var c = chipEls[chipIndex];
             if (c) TV.lift(c);
@@ -105,18 +132,20 @@
                 chipStrip.style.transform = "translateX(" + (-chipScroll) + "px)";
             }
         }
+        // the provider's category you are on, when the list's chip is the one focused (OK held: hide it)
+        function provCat() {
+            var c = chips[chipIndex];
+            if (!c || c.id !== "genres" || !inList(catId) || String(catId).indexOf("g:") === 0 || catId === "all") return null;
+            var o = catIn(catId);
+            return o && o.kind ? o : null;
+        }
         function waiting(id) {
             if (String(id).indexOf("g:") === 0) return !D.genreReady(key, id.slice(2));
             return id === "top" && !D.topReady(key);
         }
         function load(id, keep) {
-            if (id === "provider" || id === "back") {          // switch the chip row between genres and the provider's categories
-                providerMode = id === "provider";
-                buildChips(); paintChips();                // on All, or on New: never on Sort or "‹ Genres"
-                id = chips[chipIndex].id;
-            }
             keep = keep && id === catId && grid.items.length;
-            if (id === "sort") return;
+            if (id === "sort" || id === "genres") return;
             catId = id;
             TV.setPref(key + "Cat", id);
             var items = sorted(D.itemsIn(key, id));
@@ -162,7 +191,8 @@
                 return;
             }
             buildChips();
-            load(chips[chipIndex] ? chips[chipIndex].id : "recent", keep);
+            var want = TV.pref(key + "Cat") || "recent";
+            load(want !== "sort" && want !== "genres" && exists(want) ? want : "recent", keep);
         }
 
         var view = {
@@ -189,7 +219,7 @@
                     }
                     if (code === K.DOWN) {
                         var c = chips[chipIndex];
-                        if (c && c.id !== "sort" && c.id !== catId) load(c.id);
+                        if (c && c.id !== "sort" && c.id !== "genres" && c.id !== catId) load(c.id);     // Genres: down to the one you are on
                         if (grid.items.length) { zone = "grid"; TV.sound.tick(); paintChips(); grid.setActive(true); } else TV.sound.edge();
                         return true;
                     }
@@ -206,15 +236,16 @@
             },
             ok: function () {
                 if (zone === "chips" && chips[chipIndex] && chips[chipIndex].id === "sort") { clearTimeout(loadTimer); chooseSort(); return; }
+                if (zone === "chips" && chips[chipIndex] && chips[chipIndex].id === "genres") { clearTimeout(loadTimer); openGenres(); return; }
                 if (zone === "chips") { clearTimeout(loadTimer); load(chips[chipIndex].id); if (grid.items.length) { zone = "grid"; grid.setActive(true); paintChips(); } return; }
                 var it = grid.current();
                 if (it) TV.detail.open(it);
             },
-            canHold: function () { return zone === "grid" ? !!grid.current() : zone === "chips" && !!(chips[chipIndex] && chips[chipIndex].kind); },
+            canHold: function () { return zone === "grid" ? !!grid.current() : zone === "chips" && !!provCat(); },
             longOk: function () {
-                if (zone === "chips") {             // OK held on one of the provider's categories: hide it, or its whole country
-                    TV.categoryMenu(chips[chipIndex], function () {
-                        var i = chipIndex; buildChips(); chipIndex = Math.min(i, chips.length - 1); load(chips[chipIndex].id); zone = "chips"; paintChips();
+                if (zone === "chips") {             // OK held on the list's chip, on one of the provider's categories: hide it, or its whole country
+                    TV.categoryMenu(provCat(), function () {
+                        buildChips(); load(exists(catId) ? catId : "recent"); zone = "chips"; paintChips();
                     });
                     return;
                 }

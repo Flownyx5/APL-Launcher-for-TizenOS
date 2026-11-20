@@ -24,6 +24,21 @@
         return TV.fetchJSON(u, { timeout: 15000, noProxy: true });
     }
     function img(p, size) { return p ? IMG + (size || "w780") + p : ""; }
+    /* TMDB's search, in your language: movies and series (t: title, o: original title, y: year), the best known first */
+    function searchTitles(q) {
+        if (!KEY || !q) return Promise.resolve([]);
+        return tmdb("/search/multi", "language=" + TV.locale + "&include_adult=false&query=" + encodeURIComponent(q)).then(function (j) {
+            return ((j && j.results) || []).filter(function (r) { return r.media_type === "movie" || r.media_type === "tv"; }).slice(0, 30).map(function (r) {
+                return { id: r.id, t: r.title || r.name || "", o: r.original_title || r.original_name || "", y: parseInt(String(r.release_date || r.first_air_date || "").slice(0, 4), 10) || 0,
+                         kind: r.media_type === "tv" ? "series" : "movies" };
+            });
+        }, function () { return []; });
+    }
+    /* A title's IMDb id alone (a small request: Stremio's addons want it, js/stremio.js keeps it) */
+    function imdbIdOf(kind, id) {
+        if (!KEY || !id) return Promise.resolve("");
+        return tmdb("/" + (kind === "series" || kind === "tv" ? "tv" : "movie") + "/" + id + "/external_ids").then(function (j) { return (j && j.imdb_id) || ""; }, function () { return ""; });
+    }
 
     function cacheKey(item) {
         var t = S.title(item.name || item.title);
@@ -274,7 +289,13 @@
        The genres' names in your language, and for each genre its most popular titles (with enough votes to
        be real), 160 of them; data.js finds them in your catalog. Kept 7 days. */
     /* Smart categories TMDB has no genre for: anime (Japanese animation), K-drama, horror series (a keyword),
-       studios (Ghibli, Pixar…), the platforms a series comes from (Netflix, HBO…), languages (Bollywood…) */
+       studios (Ghibli, Pixar…), the platforms (Netflix, Apple TV…), languages (Bollywood…), the classics and the decades.
+       A series' platform is the one that made it (its network). A movie's is the service that has it in your
+       country now (wp: its TMDB "watch provider" ids, watchRegion() below): Netflix's own movies alone were too
+       few to fill a row. A platform your country doesn't have stays out of the movies' list.
+       sort: the classics and the decades by number of votes, the films everybody knows first.
+       Classic Movies is every movie of your catalog from 1975 or before (data.js): this list only puts the
+       best-known ones first. */
     var SPECIAL = {
         anime: { name: "Anime", q: { movie: "with_genres=16&with_original_language=ja", tv: "with_genres=16&with_original_language=ja" } },
         kdrama: { name: "K-drama", q: { tv: "with_original_language=ko&with_genres=18" } },
@@ -290,28 +311,60 @@
         disney: { name: "Disney", q: { movie: "with_companies=2" } },
         marvel: { name: "Marvel", q: { movie: "with_companies=420" } },
         dreamworks: { name: "DreamWorks", q: { movie: "with_companies=521" } },
-        netflix: { name: "Netflix", q: { tv: "with_networks=213" } },
-        hbo: { name: "HBO", q: { tv: "with_networks=49" } },
-        appletv: { name: "Apple TV+", q: { tv: "with_networks=2552" } },
-        disneyplus: { name: "Disney+", q: { tv: "with_networks=2739" } },
-        prime: { name: "Prime Video", q: { tv: "with_networks=1024" } },
-        canal: { name: "Canal+", q: { tv: "with_networks=285" } }
+        a24: { name: "A24", q: { movie: "with_companies=41077" } },
+        netflix: { name: "Netflix", q: { tv: "with_networks=213" }, wp: "8" },
+        hbo: { name: "HBO Max", q: { tv: "with_networks=49|3186" }, wp: "1899" },
+        appletv: { name: "Apple TV", q: { tv: "with_networks=2552" }, wp: "350" },
+        disneyplus: { name: "Disney+", q: { tv: "with_networks=2739" }, wp: "337" },
+        prime: { name: "Prime Video", q: { tv: "with_networks=1024" }, wp: "9|119" },
+        paramount: { name: "Paramount+", q: { tv: "with_networks=4330" }, wp: "531|2303|2616" },
+        canal: { name: "Canal+", q: { tv: "with_networks=285" }, wp: "381|2101" },
+        classic: { name: "Classic Movies", q: { movie: "primary_release_date.lte=1975-12-31" }, sort: "vote_count.desc" },
+        y70: { name: "The 70s", q: { movie: "primary_release_date.gte=1970-01-01&primary_release_date.lte=1979-12-31" }, sort: "vote_count.desc" },
+        y80: { name: "The 80s", q: { movie: "primary_release_date.gte=1980-01-01&primary_release_date.lte=1989-12-31" }, sort: "vote_count.desc" },
+        y90: { name: "The 90s", q: { movie: "primary_release_date.gte=1990-01-01&primary_release_date.lte=1999-12-31" }, sort: "vote_count.desc" },
+        classictv: { name: "Classic Series", q: { tv: "first_air_date.lte=1999-12-31&without_genres=10763|10764|10767" }, sort: "vote_count.desc" }    // no news, reality or talk shows
     };
     var GENRES = {
-        movie: [28, 35, 18, 27, "x:anime", 53, 878, 16, 12, 80, 10751, 14, 10749, 9648, "x:hero", "x:truestory", "x:kmovie", "x:bolly", 99, 10752, 36, 37, 10402,
-                "x:xmas", "x:ghibli", "x:pixar", "x:disney", "x:marvel", "x:dreamworks"],
-        tv: [18, 35, "x:anime", "x:kdrama", "x:horror", 80, 10759, 10765, 9648, "x:netflix", "x:hbo", "x:appletv", "x:disneyplus", "x:prime", "x:canal",
-             16, 10751, 10762, 99, 10764, "x:turkish", "x:xmas", "x:hero", 10768, 37, 10766]
+        movie: [28, 35, 18, 27, "x:anime", 53, 878, 16, 12, 80, 10751, 14, 10749, 9648, "x:netflix", "x:appletv", "x:prime", "x:disneyplus", "x:hbo", "x:paramount", "x:canal",
+                "x:classic", "x:y70", "x:y80", "x:y90", "x:hero", "x:truestory", "x:kmovie", "x:bolly", 99, 10752, 36, 37, 10402,
+                "x:xmas", "x:ghibli", "x:pixar", "x:disney", "x:marvel", "x:dreamworks", "x:a24"],
+        tv: [18, 35, "x:anime", "x:kdrama", "x:horror", 80, 10759, 10765, 9648, "x:netflix", "x:hbo", "x:appletv", "x:disneyplus", "x:prime", "x:paramount", "x:canal",
+             "x:classictv", 16, 10751, 10762, 99, 10764, "x:turkish", "x:xmas", "x:hero", 10768, 37, 10766]
     };
+    function special(id) { return String(id).indexOf("x:") === 0 && SPECIAL[String(id).slice(2)] || null; }
+    /* The country for "what's on Netflix": the one chosen in Settings for the age ratings, or the screen's.
+       Any country here, not only the twelve with age rules (Poland too). */
+    function watchRegion() {
+        var p = TV.pref("ageRegion");
+        if (p && p !== "auto") return p;
+        var nl = String(global.navigator && (global.navigator.language || global.navigator.userLanguage) || ""), m = nl.match(/[-_]([A-Za-z]{2})$/);
+        if (m && nl.slice(0, 2).toLowerCase() === TV.lang) return m[1].toUpperCase();
+        return { fr: "FR", pl: "PL", de: "DE", es: "ES", it: "IT", nl: "NL", pt: "PT" }[TV.lang] || "US";
+    }
+    function filterOf(kind, id) {
+        var sp = special(id);
+        if (!sp) return "with_genres=" + id;
+        if (kind === "movie" && sp.wp) return "with_watch_providers=" + sp.wp + "&watch_region=" + watchRegion() + "&with_watch_monetization_types=flatrate";
+        return sp.q && sp.q[kind] || "";
+    }
     function genres(kind) {
         if (!KEY) return Promise.resolve([]);
-        var key = "genres2:" + kind + ":" + TV.lang;
+        var cc = watchRegion(), key = "genres3:" + kind + ":" + TV.lang + (kind === "movie" ? ":" + cc : "");
         return TV.idb.get(key).then(function (saved) {
             if (saved && Date.now() - saved.at < MAX_AGE) return saved.list;
-            return tmdb("/genre/" + kind + "/list", "language=" + TV.locale).then(function (j) {
-                var names = {};
+            // the movies' platforms: only the services sold in your country (if TMDB can't say, all of them)
+            var services = kind === "movie" ? tmdb("/watch/providers/movie", "watch_region=" + cc).then(null, function () { return null; }) : null;
+            return Promise.all([tmdb("/genre/" + kind + "/list", "language=" + TV.locale), services]).then(function (r) {
+                var j = r[0], names = {}, here = null;
+                if (r[1] && r[1].results) { here = {}; r[1].results.forEach(function (s) { here[s.provider_id] = 1; }); }
                 (j.genres || []).forEach(function (g) { names[g.id] = g.name; });
-                GENRES[kind].forEach(function (id) { var sp = String(id).indexOf("x:") === 0 && SPECIAL[id.slice(2)]; if (sp) names[id] = TV.t(sp.name); });
+                GENRES[kind].forEach(function (id) {
+                    var sp = special(id);
+                    if (!sp || !filterOf(kind, id)) return;
+                    if (kind === "movie" && sp.wp && here && !sp.wp.split("|").some(function (w) { return here[w]; })) return;
+                    names[id] = TV.t(sp.name);
+                });
                 var list = GENRES[kind].filter(function (id) { return names[id]; }).map(function (id) { return { id: id, name: names[id] }; });
                 if (list.length) TV.idb.set(key, { at: Date.now(), list: list });
                 return list;
@@ -320,14 +373,15 @@
     }
     function genreTitles(kind, id) {
         if (!KEY) return Promise.resolve([]);
-        var key = "genre:" + kind + ":" + id + ":" + TV.lang;
+        var sp = special(id), filter = filterOf(kind, id);
+        var key = "genre:" + kind + ":" + id + ":" + TV.lang + (filter.indexOf("watch_region=") >= 0 ? ":" + watchRegion() : "");
         return TV.idb.get(key).then(function (saved) {
             if (saved && Date.now() - saved.at < 7 * 86400 * 1000) return saved.list;
             var pages = []; for (var p = 1; p <= 8; p++) pages.push(p);
             return Promise.all(pages.map(function (p) {
-                var sp = String(id).indexOf("x:") === 0 && SPECIAL[id.slice(2)], filter = sp ? sp.q[kind] : "with_genres=" + id;
                 if (!filter) return Promise.resolve([]);
-                return tmdb("/discover/" + kind, "language=" + TV.locale + "&" + filter + "&sort_by=popularity.desc&vote_count.gte=" + (kind === "movie" ? (sp ? 80 : 150) : (sp ? 30 : 60)) + "&include_adult=false&page=" + p)
+                return tmdb("/discover/" + kind, "language=" + TV.locale + "&" + filter + "&sort_by=" + (sp && sp.sort || "popularity.desc") +
+                            "&vote_count.gte=" + (kind === "movie" ? (sp ? 80 : 150) : (sp ? 30 : 60)) + "&include_adult=false&page=" + p)
                     .then(function (j) { return j && j.results || []; }, function () { return []; });
             })).then(function (all) {
                 var list = [], seen = {};
@@ -563,9 +617,10 @@
         if (named[up] !== undefined) return cc === "CA" && up === "R" ? 18 : named[up];
         return isNaN(n) ? -1 : n;
     }
-    /* The big banner of Home and the screen saver show only titles without an adult rating (PG-13 at most in
-       the US, under 18 in the UK and Germany): an "all audiences" film can still have a racy backdrop
-       (Charlie Wilson's War: all audiences in France, R in the US). Rows and search keep everything. */
+    /* The big banner of Home shows only titles without an adult rating (PG-13 at most in the US, under 18 in
+       the UK and Germany): an "all audiences" film can still have a racy backdrop (Charlie Wilson's War: all
+       audiences in France, R in the US). Rows and search keep everything. On LG, and in the screen saver
+       everywhere: all audiences only (allAges, below). */
     var bannerMemo = {};
     function bannerSafe(item) {
         if (!item) return Promise.resolve(false);
@@ -579,6 +634,26 @@
             });
         }).then(function (ok) { bannerMemo[item.id] = ok; return ok; }, function () { return true; });
     }
+    /* All audiences only: the screen saver everywhere, and on LG the big banner of Home (the titles it
+       recommends). Every rating known for the title, in the screen's country and in the big ones (US, UK,
+       Germany, France), is for all ages: Tous publics, U, G, PG, FSK 0 or 6. Not -10, -12, PG-13, 12A, FSK 12
+       and above. A title with no known rating stays out. */
+    var allMemo = {};
+    function allAges(item) {
+        if (!item) return Promise.resolve(false);
+        if (allMemo[item.id] !== undefined) return Promise.resolve(allMemo[item.id]);
+        return lookup(item).then(function (m) {
+            if (!m || !m.tmdbId) return false;
+            return certs(item.kind === "series" ? "tv" : "movie", m.tmdbId).then(function (c) {
+                var worst = -1;
+                ["US", "GB", "DE", "FR", ageCountry()].forEach(function (cc) {
+                    if (c && rated(c[cc])) worst = Math.max(worst, minAge(cc, c[cc]));
+                });
+                return worst >= 0 && worst < 10;
+            });
+        }).then(function (ok) { allMemo[item.id] = ok; return ok; }, function () { return false; });
+    }
+    if (TV.WEBOS) { bannerSafe = allAges; bannerMemo = allMemo; }
     function bannerKnown(item) { return item ? bannerMemo[item.id] : undefined; }
     function inScale(cc, n, kind) {
         if (cc === "FR") return n < 10 ? "TP" : n < 12 ? "10" : n < 16 ? "12" : n < 18 ? "16" : "18";
@@ -609,8 +684,8 @@
     }
     function esc0(s) { return String(s).replace(/[&<>"]/g, function (ch) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]; }); }
 
-    /* "7.8" with a decimal comma in French */
-    function fmt(n) { return n ? n.toFixed(1).replace(".", TV.lang === "fr" ? "," : ".") : ""; }
+    /* "7.8" with a decimal comma in French and Polish */
+    function fmt(n) { return n ? n.toFixed(1).replace(".", TV.lang === "fr" || TV.lang === "es" || TV.lang === "pl" || TV.lang === "it" ? "," : ".") : ""; }
     function known(item) { return memo[cacheKey(item)] || null; }      // what is already known, without asking TMDB
     function imdbBadge(n) { return n ? '<span class="imdb"><b>IMDb</b><span>' + fmt(n) + "</span></span>" : ""; }
 
@@ -621,5 +696,5 @@
     function testKey(k) {
         return TV.fetchJSON(API + "/configuration?api_key=" + encodeURIComponent(String(k || "").trim()), { timeout: 12000, noProxy: true }).then(function (j) { return !!(j && j.images); }, function () { return false; });
     }
-    TV.meta = { setKey: setKey, testKey: testKey, keySource: function () { return global.TV_KEYS && global.TV_KEYS.tmdb ? "setup" : (TV.load("tmdbKey", "") ? "settings" : ""); }, certs: certs, certBadge: certBadge, ageCountries: COUNTRIES, ageCountry: ageCountry, themeWords: themeWords, themes: themes, themeMatch: themeMatch, themeTitles: themeTitles, bannerSafe: bannerSafe, bannerKnown: bannerKnown, similar: similar, byPerson: byPerson, collection: collection, genres: genres, genreTitles: genreTitles, topRated: topRated, trending: trending, person: person, lookup: lookup, want: want, clearQueue: clearQueue, season: season, img: img, fmt: fmt, imdbBadge: imdbBadge, known: known, enabled: function () { return !!KEY; } };
+    TV.meta = { setKey: setKey, testKey: testKey, keySource: function () { return global.TV_KEYS && global.TV_KEYS.tmdb ? "setup" : (TV.load("tmdbKey", "") ? "settings" : ""); }, certs: certs, certBadge: certBadge, ageCountries: COUNTRIES, ageCountry: ageCountry, themeWords: themeWords, themes: themes, themeMatch: themeMatch, themeTitles: themeTitles, bannerSafe: bannerSafe, bannerKnown: bannerKnown, allAges: allAges, similar: similar, byPerson: byPerson, collection: collection, genres: genres, genreTitles: genreTitles, topRated: topRated, trending: trending, person: person, lookup: lookup, imdbIdOf: imdbIdOf, searchTitles: searchTitles, want: want, clearQueue: clearQueue, season: season, img: img, fmt: fmt, imdbBadge: imdbBadge, known: known, enabled: function () { return !!KEY; } };
 })(window);

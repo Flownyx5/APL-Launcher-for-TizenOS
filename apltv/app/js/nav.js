@@ -145,6 +145,8 @@
             holdFire();
         }, LONG_MS);
     }
+    /* The OK that closed the TV's own keyboard is not an OK for the page behind it */
+    TV.swallowEnter = function () { swallowEnter = Date.now(); };
     function holdFire() {
         var h = hold; if (!h) return;
         clearTimeout(h.t); if (h.release) clearTimeout(h.release);

@@ -251,6 +251,10 @@
         return this._cw || 230;
     };
     Strip.prototype.wake = function () { if (this.awake) return; this.awake = true; this.lazy(); };
+    Strip.prototype.step = function () {
+        if (!this._step && this.cards.length > 1 && this.cards[1].offsetLeft > this.cards[0].offsetLeft) this._step = this.cards[1].offsetLeft - this.cards[0].offsetLeft;
+        return this._step || (this.cardW() + this.gap);
+    };
     Strip.prototype.lazy = function () {
         if (!this.awake) return;
         var w = this.cardW() + this.gap, first = Math.floor(this.scroll / w) - 1, last = first + Math.ceil(this.width / w) + 3;
@@ -264,9 +268,10 @@
         if (i >= this.cards.length - 4) this.grow(i + 9);
         i = TV.clamp(i, 0, this.cards.length - 1);
         var c = this.cards[i];
-        /* Where the card really is, read before anything changes. Computed from the gap before, which TVs
-           without flex gap (Tizen 6.0) do not apply: there, going left, the card ended up off the screen. */
-        var real = c.offsetWidth > 0, w = (real ? c.offsetWidth : this.cardW()) + this.gap, x = real ? c.offsetLeft : i * w, right = this.width - this.left - 140;
+        /* Where the card is: the step from one card to the next measured once per row (on TVs without flex gap,
+           Tizen 6.0, it is not width + gap), then counted. Reading the card's place at every press made the
+           screen lay out the whole page again first: 50 to 140 ms on the M8 at each ▲ ▼ in Sports. */
+        var w = this.step(), x = i * w, right = this.width - this.left - 140;
         if (this.cards[this.index]) this.cards[this.index].classList.remove("is-focused");
         this.index = i;
         TV.lift(c);
@@ -307,7 +312,7 @@
     }
     Grid.prototype.set = function (items, index) {
         this.items = items || []; this.index = TV.clamp(index || 0, 0, Math.max(0, this.items.length - 1));
-        this.scroll = 0; this.inner.innerHTML = ""; this.cards = {};
+        this.scroll = 0; this.inner.innerHTML = ""; this.cards = {}; this.marked = -1;     // as VList and HList do (#4)
         this.inner.style.height = Math.ceil(this.items.length / this.cols) * this.ch + "px";
         this.draw();
     };
@@ -458,7 +463,7 @@
             var sub = el("div", "card__sub", item.year ? String(item.year) : "");
             c.appendChild(sub);
             var r = TV.data.resumeOf(item.id);
-            if (r && r.done && item.kind === "movie") art.appendChild(el("div", "card__seen", TV.icon("check", 22)));
+            if (item.kind === "movie" && TV.data.watched(item)) art.appendChild(el("div", "card__seen", TV.icon("check", 22)));
             else if (r && r.dur && item.kind === "movie") { var b = el("div", "card__bar"); b.innerHTML = "<i style='width:" + Math.round(100 * r.pos / r.dur) + "%'></i>"; art.appendChild(b); }
             c._art = function () {
                 // The provider's cover first; if it is missing or broken, TMDB's
@@ -502,7 +507,9 @@
         },
         channel: function (ch) {
             var c = el("div", "card card--channel"), art = el("div", "card__art");
-            var logo = el("div", "card__logo" + (ch.logo ? "" : " card__logo--txt"), ch.logo ? "" : esc(ch.name));
+            // a long name without a logo ("EVENT 01 : ALBANIE VS FINLANDE 20:45") in smaller letters, under the LIVE badge
+            var txt = " card__logo--txt" + (String(ch.name).length > 16 ? " is-long" : "");
+            var logo = el("div", "card__logo" + (ch.logo ? "" : txt), ch.logo ? "" : esc(ch.name));
             art.appendChild(logo);
             var now = el("div", "card__now"), bar = el("div", "card__bar");
             bar.innerHTML = "<i style='width:0'></i>";
@@ -511,7 +518,7 @@
             c.appendChild(art);
             c.appendChild(el("div", "card__cap", esc(ch.name)));
             c._art = function () {
-                if (ch.logo) { var im = new Image(); im.onload = function () { logo.style.backgroundImage = TV.cssUrl(ch.logo); }; im.onerror = function () { logo.className = "card__logo card__logo--txt"; logo.textContent = ch.name; }; im.src = ch.logo; }
+                if (ch.logo) { var im = new Image(); im.onload = function () { logo.style.backgroundImage = TV.cssUrl(ch.logo); }; im.onerror = function () { logo.className = "card__logo" + txt; logo.textContent = ch.name; }; im.src = ch.logo; }
             };
             c._update = function () {
                 var n = TV.epg.now(ch);
@@ -561,7 +568,7 @@
             { label: inl ? T("Remove from My List") : T("Add to My List"), icon: inl ? "check" : "plus", run: function () { var on = D.toggleMyList(it.id); TV.toast(on ? T("Added to My List") : T("Removed from My List")); done(); } }
         ];
         if (it.kind === "movie") {
-            var seen = D.isDone(it.id);
+            var seen = D.watched(it);
             items.push({ label: seen ? T("Mark as Unwatched") : T("Mark as Watched"), icon: "eyeCheck", run: function () { D.markWatched(it, null, !seen); done(); } });
         }
         if (opts.continueRow) items.push({ label: T("Remove from Continue Watching"), icon: "trash", run: function () { D.forget(it); TV.toast(T("Removed from Continue Watching")); done(); } });
@@ -572,6 +579,21 @@
             ] });
         } });
         TV.menu(name, items);
+    };
+    /* OK held on a channel: hide it (out of the lists, the guide, Home and search; favorites and groups keep it), or show it
+       again where it still is (Favorites, a group of yours) */
+    TV.channelHideItem = function (ch, after) {
+        var D = TV.data;
+        function done() { if (after) after(); }
+        if (D.isChanHidden(ch)) return { label: T("Show This Channel Again"), icon: "eyeCheck", run: function () {
+            D.setChanHidden(ch, false); TV.toast(T("“{name}” is back", { name: ch.name })); done();
+        } };
+        return { label: T("Hide This Channel"), icon: "eyeOff", run: function () {
+            TV.alert({ title: T("Hide “{name}”?", { name: ch.name }), message: T("It will no longer appear in your channel lists, the guide, Home or search. Your favorites and groups keep it. You can bring it back in Settings, Hidden Channels."), buttons: [
+                { label: T("Cancel") },
+                { label: T("Hide"), run: function () { D.setChanHidden(ch, true); TV.toast(T("“{name}” is hidden", { name: ch.name })); done(); } }
+            ] });
+        } };
     };
     /* OK held on a category of the playlist (Live TV, Movies, Series): hide it, or everything from its country */
     TV.categoryMenu = function (c, after) {
@@ -585,7 +607,7 @@
             ] });
         } }];
         if (c.grp) {
-            var g = D.offGroups().filter(function (x) { return x.id === c.grp; })[0], country = TV.smart.groupName(c.grp);
+            var g = D.offGroups().filter(function (x) { return x.id === c.grp; })[0], country = D.groupLabel ? D.groupLabel(c.grp) : TV.smart.groupName(c.grp);
             items.push({ label: T("Hide Everything from {name}", { name: country }), icon: "eyeOff", run: function () {
                 TV.alert({ title: T("Hide everything from {name}?", { name: country }), message: T("Its {n} categories will no longer appear anywhere in APL TV, nor the ones it adds later. You can bring them back in Settings, Countries and Categories.", { n: g ? g.cats.length : 1 }), buttons: [
                     { label: T("Cancel") },
@@ -597,17 +619,21 @@
     };
     /* A menu longer than the screen (subtitle languages, versions…) scrolls inside its panel: the title
        stays, the chosen line is always in view, and a half line at the bottom shows there is more. */
-    TV.menu = function (title, items) {
+    TV.menu = function (title, items, o) {
         var root = TV.$("menu"), panel = root.firstChild;
         panel.innerHTML = "";
         if (title) panel.appendChild(el("div", "menu__title", esc(title)));
         var list = el("div", "menu__list");
         panel.appendChild(list);
-        var tiles = items.map(function (it) {
+        // { header: "…" }: a heading between the choices (a playlist's name, Stremio), never focused
+        var tiles = [];
+        items.forEach(function (it) {
+            if (it.header) { list.appendChild(el("div", "menu__head", esc(it.header))); return; }
             var r = el("div", "menu__item" + (it.danger ? " is-danger" : ""), "<span class='menu__label'>" + esc(it.label) + "</span>" + (it.check ? "<span class='menu__check'>" + TV.icon("check", 30) + "</span>" : (it.icon ? TV.icon(it.icon, 30) : "")));
             list.appendChild(r);
-            return r;
+            tiles.push(r);
         });
+        items = items.filter(function (it) { return !it.header; });
         function inView(t) {
             var top = t.offsetTop, h = t.offsetHeight, view = list.clientHeight, s = list.scrollTop, room = 44;
             if (list.scrollHeight <= view + 1) return;
@@ -617,7 +643,7 @@
         var nav = new TV.Nav({
             onFocus: function (i, t) { inView(t); },
             onSelect: function (i) { close(); if (items[i].run) items[i].run(); },
-            onBack: close
+            onBack: function () { close(); if (o && o.onCancel) o.onCancel(); }
         });
         function close() { root.classList.remove("is-open"); TV.popNav(nav); }
         root.classList.add("is-open");
@@ -657,7 +683,9 @@
         var inp = TV.$("ime"), before = o.value || "";
         inp.type = o.secret ? "password" : (o.url ? "url" : "text");
         inp.value = before;
-        var blocker = { key: function () {} };          // nothing else moves while typing
+        /* Nothing else moves while typing, but Back always ends it (#17): a keyboard that opens in full screen
+           (Fire TV's) can take the field's focus before its blur is listened to, and Back then reached nothing. */
+        var blocker = { key: function (code) { if (TV.isBack(code) || code === TV.KEY.CANCEL) finish(code !== TV.KEY.CANCEL && code !== 27); return true; } };
         TV.pushNav(blocker);
         var finished = false;
         function finish(keep) {
@@ -674,8 +702,8 @@
         }
         function onKey(e) {
             var c = e.keyCode;
-            if (c === 13 || c === TV.KEY.DONE) { e.preventDefault(); finish(true); }
-            else if (c === TV.KEY.CANCEL || c === TV.KEY.RETURN || c === 27) { e.preventDefault(); finish(c === TV.KEY.RETURN ? true : false); }
+            if (c === 13 || c === TV.KEY.DONE) { e.preventDefault(); e.stopPropagation(); if (TV.swallowEnter) TV.swallowEnter(); finish(true); }
+            else if (c === TV.KEY.CANCEL || c === TV.KEY.RETURN || c === 27) { e.preventDefault(); e.stopPropagation(); if (TV.swallowEnter) TV.swallowEnter(); finish(c === TV.KEY.RETURN ? true : false); }
         }
         function onInput() { if (o.onInput) o.onInput(inp.value); }
         function onBlur() { setTimeout(function () { finish(true); }, 50); }
@@ -705,7 +733,49 @@
             onCancel: function () { root.classList.remove("is-open"); } });
     };
 
+    /* ---------- the network, next to the clock (asked on Reddit: some screens lose their connection) ----------
+       Wi-Fi, a cable, or a red crossed Wi-Fi when the screen has no network; a message when it goes and when it
+       comes back. Samsung: webapis.network; LG: the connection manager; Android and elsewhere: the browser's own. */
+    var netState = null, netSub = null;
+    function showNet(state) {
+        var s = TV.$("status"), n = TV.$("net");
+        if (!s) return;
+        if (!n) { n = document.createElement("span"); n.id = "net"; s.insertBefore(n, s.firstChild); }
+        if (state === netState) return;
+        var before = netState;
+        netState = state;
+        n.className = "status__net" + (state === "off" ? " is-off" : "");
+        n.innerHTML = TV.icon(state === "lan" ? "lan" : state === "off" ? "wifiOff" : "wifi", 28);
+        TV.log("network: " + state);
+        if (before && state === "off") TV.toast(T("No network connection"), true);
+        else if (before === "off") TV.toast(T("Connected again"));
+    }
+    function readNet() {
+        if (TV.WEBOS) return;                                  // LG tells it below
+        var w = global.webapis && global.webapis.network;
+        if (w && w.getActiveConnectionType) {
+            try {
+                var type = w.getActiveConnectionType(), gw = true;   // 0 none, 1 Wi-Fi, 2 cellular, 3 cable
+                try { gw = w.isConnectedToGateway(); } catch (e) {}
+                showNet(!type || !gw ? "off" : type === 3 ? "lan" : "wifi");
+                return;
+            } catch (e) {}
+        }
+        var c = global.navigator.connection;
+        if (global.navigator.onLine === false || (c && c.type === "none")) showNet("off");
+        else showNet(c && c.type === "ethernet" ? "lan" : "wifi");
+    }
+    if (TV.WEBOS && TV.luna) netSub = TV.luna("luna://com.palm.connectionmanager/getStatus", { subscribe: true }, function (m) {
+        if (!m || m.returnValue === false || (!m.wired && !m.wifi)) { if (!netState) showNet("wifi"); return; }
+        var wired = m.wired && m.wired.state === "connected", wifi = m.wifi && m.wifi.state === "connected";
+        showNet(wired ? "lan" : wifi || m.isInternetConnectionAvailable === true ? "wifi" : "off");
+    });
+    global.addEventListener("online", readNet);
+    global.addEventListener("offline", readNet);
+
     /* ---------- clock ---------- */
-    function tick() { var c = TV.$("clock"); if (c) c.textContent = TV.hhmm(new Date()); }
+    /* Written only when the minute changes: written again every 10 s, the same time made the whole bar at the top
+       be painted again (40 ms of an LG G5's graphics chip each time) */
+    function tick() { var c = TV.$("clock"), t = TV.hhmm(new Date()); if (c && c.textContent !== t) c.textContent = t; readNet(); }
     tick(); setInterval(tick, 10000);
 })(window);

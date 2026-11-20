@@ -96,6 +96,9 @@ body.is-preview { cursor: default; }
 .tab.is-focused { background: var(--focus-bg); color: var(--focus-fg); transform: scale(1.08); box-shadow: 0 12px 30px rgba(0,0,0,0.35); z-index: 1; }
 .status { position: absolute; top: 50px; right: 42px; height: 60px; padding: 0 24px; border-radius: 30px; display: flex; align-items: center; }
 .status__clock { font-size: 26px; font-weight: 500; }
+.is-webos .status { will-change: transform; }                       /* LG: the minute changing paints only the clock, not the bar */
+.status__net { display: flex; align-items: center; margin-right: 14px; opacity: .85; }
+.status__net.is-off { color: #ff453a; opacity: 1; }
 
 /* ===================== VIEWS ===================== */
 .views { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 5; }
@@ -154,6 +157,11 @@ body.is-preview { cursor: default; }
 
 .rows { padding-bottom: 300px; }
 .row { position: relative; margin-bottom: 26px; }
+/* LG: the Home Screen's 26 rows are one tall layer that slides; each ▲ ▼ to a new part of it made the TV paint again
+   every row near it (46 to 72 ms on an LG G5, the move missed several frames). Only the rows near the screen are
+   painted now (3 to 20 ms a move). The 40 px below each row keep the focused card's growth and shadow, which the row
+   would otherwise cut, the rows staying where they were. */
+.is-webos #v-home .row { content-visibility: auto; contain-intrinsic-size: auto 494px; padding-bottom: 40px; margin-bottom: -14px; }
 .row__title { padding-left: 96px; height: 54px; font-size: 31px; font-weight: 700; letter-spacing: -0.2px; display: flex; align-items: center; gap: 14px; }
 .row__title small { font-size: 23px; font-weight: 500; color: var(--faint); }
 .row__clip { position: relative; height: var(--row-h, 300px); overflow: visible; }
@@ -192,6 +200,7 @@ body.is-preview { cursor: default; }
 .card--channel .card__art { width: 330px; height: 186px; background: radial-gradient(80% 90% at 50% 30%, #3a3f4d 0%, #181b23 100%); }
 .card__logo { position: absolute; left: 40px; right: 40px; top: 50px; bottom: 56px; background: center / contain no-repeat; }
 .card__logo--txt { display: flex; align-items: center; justify-content: center; font-size: 34px; font-weight: 700; text-align: center; line-height: 1.05; background: none; }
+.card__logo--txt.is-long { top: 44px; bottom: 50px; font-size: 23px; line-height: 1.15; overflow: hidden; }
 .card__now { position: absolute; left: 18px; right: 18px; bottom: 24px; font-size: 19px; font-weight: 600; color: rgba(255,255,255,0.82); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
 .card--channel .card__bar { bottom: 12px; height: 5px; left: 40px; right: 40px; }
 .card__live { position: absolute; top: 12px; left: 12px; }
@@ -275,6 +284,11 @@ body.is-preview { cursor: default; }
 .gcell__h { font-size: 18px; color: var(--faint); white-space: nowrap; overflow: hidden; }
 .gcell.is-now { background: rgba(255,255,255,0.15); }
 .gcell.is-past { opacity: 0.55; }
+/* a past programme the provider keeps (its replay): brighter, a small replay mark before its hours */
+.gcell.has-replay { opacity: 0.8; }
+.gcell.has-replay .gcell__h::before { content: ""; display: inline-block; width: 17px; height: 17px; margin-right: 7px; vertical-align: -2px; background: no-repeat center / contain
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a1a1a6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5'/%3E%3C/svg%3E"); }
+.gcell.has-replay.is-focused .gcell__h::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236e6e73' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5'/%3E%3C/svg%3E"); }
 .gcell.is-empty { background: rgba(255,255,255,0.04); }
 .gcell.is-empty .gcell__t { color: var(--faint); font-weight: 500; }
 .gcell.is-focused { background: var(--focus-bg); color: var(--focus-fg); opacity: 1; box-shadow: 0 10px 24px rgba(0,0,0,0.35); z-index: 2; }
@@ -448,6 +462,10 @@ body.is-preview { cursor: default; }
 .step { display: flex; gap: 26px; margin-bottom: 44px; font-size: 30px; line-height: 1.35; color: rgba(255,255,255,0.88); }
 .step b { flex: none; width: 56px; height: 56px; border-radius: 28px; background: rgba(255,255,255,0.14); display: flex; align-items: center; justify-content: center; font-size: 26px; }
 .steps .btn { margin-top: 20px; }
+/* A guide without a QR code (Stremio in APL TV): the steps across the screen, the buttons in a row */
+.steps--wide { left: 240px; top: 190px; width: 1440px; }
+.steps--wide .step { margin-bottom: 30px; font-size: 28px; }
+.steps__btns { display: flex; gap: 24px; }
 
 /* On-screen keyboard (search) */
 .search__field { position: absolute; left: 96px; top: 150px; width: 1728px; height: 90px; border-radius: 45px; padding: 0 40px; display: flex; align-items: center; gap: 20px; font-size: 38px; font-weight: 600;
@@ -460,6 +478,17 @@ body.is-preview { cursor: default; }
 .kb__key { flex: none; width: 98px; margin: 0 25px 12px 0; height: 70px; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 29px; font-weight: 600; background: rgba(255,255,255,0.09);
     transition: transform 200ms var(--spring), background 120ms ease, color 120ms ease; }
 .kb__key--wide { width: 221px; font-size: 23px; }
+/* four rows like a computer's keyboard (or the alphabet), the actions in a column on the right */
+.kb { top: 262px; flex-direction: column; }
+.kb__row { display: flex; width: 1722px; }
+.kb .kb__key { width: 116px; margin: 0 18px 12px 0; }
+.kb__row:nth-child(2) { padding-left: 34px; }
+.kb__row:nth-child(3) { padding-left: 68px; }
+.kb .kb__key--alt { width: 150px; font-size: 22px; }
+.kb .kb__key--act { width: 300px; margin-left: auto; margin-right: 0; font-size: 23px; }
+.kb__key--tv { gap: 12px; }
+.qr__pin--big { font-size: 64px; font-weight: 700; letter-spacing: 10px; }
+.kb__key--tv svg { flex: none; }
 .kb__key.is-focused { background: var(--focus-bg); color: var(--focus-fg); transform: scale(1.12); box-shadow: 0 10px 24px rgba(0,0,0,0.4); z-index: 2; }
 .search__results { position: absolute; left: 0; right: 0; top: 540px; bottom: 0; overflow: hidden; }
 .search__results .rows { padding-bottom: 0; }
@@ -472,6 +501,8 @@ body.is-preview { cursor: default; }
     background: var(--glass), rgba(40, 42, 50, 0.97); transition: opacity 180ms ease, transform 320ms var(--spring); }
 .menu.is-open .menu__panel { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 .menu__title { padding: 16px 28px 14px; font-size: 24px; font-weight: 600; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* a heading between a menu's choices (Versions: the playlist's name, then Stremio) */
+.menu__head { padding: 20px 30px 8px; font-size: 21px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .menu__item { display: flex; align-items: center; justify-content: space-between; gap: 40px; height: 80px; padding: 0 28px 0 30px; border-radius: 20px; font-size: 30px; font-weight: 600;
     transition: background 150ms ease, color 150ms ease, transform 220ms var(--spring); }
 .menu__item.is-focused { background: #fff; color: #1d1d1f; transform: scale(1.03); }
@@ -492,6 +523,8 @@ body.is-preview { cursor: default; }
 .alert__msg { margin: 0 0 46px; font-size: 29px; line-height: 1.38; color: rgba(255, 255, 255, 0.66); white-space: pre-line; }
 .alert__buttons { display: flex; flex-direction: column; align-items: center; gap: 18px; }
 .alert__btn { width: 620px; height: 86px; line-height: 86px; border-radius: 20px; background: rgba(255, 255, 255, 0.14); font-size: 31px; font-weight: 600; transition: background 160ms ease, color 160ms ease, transform 240ms var(--spring); }
+/* js/crash.js: the report, as it will be sent */
+.alert__report { margin: 0 0 36px; padding: 18px 24px; max-height: 470px; overflow: hidden; text-align: left; white-space: pre; font: 19px/1.4 "SF Mono", Menlo, Consolas, monospace; color: rgba(255, 255, 255, 0.78); background: rgba(0, 0, 0, 0.32); border-radius: 18px; }
 .alert__btn.is-danger { color: #ff453a; }
 .alert__btn.is-focused { background: #fff; color: #1d1d1f; transform: scale(1.06); }
 .alert__btn.is-focused.is-danger { color: #ff3b30; }
@@ -558,3 +591,417 @@ body.is-preview { cursor: default; }
 .setup__txt b { display: block; font-size: 30px; font-weight: 600; }
 .setup__txt small { display: block; margin-top: 6px; font-size: 22px; opacity: 0.7; }
 .setup__row em { font-style: normal; font-size: 28px; font-weight: 600; opacity: 0.85; }
+
+/* ===================== SPORTS (js/sports.js): Apple Sports style ===================== */
+.sports { position: absolute; left: 0; right: 0; top: 0; padding-top: 150px; transition: transform 380ms var(--ease); }
+.sports, .match { --live: #ff5066; }                                  /* Apple's LIVE: a pink red */
+/* Sports on a plain near-black ground: the app's gradient background is a full-screen layer of its own (with its
+   fades over it), and composing it again with the page made the M8 miss 8 to 10 frames each time the banner was
+   left or reached */
+.in-sports .bg { visibility: hidden; }
+#v-sports { background: #08090e; }
+.sports__bar { position: relative; z-index: 2; display: flex; align-items: center; gap: 14px; height: 92px; padding: 0 80px; transition: opacity 260ms ease; }
+/* the rows above the one you are on go under a dark fade at the top of the screen, as on Apple TV (hiding them made
+   the M8 paint them again at each ▲, half a second); the tiles without a blurred shadow until focused (painting 120
+   of them cost as much) */
+.sports .row { margin-bottom: 34px; }
+#v-sports::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 96px; z-index: 3; pointer-events: none; opacity: 0;
+    background: linear-gradient(180deg, #07080d 0%, rgba(7,8,13,0.92) 55%, rgba(7,8,13,0) 100%); transition: opacity 300ms ease; }
+.in-rows #v-sports::after { opacity: 1; }
+.sports .card__art { box-shadow: none; }
+/* the page and its rows keep a layer of their own: given one only while they slid, they lost it at the end of each
+   slide and the whole page (120 tiles) was painted again, 400 to 700 ms on the M8 after every press */
+.sports, .sports .row__strip { will-change: transform; }
+/* the tile you are on keeps a layer of its own while it grows (painted once, not again at each step of the zoom) */
+.sports .card.is-lift { will-change: transform; }
+.sports .row__title { padding-left: 80px; height: 60px; font-size: 38px; letter-spacing: -0.4px; }
+.sports .row__title small { font-size: 25px; color: rgba(255,255,255,0.64); }
+.sports.is-down .sports__bar { opacity: 0; }
+.sports__gap { margin-left: 34px; }
+/* the chips stay readable over a light photo (a stadium in daylight): their glass a little darker here, and the day
+   or sport you are on a solid grey instead of white at 22 % (it went almost white over a bright sky) */
+.sports__bar .chip { background: var(--glass), rgba(30, 32, 41, 0.8); }
+.sports__bar .chip.is-current { background: var(--glass), rgba(86, 89, 100, 0.9); color: #fff; }
+.sports__bar .chip.is-focused { background: var(--focus-bg); color: var(--focus-fg); }
+/* LG: each chip of the bar keeps a layer of its own. Lifted only while focused, a chip went back into the layer under
+   it once the remote rested, and that was the banner's text (1920x800): it was painted again after the moves on the
+   chips (120 ms of an LG G5's graphics chip for six presses), now only the two chips are */
+.is-webos .sports__bar .chip { will-change: transform; }
+.sports__rows { padding-top: 22px; }
+.sports__msg { top: 430px; font-size: 32px; font-weight: 500; color: var(--dim); }
+/* A match's page */
+.match { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 25; display: none; overflow: hidden; background: #06070b; }
+.match.is-open { display: block; animation: viewIn 280ms var(--ease); }
+.is-fullscreen .match { opacity: 0 !important; }
+.match__bg { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
+.match__photo, .match__tint { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
+.match__photo { background: center 35% / cover no-repeat; animation: fadeIn 500ms ease; }
+.match__photo::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: linear-gradient(180deg, rgba(6,7,11,0.62) 0%, rgba(6,7,11,0.74) 40%, rgba(6,7,11,0.97) 68%); }
+.match__in { position: absolute; left: 0; top: 0; width: 1920px; padding-top: 86px; text-align: center; transition: transform 380ms var(--ease); will-change: transform; }
+.match__kicker { margin-bottom: 30px; font-size: 26px; font-weight: 600; color: rgba(255,255,255,0.72); }
+.match__board { display: flex; align-items: flex-start; justify-content: center; gap: 60px; }
+.match__side { width: 480px; display: flex; flex-direction: column; align-items: center; }
+.match__side.is-lose { opacity: 0.55; }
+.match__logo { width: 170px; height: 170px; margin-bottom: 18px; background: center / contain no-repeat; }
+.match__team { font-size: 40px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.1; }
+.match__mid { width: 420px; height: 216px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.match__score { display: flex; align-items: center; gap: 28px; font-size: 128px; font-weight: 700; letter-spacing: -3px; line-height: 1; font-variant-numeric: tabular-nums; }
+.match__score span { font-size: 80px; font-weight: 500; color: rgba(255,255,255,0.45); }
+.match__time { font-size: 104px; font-weight: 700; letter-spacing: -2px; line-height: 1; font-variant-numeric: tabular-nums; }
+.match__st { display: flex; align-items: center; gap: 12px; margin-top: 20px; font-size: 28px; font-weight: 600; color: rgba(255,255,255,0.75); }
+.match__st.is-live { color: #fff; }
+.match__st.is-live::before { content: ""; width: 14px; height: 14px; border-radius: 7px; background: var(--live); box-shadow: 0 0 14px var(--live); }
+.match__info { margin-top: 28px; font-size: 22px; color: rgba(255,255,255,0.55); }
+.match__btns { display: flex; justify-content: center; gap: 24px; margin-top: 40px; }
+.match__note { max-width: 1100px; margin: 36px auto 0; font-size: 27px; line-height: 1.4; color: rgba(255,255,255,0.7); }
+.match__where { margin-top: 44px; text-align: left; }
+.match__credit { position: absolute; right: 56px; bottom: 30px; font-size: 18px; color: rgba(255,255,255,0.32); }
+
+/* Your favourites, FotMob style (sports.js setup): four steps of tiles to tick */
+.sfav { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 26; display: none; background: radial-gradient(120% 100% at 15% 0%, #26304a 0%, #121622 50%, #07080d 100%); }
+.sfav.is-open { display: block; animation: viewIn 260ms var(--ease); }
+.sfav__in { position: absolute; left: 96px; right: 96px; top: 56px; bottom: 44px; display: flex; flex-direction: column; }
+.sfav__steps { display: flex; align-items: center; gap: 34px; font-size: 22px; font-weight: 600; color: rgba(255,255,255,0.45); }
+.sfav__step { display: flex; align-items: center; gap: 12px; }
+.sfav__step b { width: 36px; height: 36px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 19px; background: rgba(255,255,255,0.12); }
+.sfav__step.is-on { color: #fff; }
+.sfav__step.is-on b { background: #fff; color: #000; }
+.sfav__step.is-done { color: rgba(255,255,255,0.75); }
+.sfav__step.is-done b { background: var(--blue); color: #fff; }
+.sfav__title { margin-top: 22px; font-size: 56px; font-weight: 700; letter-spacing: -1px; }
+.sfav__text { max-width: 1300px; margin-top: 10px; font-size: 26px; color: var(--dim); }
+.sfav__chips { display: flex; align-items: center; gap: 14px; margin: 22px -40px 0; padding: 10px 40px; overflow: hidden; }
+.sfav__chips > * { flex: none; }
+.sfav__chips:empty { display: none; }
+.sfav__find { display: flex; align-items: center; gap: 10px; }
+.sfav__count { margin-left: auto; font-size: 22px; color: var(--dim); }
+/* the list slides inside its frame (tvOS): title, chips and tiles go up together, nothing is cut at the bottom */
+.sfav__grid { position: relative; flex: 1; min-height: 0; margin: 12px -40px 0; overflow: hidden; }
+.sfav__list { position: relative; padding: 0 40px 80px; transition: transform 420ms var(--ease); will-change: transform; }
+.sfav__tiles { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 22px; padding: 16px 12px 0; }
+.sfav__h { width: 100%; margin-top: 14px; font-size: 30px; font-weight: 700; }
+/* the search: the field, then one line of keys as on tvOS */
+.sfav__field { display: flex; align-items: center; gap: 18px; margin-top: 18px; height: 84px; padding: 0 30px; border-radius: 42px; font-size: 38px; font-weight: 600; background: var(--glass), rgba(255,255,255,0.1); box-shadow: var(--glass-shadow); }
+.sfav__field > span { display: flex; align-items: center; }
+.sfav__ph { color: var(--dim); font-weight: 500; }
+.sfav__field .caret { display: inline-block; width: 3px; height: 42px; background: var(--blue); animation: pulse 1s steps(1) infinite; margin-left: 4px; }
+.sfav__kb { gap: 8px; }
+.sfav__key { min-width: 54px; height: 66px; padding: 0 6px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 600; color: rgba(255,255,255,0.86);
+    background: rgba(255,255,255,0.08); transition: transform 180ms var(--spring), background 120ms ease, color 120ms ease; }
+.sfav__key.is-wide { padding: 0 22px; font-size: 24px; }
+.sfav__key.is-focused { background: #fff; color: #000; transform: scale(1.16); z-index: 2; }
+.sfav__sub { max-height: 26px; overflow: hidden; margin-top: -8px; font-size: 18px; color: var(--dim); }
+.sfav__tile.has-sub { height: 214px; gap: 10px; }
+.sfav__tile.has-sub .sfav__logo { width: 72px; height: 72px; }
+.sfav__tile { position: relative; width: 262px; height: 186px; padding: 16px; border-radius: 22px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center;
+    background: var(--glass), rgba(40,44,58,0.72); box-shadow: var(--glass-shadow); transition: transform 220ms var(--spring), background 150ms ease, color 150ms ease; }
+.sfav__tile.is-small { height: 170px; }
+.sfav__tile.is-text { height: 116px; }
+.sfav__tile.is-on { box-shadow: inset 0 0 0 3px var(--blue), var(--glass-shadow); }
+.sfav__tile.is-focused { background: var(--glass), rgba(255,255,255,0.3); color: #fff; transform: scale(1.08); box-shadow: inset 0 0 0 3px rgba(255,255,255,0.85), 0 16px 34px rgba(0,0,0,0.45); z-index: 2; }
+.sfav__tile.is-focused.is-on { box-shadow: inset 0 0 0 3px var(--blue), 0 16px 34px rgba(0,0,0,0.45); }
+.sfav__logo { flex: none; width: 84px; height: 84px; background: center / contain no-repeat; font-style: normal; }
+.sfav__logo--txt { display: flex; align-items: center; justify-content: center; border-radius: 42px; background-color: rgba(255,255,255,0.12); font-size: 30px; font-weight: 700; }
+.sfav__logo--icon { display: flex; align-items: center; justify-content: center; }
+.sfav__tile.is-focused .sfav__logo--txt { background-color: rgba(255,255,255,0.2); }
+.sfav__name { max-height: 52px; overflow: hidden; font-size: 22px; font-weight: 600; line-height: 1.15; }
+.sfav__tile.is-text .sfav__name { max-height: 64px; font-size: 26px; }
+.sfav__check { position: absolute; top: 12px; right: 12px; width: 36px; height: 36px; border-radius: 18px; display: flex; align-items: center; justify-content: center; background: var(--blue); color: #fff;
+    opacity: 0; transform: scale(0.6); transition: opacity 160ms ease, transform 200ms var(--spring); }
+.sfav__tile.is-on .sfav__check { opacity: 1; transform: scale(1); }
+.sfav__empty { width: 100%; padding-top: 60px; text-align: center; font-size: 28px; color: var(--dim); }
+.sfav__foot { display: flex; justify-content: flex-end; align-items: center; gap: 22px; padding-top: 20px; }
+.sfav__hint { margin-right: auto; font-size: 22px; color: rgba(255,255,255,0.5); }
+/* Sports' video summaries: YouTube's player full screen, a bar with the title and the time that comes and goes */
+.ytp { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 30; display: none; background: #000; }
+/* shown at once, black with its spinner: an opening animation over the video, just when YouTube starts it, cost
+   frames on the M8 */
+.ytp.is-open { display: block; }
+.ytp.is-pre { display: block; visibility: hidden; }
+.ytp__f { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; pointer-events: none; }
+.ytp__load { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; transition: opacity 300ms ease; pointer-events: none; }
+.ytp__load .aspin { width: 72px; height: 72px; }
+.ytp.is-playing .ytp__load { opacity: 0; }
+@keyframes ytSpin { to { transform: rotate(360deg); } }
+.ytp__bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 160px 96px 60px; background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.85));
+    opacity: 0; transform: translateY(30px); transition: opacity 300ms ease, transform 380ms var(--ease); }
+.ytp.is-bar .ytp__bar { opacity: 1; transform: none; }
+.ytp__title { font-size: 40px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ytp__sub { margin-top: 6px; font-size: 24px; color: var(--dim); }
+.ytp__line { display: flex; align-items: center; margin-top: 24px; font-size: 24px; font-variant-numeric: tabular-nums; }
+.ytp__track { flex: 1; height: 8px; margin: 0 22px; border-radius: 4px; background: rgba(255,255,255,0.25); overflow: hidden; }
+.ytp__track i { display: block; height: 100%; width: 0; border-radius: 4px; background: #fff; transition: width 500ms linear; }
+.ytp__hint { margin-top: 16px; font-size: 22px; color: var(--dim); }
+/* Sports' calendar: a month, as in Apple's Calendar (today in red, the day shown ringed, your teams' days starred) */
+.scal { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 26; display: none; background: radial-gradient(120% 100% at 85% 0%, #26304a 0%, #121622 50%, #07080d 100%); }
+.scal.is-open { display: block; animation: viewIn 260ms var(--ease); }
+.scal__in { position: absolute; left: 96px; right: 96px; top: 48px; bottom: 36px; display: flex; flex-direction: column; }
+.scal__top { display: flex; align-items: baseline; justify-content: space-between; }
+.scal__top h1 { font-size: 56px; font-weight: 700; letter-spacing: -1px; }
+.scal__top span { font-size: 22px; color: var(--dim); }
+.scal__grid { flex: 1; min-height: 0; margin-top: 14px; display: grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: 40px; grid-auto-rows: minmax(0, 1fr); grid-gap: 12px; }
+.scal__wd { align-self: end; padding-left: 16px; font-size: 22px; font-weight: 600; color: var(--dim); text-transform: capitalize; }
+.scal__day { will-change: transform; position: relative; border-radius: 20px; padding: 10px 14px; background: rgba(255,255,255,0.07); transition: transform 200ms var(--spring); }
+.scal__day.is-out { opacity: 0.35; }
+.scal__day.is-ours { background: rgba(255,204,0,0.12); }
+.scal__n { display: inline-flex; align-items: center; justify-content: center; min-width: 46px; height: 46px; border-radius: 23px; font-size: 28px; font-weight: 600; }
+.scal__day.is-today .scal__n { background: #ff3b30; color: #fff; }
+.scal__day.is-shown { box-shadow: inset 0 0 0 3px var(--blue); }
+.scal__star { position: absolute; top: 14px; right: 14px; color: #ffcc00; }
+.scal__marks { position: absolute; left: 14px; right: 10px; bottom: 10px; display: flex; align-items: center; }
+.scal__marks i { flex: none; width: 34px; height: 34px; margin-right: 8px; background: center / contain no-repeat; }
+.scal__marks b { flex: none; width: 10px; height: 10px; margin-right: 8px; border-radius: 5px; background: rgba(255,255,255,0.7); }
+.scal__marks em { font-style: normal; font-size: 18px; color: var(--dim); }
+.scal__day.is-focused { background: #fff; color: #000; transform: scale(1.08); z-index: 2; box-shadow: 0 16px 34px rgba(0,0,0,0.45); }
+.scal__day.is-focused.is-shown { box-shadow: inset 0 0 0 3px var(--blue), 0 16px 34px rgba(0,0,0,0.45); }
+.scal__day.is-focused .scal__marks em { color: rgba(0,0,0,0.6); }
+.scal__day.is-focused .scal__marks b { background: rgba(0,0,0,0.6); }
+.scal__info { will-change: transform; flex: none; height: 150px; margin-top: 18px; padding: 18px 28px; border-radius: 24px; background: var(--glass), rgba(255,255,255,0.08); box-shadow: var(--glass-shadow); overflow: hidden; }
+.scal__info h2 { font-size: 30px; font-weight: 700; }
+.scal__info p { display: flex; align-items: center; margin-top: 8px; font-size: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: rgba(255,255,255,0.86); }
+.scal__info p.is-ours svg { flex: none; margin-right: 10px; color: #ffcc00; }
+.scal__info p.is-dim { color: var(--dim); }
+.scal__in.is-next .scal__grid { animation: calNext 340ms var(--ease); }
+.scal__in.is-prev .scal__grid { animation: calPrev 340ms var(--ease); }
+@keyframes calNext { from { opacity: 0; transform: translateY(60px); } to { opacity: 1; transform: none; } }
+@keyframes calPrev { from { opacity: 0; transform: translateY(-60px); } to { opacity: 1; transform: none; } }
+.scal__info h2, .scal__info p { animation: tabIn 260ms var(--ease); }
+
+/* Game tiles, Apple TV's (16:9, 410 px, four to a row): the clubs' colours split on a slant (60 % at the top, 40 % at
+   the bottom), a jersey's mesh and the folds of the fabric over them, the crests in their halves at a third of the
+   height; in play and after, the scoreboard across (crest, score, clock, score, crest). Capsules: black at 80 %. */
+.mc { width: 410px; }
+.mc__art { width: 410px; height: 231px; border-radius: 20px; }
+/* the texture (the fabric's folds, a jersey's mesh) as two small pictures painted with the tile's colours */
+.mc__art { --mc-tex: url("data:image/png;base64,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") 0 0 / 100% 100% no-repeat, url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAMCAYAAABSgIzaAAAAR0lEQVR42mNgoBLgJlYhMxJbhoGBQZmBgYGRgYHhEyGNTEjs/2g0bZxKCmAkW5IqIc5MpCZpaIgzMDAwfEYPVWK8wDhwIQ4AkS4EnNUXSdwAAAAASUVORK5CYII=") 0 0 / 14px 12px; }
+.mc__crest { position: absolute; top: 50%; width: 80px; height: 80px; margin: -40px 0 0 -40px; background: center / contain no-repeat; }
+.mc__crest--a { left: 25%; }
+.mc__crest--b { left: 75%; }
+.mc__board { position: absolute; left: 0; right: 0; top: 50%; height: 90px; margin-top: -45px; display: flex; align-items: center; }
+.mc__board .mc__crest { position: static; flex: none; width: 70px; height: 70px; margin: 0 0 0 13px; }
+.mc__board .mc__crest:last-child { margin: 0 13px 0 0; }
+.mc__board b { flex: 1; text-align: center; font-size: 50px; font-weight: 700; letter-spacing: -1px; color: rgba(255,255,255,0.96); font-variant-numeric: tabular-nums; text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+.mc__board b.is-lose { color: rgba(255,255,255,0.6); }
+.mc__board span { flex: none; width: 100px; height: 34px; border-radius: 17px; display: flex; align-items: center; justify-content: center; font-size: 19px; font-weight: 700; color: rgba(255,255,255,0.92);
+    background: rgba(0,0,0,0.55); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+/* a period and its clock ("QT2" over "06:52"), or a long word ("Rzuty karne", "Terminé (t.a.b.)"): smaller, on two lines */
+.mc__board span.is-two, .mc__board span.is-long { width: auto; min-width: 100px; max-width: 132px; height: auto; min-height: 34px; padding: 5px 12px; box-sizing: border-box;
+    border-radius: 16px; font-size: 16px; line-height: 1.12; text-align: center; white-space: normal; }
+.mc__board span.is-two { flex-direction: column; }
+.mc__board span em { display: block; font-style: normal; }
+.mc__badge { position: absolute; top: 14px; left: 14px; height: 34px; padding: 0 14px; border-radius: 17px; display: flex; align-items: center; gap: 8px;
+    font-size: 20px; font-weight: 600; color: rgba(255,255,255,0.92); background: rgba(0,0,0,0.8); font-variant-numeric: tabular-nums; }
+.mc__badge.is-live { color: #fff; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; background: var(--live); }
+.mc__badge.is-done { color: rgba(255,255,255,0.8); }
+.mc__fav { position: absolute; top: 14px; right: 14px; width: 34px; height: 34px; border-radius: 17px; display: flex; align-items: center; justify-content: center; color: #ffd60a; background: rgba(0,0,0,0.8); }
+.mc__cap { margin-top: 16px; font-size: 29px; font-weight: 600; letter-spacing: -0.2px; color: rgba(255,255,255,0.92); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc__sub { height: 30px; margin-top: 4px; display: flex; align-items: center; gap: 10px; font-size: 23px; color: rgba(255,255,255,0.64); white-space: nowrap; overflow: hidden; }
+.mc__sub > span { overflow: hidden; text-overflow: ellipsis; }
+.mc__lg { flex: none; width: 28px; height: 28px; background: center / contain no-repeat; font-style: normal; }
+.mc__tv { flex: none; display: flex; align-items: center; gap: 6px; }
+.mc__tv.is-on { font-weight: 600; color: rgba(255,255,255,0.88); }
+.mc__dot { flex: none; font-weight: 400; }
+
+/* Row titles: the competition's logo, a star (My Teams), a red dot (Live Now) */
+.row__mark { flex: none; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: center / contain no-repeat; font-style: normal; }
+.row__mark.is-star { color: #ffd60a; }
+.row__mark.is-live { width: 16px; height: 16px; border-radius: 8px; background: var(--live); box-shadow: 0 0 12px var(--live); }
+
+/* The banner on top of Sports, Apple TV's hero: the whole width from the top of the screen (under the menu and the
+   tabs), the clubs' colours on a slant with the jersey's mesh, the crests and the score on the right, the text at
+   the bottom left; the first row peeks under it */
+.sh { position: relative; height: 800px; margin: -264px 0 30px; overflow: hidden; }
+.sh__bg, .sh__bg i, .sh__tex, .sh__scrim { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
+.sh__bg i { display: block; }
+.sh__bg .sh__c2 { -webkit-clip-path: polygon(83% 0, 100% 0, 100% 100%, 67% 100%); clip-path: polygon(83% 0, 100% 0, 100% 100%, 67% 100%); }
+.sh__tex { background:
+        linear-gradient(116deg, rgba(255,255,255,0) 30%, rgba(255,255,255,0.08) 44%, rgba(255,255,255,0) 56%, rgba(0,0,0,0.12) 68%, rgba(255,255,255,0) 80%, rgba(255,255,255,0.06) 90%, rgba(255,255,255,0) 98%),
+        url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAMCAYAAABSgIzaAAAAR0lEQVR42mNgoBLgJlYhMxJbhoGBQZmBgYGRgYHhEyGNTEjs/2g0bZxKCmAkW5IqIc5MpCZpaIgzMDAwfEYPVWK8wDhwIQ4AkS4EnNUXSdwAAAAASUVORK5CYII=") 0 0 / 20px 17px; }
+/* with a photo (the stadium, the match): the photo full width, darker at the left and the bottom for the text */
+.sh__slides, .sh__slide, .sh__fg { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
+/* each match's picture on its layer, kept painted (almost transparent rather than hidden, or it would be thrown away) */
+.sh__slide { opacity: 0.004; transition: opacity 450ms ease; will-change: opacity; }
+.sh__slide.is-on { opacity: 1; }
+/* LG: the graphics chip blends each almost transparent picture at every frame (six of them: 7 of the 12 million pixels
+   drawn a frame on Sports, counted with the same layers in the PC preview). There only the next one stays ready (and
+   the one before while you are on the banner), the others are not drawn at all (Hero.near in sports.js) */
+.is-webos .sh__slide { opacity: 0; }
+.is-webos .sh__slide.is-near { opacity: 0.004; }
+.is-webos .sh__slide.is-on { opacity: 1; }
+.sh__photo { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: center 35% / cover no-repeat; }
+.sh__slide.has-photo .sh__scrim { background:
+        linear-gradient(0deg, rgba(6,7,11,1) 0%, rgba(6,7,11,0.7) 24%, rgba(6,7,11,0) 55%),
+        linear-gradient(90deg, rgba(6,7,11,0.92) 0%, rgba(6,7,11,0.6) 30%, rgba(6,7,11,0) 60%),
+        linear-gradient(180deg, rgba(6,7,11,0.8) 0%, rgba(6,7,11,0.55) 28%, rgba(6,7,11,0) 50%); }   /* the tab bar and the chips over it */
+.sh__credit { position: absolute; right: 80px; bottom: 44px; font-size: 18px; color: rgba(255,255,255,0.4); }
+/* Apple's text: the time in a capsule and the competition, a line per team with its crest, the day and the venue */
+.sh__cap { display: flex; align-items: center; gap: 14px; font-size: 25px; font-weight: 600; color: rgba(255,255,255,0.8); }
+.sh__cap .mc__lg { width: 36px; height: 36px; }
+.sh__pill { height: 40px; padding: 0 16px; border-radius: 20px; display: flex; align-items: center; font-size: 23px; font-weight: 700; color: rgba(255,255,255,0.92); background: rgba(0,0,0,0.6); font-variant-numeric: tabular-nums; }
+.sh__pill.is-live { color: #fff; background: var(--live); }
+.sh__ours { display: flex; align-items: center; gap: 8px; color: #ffd60a; }
+.sh__team { display: flex; align-items: center; gap: 22px; margin-top: 14px; font-size: 64px; font-weight: 700; letter-spacing: -1.2px; line-height: 1.1; }
+.sh__cap + .sh__team { margin-top: 22px; }
+.sh__team i { flex: none; width: 70px; height: 70px; background: center / contain no-repeat; }
+.sh__team span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 820px; }
+.sh__team b { margin-left: 18px; font-variant-numeric: tabular-nums; }
+.sh__team b.is-lose { color: rgba(255,255,255,0.55); }
+.sh__scrim { background:
+        linear-gradient(0deg, rgba(6,7,11,1) 0%, rgba(6,7,11,0.6) 22%, rgba(6,7,11,0) 50%),
+        linear-gradient(90deg, rgba(6,7,11,0.9) 0%, rgba(6,7,11,0.55) 34%, rgba(6,7,11,0) 58%),
+        linear-gradient(180deg, rgba(6,7,11,0.6) 0%, rgba(6,7,11,0) 32%); }
+.sh__txt { position: absolute; left: 80px; bottom: 100px; width: 1040px; display: flex; flex-direction: column; }
+.sh__kicker { display: flex; align-items: center; gap: 12px; font-size: 23px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.8); }
+.sh__kicker .mc__lg { width: 40px; height: 40px; }
+.sh__kicker.is-live > span:first-of-type { color: var(--live); }
+.sh__lg { font-weight: 600; letter-spacing: 0; text-transform: none; color: rgba(255,255,255,0.64); }
+.sh__lg::before { content: "\00B7"; margin-right: 12px; }
+.sh__title { margin-top: 14px; font-size: 76px; font-weight: 700; letter-spacing: -1.5px; line-height: 1.08; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh__when { margin-top: 10px; font-size: 38px; font-weight: 600; }
+.sh__when.is-live { color: var(--live); }
+.sh__meta { margin-top: 18px; font-size: 29px; color: rgba(255,255,255,0.72); }
+.sh__tv { margin-top: 10px; display: flex; align-items: center; gap: 10px; font-size: 25px; color: rgba(255,255,255,0.64); white-space: nowrap; overflow: hidden; }
+.sh__tv span { overflow: hidden; text-overflow: ellipsis; }
+.sh__btns { margin-top: 34px; display: flex; gap: 20px; }
+.sh__dots { position: absolute; left: 0; right: 0; bottom: 40px; display: flex; justify-content: center; gap: 10px; }
+.sh__dots i { width: 10px; height: 10px; border-radius: 5px; background: rgba(255,255,255,0.35); transition: width 240ms var(--ease); }
+.sh__dots i.is-on { width: 28px; background: #fff; }
+.sh__board { position: absolute; left: 1120px; right: 80px; top: 250px; height: 300px; display: flex; align-items: center; justify-content: space-between; }
+.sh__crest { flex: none; width: 230px; height: 230px; background: center / contain no-repeat; }
+.sh__score { flex: 1; display: flex; align-items: center; justify-content: center; gap: 16px; font-size: 96px; font-weight: 700; letter-spacing: -2px; font-variant-numeric: tabular-nums; text-shadow: 0 4px 24px rgba(0,0,0,0.35); }
+.sh__score i { font-style: normal; font-weight: 500; color: rgba(255,255,255,0.55); }
+.sh__vs { margin: 0 auto; padding: 10px 26px; border-radius: 30px; font-size: 46px; font-weight: 700; background: rgba(0,0,0,0.6); font-variant-numeric: tabular-nums; }
+.match__kicker { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.match__kicker .mc__lg { width: 44px; height: 44px; }
+
+/* A match's page: the scorers, the tabs and what they show (sports.js, FotMob style) */
+.match__goals { margin-top: 10px; font-size: 22px; line-height: 1.45; color: rgba(255,255,255,0.78); }
+.match__tabs { display: flex; justify-content: center; gap: 14px; margin-top: 30px; }
+.match__tabs.seg { width: -webkit-max-content; width: max-content; margin: 30px auto 0; gap: 4px; padding: 6px; border-radius: 40px; background: var(--glass), rgba(40,43,54,0.62); box-shadow: var(--glass-shadow); }
+.match__tabs.seg .chip { height: 60px; padding: 0 30px; border-radius: 30px; font-size: 25px; background: none; box-shadow: none; color: rgba(255,255,255,0.72); }
+.match__tabs.seg .chip.is-current { background: rgba(255,255,255,0.2); color: #fff; }
+.match__tabs.seg .chip.is-focused { background: var(--focus-bg); color: var(--focus-fg); transform: scale(1.06); box-shadow: 0 10px 24px rgba(0,0,0,0.35); }
+.match__body { width: 1500px; height: 560px; margin: 24px auto 0; overflow: hidden; text-align: left; }
+.match__body--where { width: 1920px; margin-left: 0; margin-right: 0; }
+.match__body .match__note { margin-top: 30px; text-align: center; }
+.mev { padding: 6px 0 40px; }
+.mev__row { display: flex; align-items: center; height: 64px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 25px; }
+.mev__l { flex: 1; display: flex; flex-direction: row-reverse; align-items: center; gap: 12px; text-align: right; }
+.mev__r { flex: 1; display: flex; align-items: center; gap: 12px; }
+.mev__min { width: 120px; text-align: center; font-weight: 700; color: rgba(255,255,255,0.62); font-variant-numeric: tabular-nums; }
+.mev__row.is-goal { font-size: 27px; }
+.mev__row.is-goal .mev__min { color: #fff; }
+.mev__row small { font-size: 21px; color: rgba(255,255,255,0.55); }
+.mev__card { display: inline-block; width: 17px; height: 23px; border-radius: 3px; background: #ffd60a; font-style: normal; }
+.mev__card.is-red { background: #ff453a; }
+.mev__sub { font-size: 26px; font-style: normal; color: #30d158; }
+.mev__goal { display: flex; font-style: normal; color: #fff; }
+.mev__sep { padding: 14px 0; text-align: center; font-size: 21px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.5); }
+.mst { padding: 0 60px 40px; }
+.mst__head { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.mst__head i { width: 52px; height: 52px; background: center / contain no-repeat; }
+.mst__row { display: flex; align-items: center; gap: 24px; height: 76px; }
+.mst__row > b { width: 130px; font-size: 30px; font-weight: 700; color: rgba(255,255,255,0.62); font-variant-numeric: tabular-nums; }
+.mst__row > b:last-child { text-align: right; }
+.mst__row > b.is-more { color: #fff; }
+.mst__mid { flex: 1; text-align: center; }
+.mst__mid span { font-size: 22px; color: rgba(255,255,255,0.75); }
+.mst__bar { display: flex; gap: 6px; height: 8px; margin-top: 8px; }
+.mst__bar i { display: block; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.85); }
+.mlu { display: flex; gap: 60px; padding: 0 40px 40px; }
+.mlu__col { flex: 1; }
+.mlu__head { display: flex; align-items: center; gap: 14px; height: 64px; font-size: 26px; font-weight: 700; }
+.mlu__head i { width: 44px; height: 44px; background: center / contain no-repeat; }
+.mlu__head em { margin-left: auto; font-size: 22px; font-style: normal; color: rgba(255,255,255,0.6); }
+.mlu__p { display: flex; align-items: center; gap: 16px; height: 46px; font-size: 23px; }
+.mlu__p b { width: 40px; text-align: right; color: rgba(255,255,255,0.55); font-variant-numeric: tabular-nums; }
+.mlu__p.is-out span { color: rgba(255,255,255,0.62); }
+.mlu__p.is-out span::after { content: " ↓"; color: #ff453a; }
+.mlu__p.is-in span::after { content: " ↑"; color: #30d158; }
+.mlu__sub { margin: 16px 0 6px; font-size: 20px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.5); }
+/* the table, FotMob style: places in colour, crests, W D L, goal difference, points */
+.mtb { max-width: 1500px; margin: 0 auto; padding: 0 40px 40px; }
+.mtb__title { margin: 6px 0 12px; font-size: 24px; font-weight: 700; color: rgba(255,255,255,0.75); }
+.mtb__row { display: flex; align-items: center; height: 58px; padding: 0 20px; border-radius: 14px; font-size: 24px; }
+.mtb__row:nth-child(odd):not(.mtb__row--head) { background: rgba(255,255,255,0.035); }
+.mtb__row b { flex: none; width: 44px; height: 40px; margin-right: 18px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 21px; font-weight: 700; color: rgba(255,255,255,0.75); }
+.mtb__row span { flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mtb__row span i { flex: none; width: 38px; height: 38px; margin-right: 16px; background: center / contain no-repeat; }
+.mtb__row em { flex: none; width: 76px; text-align: center; font-style: normal; font-variant-numeric: tabular-nums; color: rgba(255,255,255,0.78); }
+.mtb__row em.mtb__pts { width: 96px; font-weight: 700; color: #fff; }
+.mtb__row--head { height: 44px; font-size: 18px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: rgba(255,255,255,0.45); }
+.mtb__row--head b, .mtb__row--head em, .mtb__row--head em.mtb__pts { color: rgba(255,255,255,0.45); font-size: 18px; }
+.mtb__row.is-team { font-weight: 700; background: rgba(255,255,255,0.16); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.22); }
+.mtb__z--ucl { background: #1d6cf2; color: #fff !important; }
+.mtb__z--uel { background: #f08a24; color: #fff !important; }
+.mtb__z--uecl { background: #22a35a; color: #fff !important; }
+.mtb__z--q { background: #22a35a; color: #fff !important; }
+.mtb__z--po { background: #1d6cf2; color: #fff !important; }
+.mtb__z--rel { background: #e5484d; color: #fff !important; }
+.mtb__z--relpo { background: #d9822b; color: #fff !important; }
+.mtb__legend { display: flex; flex-wrap: wrap; margin-top: 18px; font-size: 20px; color: var(--dim); }
+.mtb__legend span { display: flex; align-items: center; margin: 0 28px 10px 0; }
+.mtb__legend i { width: 16px; height: 16px; margin-right: 10px; border-radius: 5px; }
+/* the form: each side's last five */
+.mfo { display: flex; max-width: 1600px; margin: 0 auto; padding: 0 40px 40px; }
+.mfo__col { flex: 1; min-width: 0; padding: 0 24px; }
+.mfo__head { display: flex; align-items: center; height: 70px; margin-bottom: 8px; font-size: 26px; font-weight: 700; }
+.mfo__head > i { flex: none; width: 50px; height: 50px; margin-right: 16px; background: center / contain no-repeat; }
+.mfo__head span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mfo__head em { flex: none; display: flex; font-style: normal; }
+.mfo__head em .mfo__pill { margin-left: 6px; }
+.mfo__pill { flex: none; width: 36px; height: 36px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-size: 19px; font-weight: 800; font-style: normal; color: #fff; background: #6b7280; }
+.mfo__pill.is-w { background: #22a35a; }
+.mfo__pill.is-l { background: #e5484d; }
+.mfo__g { display: flex; align-items: center; height: 66px; padding: 0 16px; border-radius: 14px; font-size: 22px; }
+.mfo__g:nth-child(even) { background: rgba(255,255,255,0.035); }
+.mfo__g b { flex: none; width: 74px; margin-left: 16px; font-variant-numeric: tabular-nums; }
+.mfo__g span { flex: none; width: 40px; color: var(--dim); }
+.mfo__crest { flex: none; width: 36px; height: 36px; margin-right: 14px; background: center / contain no-repeat; }
+.mfo__g strong { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 600; }
+.mfo__g small { flex: none; margin-left: 14px; font-size: 18px; color: var(--dim); white-space: nowrap; }
+.match__note--top { margin: 0 auto 14px; text-align: center; font-size: 23px; }
+/* reading a tab: the page slides up to its tabs (380 ms), the board fades away, the one-line board fades in at the
+   top; the tab's content comes in softly and scrolls softly (transforms only, as on Home) */
+.match__mini { position: absolute; left: 0; right: 0; top: 26px; z-index: 3; display: flex; align-items: center; justify-content: center; height: 72px; font-size: 30px; font-weight: 700;
+    opacity: 0; transform: translateY(-14px); transition: opacity 300ms ease, transform 380ms var(--ease); pointer-events: none; }
+.match__mini i { flex: none; width: 56px; height: 56px; margin: 0 18px; background: center / contain no-repeat; }
+.match__mini b { flex: none; margin: 0 26px; font-size: 42px; font-variant-numeric: tabular-nums; }
+.match.is-reading .match__mini { opacity: 1; transform: none; }
+.match__kicker, .match__board, .match__info, .match__btns { transition: opacity 260ms ease; }
+.match.is-reading .match__kicker, .match.is-reading .match__board, .match.is-reading .match__info, .match.is-reading .match__btns { opacity: 0; }
+.match__body { width: 1800px; height: 860px; }
+.match__body--where { width: 1920px; }
+.match__scroll { transition: transform 360ms var(--ease); will-change: transform; animation: tabIn 300ms var(--ease); }
+.match__scroll.is-kept { animation: none; }
+@keyframes tabIn { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+.mtb, .mfo { max-width: 1800px; }
+.match.is-reading .match__credit { opacity: 0; }
+.match__credit { transition: opacity 200ms ease; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+/* the favourites' tiles: each on its layer, no blurred shadow at rest (117 tiles with one: the M8 at 45 frames a
+   second in the list, 59 to 60 without); the chips and buttons on a layer while focused (TV.lift) */
+.sfav__tile { will-change: transform; box-shadow: inset 0 1px 0 rgba(255,255,255,0.22); transition: transform 220ms var(--spring); }
+.sfav__tile.is-on { box-shadow: inset 0 0 0 3px var(--blue); }
+.sfav__tile.is-focused { box-shadow: inset 0 0 0 3px rgba(255,255,255,0.85); }
+.sfav__tile.is-focused.is-on { box-shadow: inset 0 0 0 3px var(--blue); }
+.sfav .chip.is-lift, .sfav .btn.is-lift { will-change: transform; }
+
+/* Apple's activity indicator (TV.spinner): eight bars, the brightest leading, turned in eight steps */
+.aspin { position: relative; display: inline-block; vertical-align: middle; animation: aspin 800ms steps(8) infinite; will-change: transform; }
+.aspin i { position: absolute; left: 45.5%; top: 2%; width: 9%; height: 28%; border-radius: 99px; background: #fff; transform-origin: 50% 171%; }
+.aspin i:nth-child(1) { transform: rotate(0deg); opacity: 1; }
+.aspin i:nth-child(2) { transform: rotate(-45deg); opacity: 0.82; }
+.aspin i:nth-child(3) { transform: rotate(-90deg); opacity: 0.66; }
+.aspin i:nth-child(4) { transform: rotate(-135deg); opacity: 0.52; }
+.aspin i:nth-child(5) { transform: rotate(-180deg); opacity: 0.4; }
+.aspin i:nth-child(6) { transform: rotate(-225deg); opacity: 0.32; }
+.aspin i:nth-child(7) { transform: rotate(-270deg); opacity: 0.26; }
+.aspin i:nth-child(8) { transform: rotate(-315deg); opacity: 0.22; }
+@keyframes aspin { to { transform: rotate(360deg); } }
+.is-spin { display: flex; justify-content: center; }
+.sfav__empty.is-spin, .match__note.is-spin { padding-top: 70px; }
+.sports__msg.is-spin { top: 470px; }
+/* the Arabic keyboard's letters (search.js): a size that reads like the Latin capitals */
+.kb .kb__key--ar { font-size: 36px; font-weight: 500; }
