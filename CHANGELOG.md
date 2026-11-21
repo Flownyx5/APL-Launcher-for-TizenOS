@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.0 (Flownyx5 fork)
+Rebuilt on the original project's **1.3.8** (154 commits since 1.0.22), with every feature of the fork kept.
+- **From the original:** the Home Screen from the kept list of apps (about 10 s sooner after a power cut), a start-up screen instead of a black frame, trailers and Continue Watching on the wall (◀ ▶ through an app's titles in full screen, the film's logo as its title), the glass reworked, settings, Home Screen order, folders and icons that survive a cut at the wall, the weather of a city you pick, wallpapers, Adaptive Picture in the Control Center, Home Assistant, Change Icon, consoles' games on Sources tiles, Turkish, Polish and Malay.
+- **Tizen 6 keeps the fork's web bridge** (remote in use followed, Samsung's bar closed by itself, phone remote): the original now installs its APL Overlay with a .NET bridge on Tizen 6, not confirmed on 6.0 yet, and that bridge has none of these. `install.ps1 -Tizen6Overlay` takes the original's pair. `03-build-launcher.ps1` follows the original's new layout and still builds this folder's launcher.
+- **APL TV 1.5.0**: the original's 1.4.7 (Sports, Stalker portals, subtitles that sync themselves, Stremio in the Versions, public domain movies, crash reports, Light Mode) with the fork's Home that loads in one go.
+- **Lighter Home Screen on older screens after the merge** (Light and Minimal Effects): the original warms every title of every shelf while you move and decodes both neighbours on every press; there, three titles once the remote rests, and one neighbour in the direction you go. The picture kept for an app also waits for the focus to rest, and the shelf starting on that same picture no longer draws it a second time.
+- The weather: a city chosen in *Settings › Appearance › Weather* wins; its pill shows the weather, and the light of the day and the rain follow that city.
+- The Control Center's circles go four to a row (Search, Adaptive Picture, Phone Remote, Good Night, then Kids Mode).
+- **Fixed:** two rules of the stylesheet were dropped by the screen since 1.2.0 (a separator line and a lost comment opener left by a merge): the dock's Liquid Glass fill, and the spacing of the status pill on Tizen 6, where the weather touched the clock.
+- Needs APL Launcher Setup once (the original's 1.3.x changed the package: trailers' permission, the bridge).
+
 ## 1.3.2 (Flownyx5 fork)
 - **APL TV in this repository** (`apltv/`, MIT License, by Knikt): APL TV 1.0.10 with the fork's changes, 1.0.11. It updates itself from here, and APL Launcher Setup installs it from this folder (`06-install-apltv.ps1` builds it as the original's `make-package.sh` does; `-FromRelease` takes the original's release). On a big account (15,000 channels, 40,000 movies, 8,000 series, fake provider and TMDB, processor slowed four times):
   - Home loads in one go: each piece of information arriving at start-up (catalog, trending titles, hidden themes, genres) drew every row again with its pictures; unchanged rows are now kept, changes that arrive by themselves are drawn once per burst, and the row in focus stays in focus when a row arrives above it. Second start: 20 rows made for 20 shown, instead of 45 to 50.

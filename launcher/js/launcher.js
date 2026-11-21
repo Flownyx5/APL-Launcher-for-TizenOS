@@ -988,8 +988,13 @@
         if (warmItems._items === items) return;                 // this shelf is already being warmed
         warmItems._items = items;
         var i = 0;
+        /* Lighter effects (fork): the first three titles only, and never while the remote is in use. Every title
+           of every shelf, fetched and decoded while moving along the dock, was the heaviest work added since 1.3
+           on an older screen (decoding up by 80 % on the test bench, more frames late). */
+        var upTo = lite() ? Math.min(items.length, 3) : items.length;
         function next() {
-            while (i < items.length) {
+            if (lite() && Date.now() - lastKeyAt < 1500) { if (warmItems._items === items) global.setTimeout(next, 700); return; }
+            while (i < upTo) {
                 var it = items[i++];
                 if (!it || !it.bg || it.ok || it.bad || it._warm) continue;
                 it._warm = true;
@@ -1115,6 +1120,16 @@
         liveShown = { app: app, item: item, tag: tag };
         lastPicks[app.id] = item;
         if (bgActive.dataset.app === tag) return;
+        /* Fork: the same picture is already on the wall for this app (its kept copy, shown the moment the app
+           took the focus, then the shelf starting on that same title): only its name changes. Drawing it again
+           in the other layer was a second full-screen picture for every app, on every move along the dock. */
+        var onWall = bgActive.querySelector && bgActive.querySelector("img:not(.brandcard__icon)");
+        if (onWall && String(bgActive.dataset.app || "").indexOf(app.id + "#") === 0 &&
+            (onWall.getAttribute("src") === srcOf(item) || onWall.getAttribute("src") === item.bg)) {
+            bgActive.dataset.app = tag;
+            shelfInfo(item);
+            return;
+        }
         var next = (bgActive === dom.bgA) ? dom.bgB : dom.bgA;
         next.innerHTML = "";
         next.dataset.app = tag;
@@ -1268,6 +1283,18 @@
        stepping along the row never waits for one, which was the last place a
        pane could still arrive a moment after the picture it belongs to. */
     function warmNear(i) {
+        /* Lighter effects (fork): one neighbour, the next one in the direction of travel, once the focus rests.
+           Both neighbours decoded on every press doubled the decoding on an older screen's slow cores. */
+        if (lite()) {
+            var dir = warmNear._last !== undefined && i < warmNear._last ? -1 : 1;
+            warmNear._last = i;
+            clearTimeout(warmNear._t);
+            warmNear._t = setTimeout(function () {
+                var app = apps[i + dir], art = app && artOf(app);
+                if (art) preload(art);
+            }, 600);
+            return;
+        }
         [-1, 1].forEach(function (d) {
             var app = apps[i + d];
             if (!app) return;
@@ -1349,8 +1376,10 @@
         if (kept && APL.artCache.look(kept)) {
             /* The picture is on the screen already: it goes up at once, so two
                apps that both have one only ever fade into each other. */
-            setLiveBackdrop(app, { bg: kept, ok: true }, "c", null, 0);
-            startLive(app);
+            clearTimeout(bgTimer);
+            var showKept = function () { setLiveBackdrop(app, { bg: kept, ok: true }, "c", null, 0); startLive(app); };
+            // Lighter effects (fork): once the focus rests, so a quick run along the dock draws one picture, not one per press
+            if (lite() && bgActive.dataset.app) bgTimer = setTimeout(showKept, 340); else showKept();
             return;
         }
         /* Nothing kept yet (the first launch, or an app whose six hours are up):
