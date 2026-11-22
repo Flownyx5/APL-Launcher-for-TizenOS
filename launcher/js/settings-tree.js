@@ -65,6 +65,45 @@
         };
     }
 
+    /* Settings › Apps › Protected Apps (vault.js): the secret code, then each app Visible, Locked or Hidden.
+       Once there is a code, the page itself asks for it (menu.guard); its rows are made when it opens
+       (menu.build), so a hidden app shown for a while is in the list. */
+    var VAULT_SKIP = { "apl.settings": true, "apl.sources": true, "apl.samsunghome": true };
+    function vaultMenu() {
+        var V = APL.vault;
+        if (!V) return { type: "section", label: "" };
+        var m = menu(APL.t("Protected Apps"), "lock", [], APL.t("Lock apps or hide them behind a secret code you choose."));
+        m.value = function () { var n = V.protectedIds().length; return n ? String(n) : (V.hasCode() ? APL.t("None") : APL.t("Off")); };
+        m.guard = function (enter) { if (!V.hasCode()) { enter(); return; } V.ask(null, enter, null, APL.t("Enter the secret code")); };
+        m.build = function () {
+            var list = ((APL.allApps && APL.allApps()) || []).filter(function (a) { return !a.folder && !VAULT_SKIP[a.id]; })
+                .slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name), APL.locale, { sensitivity: "base" }); });
+            var rows = [
+                action(V.hasCode() ? APL.t("Change the Secret Code") : APL.t("Choose a Secret Code"), function (done) { V.changeCode(done); },
+                    APL.t("4, 6 or 8 digits, typed with the remote's arrows or its number keys. Kept for the whole screen, every profile."), "lock"),
+                choice(APL.t("Code Length"), "vaultPinLength", [[4, APL.t("{n} digits", { n: 4 })], [6, APL.t("{n} digits", { n: 6 })], [8, APL.t("{n} digits", { n: 8 })]],
+                    APL.t("Changing it asks for a new code of that length."),
+                    function () { if (V.hasCode()) setTimeout(function () { V.newCode(); }, 300); }),
+                choice(APL.t("Ask for the Code Again"), "vaultRelock", [["each", APL.t("Every Time")], [5, APL.t("After 5 Minutes")], [30, APL.t("After 30 Minutes")], ["sleep", APL.t("When the Screen Sleeps")]],
+                    APL.t("Once the code is typed, the app opens without it for this long. Every Time: the code at each opening.")),
+                { type: "section", label: APL.t("Apps") }
+            ];
+            list.forEach(function (a) {
+                rows.push({ type: "vault", label: a.name, id: a.id,
+                    desc: APL.t("OK: Visible, then Locked (the code to open it), then Hidden (gone from the Home Screen, Search and the App Switcher).") });
+            });
+            if (V.hasCode()) {
+                rows.push({ type: "section", label: "" });
+                if (V.revealed()) rows.push(action(APL.t("Hide Them Again"), function (done) { V.hideAgain(); if (done) done(); }, APL.t("The hidden apps leave the Home Screen again now."), "eyeOff"));
+                else rows.push(action(APL.t("Show Hidden Apps"), function (done) { V.reveal(done); }, APL.t("The hidden apps come back on the Home Screen for a while, with their lock."), "eye"));
+                rows.push(action(APL.t("Remove the Secret Code"), function (done) { V.forget(done); },
+                    APL.t("Every app is visible and opens without the code again."), "trash"));
+            }
+            return rows;
+        };
+        return m;
+    }
+
     function build() {
         var apps = ((APL.allApps && APL.allApps()) || []).filter(function (a) { return !a.virtual; });
         /* The language is fixed when the launcher starts (i18n.js): changing it reloads the launcher. */
@@ -129,7 +168,7 @@
                     // The launcher's own Smart Hub tile first: the way out to Samsung's home
                     { type: "hide", label: "Smart Hub", id: "apl.samsunghome",
                       desc: APL.t("A tile that opens Samsung's Smart Hub, the way out now that the Home button opens the launcher. Press Home there to come back.") }
-                ].concat(apps.map(function (a) {
+                ].concat(apps.filter(function (a) { return !(APL.vault && APL.vault.hidden(a)); }).map(function (a) {
                     return { type: "hide", label: a.name, id: a.id, desc: APL.t("OK to show or hide “{name}” on the Home Screen.", { name: a.name }) };
                 })), APL.t("Choose the apps shown on the Home Screen.")),
                 info(APL.t("Rearrange"), function () { return APL.t("Hold OK"); },
@@ -284,6 +323,7 @@
                     APL.toast(APL.t("Searching for artwork in the background…"), true);
                 }, APL.t("Clears the artwork found and searches again for all apps."), "reset"),
                 info(APL.t("Installed Apps"), function () { return String(apps.length); }),
+                vaultMenu(),
                 action(APL.t("Home Assistant"), function () {
                     APL.settings.close();
                     if (APL.ha && APL.ha.connect) APL.ha.connect();

@@ -18,7 +18,8 @@
             var recent = sys.pref("recentApps") || [];
             var P = APL.platform;
             var list = APL.allApps().filter(function (a) {
-                return !a.virtual && ids.indexOf(a.id) !== -1 && !(P && P.notInSwitcher && P.notInSwitcher(a.id));
+                return !a.virtual && ids.indexOf(a.id) !== -1 && !(P && P.notInSwitcher && P.notInSwitcher(a.id)) &&
+                       !(APL.vault && APL.vault.hidden(a));          // hidden behind the secret code (vault.js)
             });
             function rank(a) { var i = recent.indexOf(a.id); return i === -1 ? 999 : i; }
             return list.sort(function (a, b) { return rank(a) - rank(b); });

@@ -35,6 +35,8 @@
 
     function candidates() {
         var hidden = APL.sys.pref("searchHidden") ? [] : APL.sys.pref("hiddenApps") || [];
+        // Apps hidden behind the secret code never show here (vault.js), whatever Search Hidden Apps says
+        if (APL.vault) hidden = hidden.concat(APL.vault.hiddenIds());
         return ((APL.allApps && APL.allApps()) || []).filter(function (a) {
             return !a.folder && hidden.indexOf(a.id) === -1;
         });

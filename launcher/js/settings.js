@@ -69,6 +69,7 @@
                 return '<span class="srow__bar"><i style="width:' + vol + '%"></i></span>' + vol;
             case "mute": return onOff(sys.audio.isMute());
             case "hide": return (sys.pref("hiddenApps").indexOf(item.id) === -1) ? APL.t("Visible") : APL.t("Hidden");
+            case "vault": return APL.vault ? APL.vault.stateText(item.id) : "";
             case "tvmode":
                 return sys.tvItem("pictureMode").then(function (it) { return it ? sys.pictureModeName(it.value) : APL.t("Unavailable"); },
                                                       function () { return APL.t("Unavailable"); });
@@ -286,6 +287,23 @@
     }
 
     function refreshRow(row) { fillValue(row); row.querySelector(".srow__acc").innerHTML = accessory(row._item); }
+    /* A page made as it opens (Protected Apps): made again in place, the focus kept on its row (a row
+       can come or go: the secret code chosen or removed) */
+    function rebuild(row) {
+        var L = cur();
+        if (!isOpen || !L.node.build || !row || row.parentNode !== listEl) { if (row && row.parentNode) refreshRow(row); return; }
+        var item = row._item, at = L.index || 0;
+        L.node.children = L.node.build();
+        var kids = L.node.children.filter(function (k) { return k.type !== "section"; });
+        for (var i = 0; i < kids.length; i++) {
+            if (kids[i].label === item.label && kids[i].type === item.type && kids[i].id === item.id) { at = i; break; }
+        }
+        L.index = Math.min(at, kids.length - 1);
+        var y = listY;
+        render();
+        // the list stays where it was, unless the row moved out of the view
+        if (nav.current()) { listY = y; ensureVisible(nav.current()); placePlate(nav.current()); }
+    }
     function refreshNativeRows(row) {
         var rows = row.parentNode ? row.parentNode.children : [row];
         for (var i = 0; i < rows.length; i++) if (rows[i]._item && rows[i]._item.type === "native") refreshRow(rows[i]);
@@ -297,8 +315,17 @@
         switch (item.type) {
             case "menu":
                 L.index = i;
-                levels.push({ node: item, index: 0 });
-                render("fwd");
+                // A page behind the secret code (Protected Apps), and a page whose rows are made as it opens
+                var enter = function () {
+                    if (item.build) item.children = item.build();
+                    levels.push({ node: item, index: 0 });
+                    render("fwd");
+                };
+                if (item.guard) item.guard(enter); else enter();
+                break;
+            case "vault":
+                // Visible -> Locked -> Hidden -> Visible; the first protection asks for a new code first
+                APL.vault.setState(item.id, APL.vault.nextState(item.id), function () { rebuild(row); });
                 break;
             case "choice":
                 L.index = i;
@@ -380,6 +407,7 @@
             case "action":
                 // done(): the rows of this page show their new values (Android: the keys removed)
                 item.run(function () {
+                    if (cur().node.build) { rebuild(row); return; }
                     var rows = row.parentNode ? row.parentNode.children : [];
                     for (var r = 0; r < rows.length; r++) if (rows[r]._item) refreshRow(rows[r]);
                 });

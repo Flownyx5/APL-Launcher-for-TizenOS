@@ -19,7 +19,8 @@
     function holding(appId) { return all().filter(function (f) { return f.apps.indexOf(appId) !== -1; })[0] || null; }
     function members(f) {
         var apps = APL.allApps();
-        return f.apps.map(function (id) { return apps.filter(function (a) { return a.id === id; })[0]; }).filter(Boolean);
+        return f.apps.map(function (id) { return apps.filter(function (a) { return a.id === id; })[0]; })
+                     .filter(function (a) { return a && !(APL.vault && APL.vault.hidden(a)); });   // behind the secret code: out
     }
 
     /* The folder's tile: its first six apps in miniature. */

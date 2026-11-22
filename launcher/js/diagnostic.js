@@ -207,6 +207,19 @@
                                    (seen ? " · " + APL.t("last seen: {k} at {t}", { k: APL.t(SNAP_KINDS[seen.kind] || seen.kind), t: seen.at }) : ""));
                 });
             } },
+            { label: APL.t("Protected Apps"), run: function () {
+                var V = APL.vault;
+                if (!V || !V.hasCode() || !V.protectedIds().length) return R("skip", APL.t("none (Settings › Apps › Protected Apps)"));
+                var here = APL.t("{n} apps behind the code", { n: V.protectedIds().length });
+                if (PREVIEW) return R("ok", here);
+                // Opened from outside the launcher (Smart Hub, a phone): the launcher service brings the code up
+                return limit(sys.bridgeState(), 9000).then(function (st) {
+                    var v = st && st.vault;
+                    if (!v) return R("warn", here + " · " + APL.t("opened from outside the launcher: not watched, install again with APL Launcher Setup"));
+                    return R(v.apps ? "ok" : "warn", here + " · " + APL.t("watched outside the launcher: {n} apps", { n: v.apps }) +
+                             (v.stops ? " · " + APL.t("code asked {n} times (last {t})", { n: v.stops, t: v.last }) : ""));
+                }, function () { return R("warn", here + " · " + APL.t("the launcher service doesn't answer")); });
+            } },
             { label: "APL Overlay", run: function () {
                 if (PREVIEW) return preview();
                 if (APL.overlay && APL.overlay.isInstalled()) return R("ok", APL.t("installed"));

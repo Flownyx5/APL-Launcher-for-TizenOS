@@ -456,6 +456,8 @@
     function pick(data, key) { var v = data && data[key]; return v && /^[A-Za-z0-9_.:|-]{1,80}$/.test(String(v)) ? { key: key, value: String(v) } : null; }
     /* Opens the app with one piece of app control data (APL TV: resume=<title>, channel=<channel>) */
     function launchWith(app, launch) {
+        // Behind the secret code (vault.js): asked first
+        if (APL.vault && APL.vault.needs(app)) { APL.vault.ask(app, function () { launchWith(app, launch); }); return; }
         // LG: the same data as launch parameters ({"resume": "…"}, {"channel": "…"}); Android: as an Intent extra
         if ((sys.platform === "webos" || sys.platform === "android") && APL.platform && APL.platform.launch) {
             var params = {};

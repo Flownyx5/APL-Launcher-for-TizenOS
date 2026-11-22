@@ -98,7 +98,11 @@
         openAnim: "auto",           // opening an app: "auto" (fade on older screens, zoom otherwise) | "zoom" | "fade" | "none"
         liquidGlass: !APL.oldScreen,// glass panes under the dock and the pill (glass.js): off before 2022, where it slowed every key
         smoothness: "auto",         // "auto" (lighter effects when keys are measured slow, smooth.js) | "effects" | "light" | "lightest"
-        remoteFollow: true          // Vetro intercepts the remote in use: infrared while the Bluetooth one is away (bridge/service.js)
+        remoteFollow: true,         // Vetro intercepts the remote in use: infrared while the Bluetooth one is away (bridge/service.js)
+        vaultPin: "",               // the secret code of protected apps (hashed), shared by the whole screen (vault.js)
+        vaultPinLength: 4,          //   4, 6 or 8 digits
+        vaultApps: {},              //   app id -> "lock" (asks the code) | "hide" (hidden, and asks the code)
+        vaultRelock: 5              //   asked again: "each" time | 5 | 30 minutes | "sleep" (until the screen sleeps)
     };
     /* OLED panels, told by the model the screen reports: the S8x / S9x TVs from 2022 on, whatever the
        region letters (QE55S95BATXXU, QN65S90FAEXZA, KQ65SD95AFXKR…), and the Odyssey OLED monitors with

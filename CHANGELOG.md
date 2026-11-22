@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.1 (Flownyx5 fork)
+- **Apps behind a secret code.** Hold OK on an app › *Lock with the Code* or *Hide with the Code*, or *Settings › Apps › Protected Apps*:
+  - **Locked**: the app stays on the Home Screen with a small lock; opening it asks for the code.
+  - **Hidden**: the app leaves the Home Screen, Search, folders, the App Switcher and the Home Screen list in Settings. Hold OK › *Show Hidden Apps* (or the same Settings page) asks for the code and brings them back for a while, with an orange mark; *Hide Them Again* at once.
+  - The code: 4, 6 or 8 digits (*Code Length*), typed with the arrows or the remote's number keys, twice when it is chosen, kept hashed for the whole screen (every profile). *Ask for the Code Again*: every time, after 5 or 30 minutes, or when the screen sleeps; the time counts from the moment you leave the app, so a film is never stopped. Five wrong codes: 30 seconds before the next try. The Settings page asks for the code itself, and taking a protection off from the Home Screen too. *Remove the Secret Code* opens everything again.
+  - Every way the launcher opens an app asks for it: the Home Screen, folders, Search, the App Switcher, Continue Watching, widgets, Alexa. The bridge also watches the front: a protected app opened from outside the launcher (Samsung's Smart Hub, a phone app) brings the launcher back over it with the code; typed, the app comes back. The Diagnostic shows the protected apps and how often the code was asked.
+  - A fence for the family, not a safe: Samsung's own menus can still uninstall or open an app while the bridge isn't running.
+- The watch outside the launcher needs APL Launcher Setup once (new bridge); the rest comes with the automatic update.
+
 ## 1.4.0 (Flownyx5 fork)
 Rebuilt on the original project's **1.3.8** (154 commits since 1.0.22), with every feature of the fork kept.
 - **From the original:** the Home Screen from the kept list of apps (about 10 s sooner after a power cut), a start-up screen instead of a black frame, trailers and Continue Watching on the wall (◀ ▶ through an app's titles in full screen, the film's logo as its title), the glass reworked, settings, Home Screen order, folders and icons that survive a cut at the wall, the weather of a city you pick, wallpapers, Adaptive Picture in the Control Center, Home Assistant, Change Icon, consoles' games on Sources tiles, Turkish, Polish and Malay.

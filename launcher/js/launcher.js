@@ -1415,6 +1415,8 @@
     }
 
     function launch(i) {
+        // Behind the secret code (vault.js): asked first, then the app opens as usual
+        if (APL.vault && apps[i] && APL.vault.needs(apps[i])) { APL.vault.ask(apps[i], function () { launch(i); }); return; }
         var el = tiles[i];
         el.classList.add("is-pressed");
         setTimeout(function () { el.classList.remove("is-pressed"); }, 160);
@@ -1721,6 +1723,7 @@
         }
         apps = allApps.filter(function (a) {
             if (APL.sys.pref("hiddenApps").indexOf(a.id) !== -1 || APL.folders.holding(a.id)) return false;
+            if (APL.vault && APL.vault.hidden(a)) return false;        // behind the secret code (vault.js)
             return !a.folder || APL.folders.byId(a.folder);
         });
         // Kids Mode: only the apps chosen for this profile (routines.js)
@@ -1733,6 +1736,15 @@
         tiles = apps.map(function (app, i) {
             var row = i < DOCK_SIZE ? 0 : 1 + Math.floor((i - DOCK_SIZE) / DOCK_SIZE);
             var t = makeTile(app, row);
+            // Locked or hidden behind the secret code: a small lock on the tile
+            var lock = APL.vault && APL.vault.badge(app);
+            if (lock) {
+                t.classList.add("is-vault");
+                var b = document.createElement("div");
+                b.className = "tile__lock" + (lock === "hide" ? " is-hidden" : "");
+                b.innerHTML = APL.icon(lock === "hide" ? "eyeOff" : "lock", 24, 2.4);
+                t.appendChild(b);
+            }
             (row === 0 ? dom.row0 : dom.rows).appendChild(t);
             return t;
         });
@@ -2046,6 +2058,22 @@
         if (app.id !== "apl.settings") {
             items.push({ label: APL.t("Hide App"), icon: "eyeOff", run: function () { hideApp(app); } });
         }
+        // The secret code (vault.js): lock, hide, or open again (the code is asked to take a protection off)
+        if (APL.vault && app.id !== "apl.settings" && app.id !== "apl.sources") {
+            var vst = APL.vault.stateOf(app.id);
+            var vset = function (st, msg) { return function () {
+                var go = function () { APL.vault.setState(app.id, st, function () { toast(APL.t(msg, { name: app.name }), true); }); };
+                if (vst !== "open" && APL.vault.hasCode()) APL.vault.ask(null, go, null, APL.t("Current secret code")); else go();
+            }; };
+            if (vst !== "lock") items.push({ label: APL.t("Lock with the Code"), icon: "lock", run: vset("lock", "“{name}” asks for the secret code now") });
+            if (vst !== "hide") items.push({ label: APL.t("Hide with the Code"), icon: "eyeOff", run: vset("hide", "“{name}” is hidden behind the secret code") });
+            if (vst !== "open") items.push({ label: APL.t("Remove the Code"), icon: "lock", run: vset("open", "“{name}” opens without the code again") });
+        }
+        if (APL.vault && APL.vault.hasCode() && APL.vault.hiddenIds().length) {
+            items.push({ label: APL.t("Show Hidden Apps"), icon: "eye", run: function () { APL.vault.reveal(); } });
+        } else if (APL.vault && APL.vault.revealed()) {
+            items.push({ label: APL.t("Hide Them Again"), icon: "eyeOff", run: function () { APL.vault.hideAgain(); } });
+        }
         // Deleted through Vetro; on another TV system, through its own way when it has one (LG, rooted: the apps LG lets you delete)
         var P = APL.platform;
         if (!app.virtual && !PROTECTED.test(app.id) && (!P || (P.canDelete && P.canDelete(app)))) {
@@ -2167,6 +2195,9 @@
         APL.launchApp(app.id).catch(function (err) { hideVeil(); toast(err.message || APL.t("Couldn't open the app")); });
     };
     APL.makeTile = makeTile;
+    APL.hideVeil = hideVeil;
+    APL.showVeil = function () { showVeil(); };
+    APL.dropZoom = dropZoom;
 
     function hideApp(app) {
         var hidden = APL.sys.pref("hiddenApps").slice();
@@ -2411,6 +2442,7 @@
     function runAction(action) {
         if (action === "boot") return;           // APL Boot putting the launcher on screen after a start-up: nothing to open
         if (action === "return") return;         // the bridge bringing it back over Samsung's home: not a press on Home
+        if (action.indexOf("vault:") === 0) { if (APL.vault) APL.vault.fromBridge(action.slice(6)); return; }
         if (action === "controlcenter") { if (APL.controlCenter) APL.controlCenter.toggle(); return; }
         if (APL.controlCenter && APL.controlCenter.isOpen()) APL.controlCenter.close();
         if (action === "switcher") {

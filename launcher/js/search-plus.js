@@ -84,6 +84,8 @@
         if (!q) return [];
         // Hidden apps only with Settings › Home Screen › Search Hidden Apps, as in the original's search
         var hidden = APL.sys.pref("searchHidden") ? [] : APL.sys.pref("hiddenApps") || [];
+        // Apps hidden behind the secret code never show here (vault.js), whatever Search Hidden Apps says
+        if (APL.vault) hidden = hidden.concat(APL.vault.hiddenIds());
         var list = (APL.allApps ? APL.allApps() : []).filter(function (a) { return !a.folder && hidden.indexOf(a.id) === -1; });
         var scored = [];
         list.forEach(function (a) {

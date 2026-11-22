@@ -20,7 +20,7 @@
     var APL = global.APL, sys = APL.sys;
 
     /* ---------- PIN pad ---------- */
-    var pinRoot, pinTitle, pinDots, pinNav, pinSpec = null, entered = "";
+    var pinRoot, pinTitle, pinSub, pinDots, pinNav, pinSpec = null, entered = "", pinLen = 4;
 
     function el(tag, cls, html) { var e = document.createElement(tag); e.className = cls; if (html) e.innerHTML = html; return e; }
     /* A hash so the PIN isn't stored as is (FNV-1a): enough for a fence, not a safe. */
@@ -34,7 +34,8 @@
         pinRoot = el("section", "pin");
         var box = el("div", "pin__box");
         pinTitle = el("h2", "pin__title");
-        pinDots = el("div", "pin__dots", "<i></i><i></i><i></i><i></i>");
+        pinSub = el("div", "pin__sub");
+        pinDots = el("div", "pin__dots");
         var pad = el("div", "pin__pad");
         var keys = [];
         "123456789 0<".split("").forEach(function (c) {
@@ -45,7 +46,7 @@
             pad.appendChild(k);
             if (c !== " ") keys.push(k);
         });
-        box.appendChild(pinTitle); box.appendChild(pinDots); box.appendChild(pad);
+        box.appendChild(pinTitle); box.appendChild(pinSub); box.appendChild(pinDots); box.appendChild(pad);
         pinRoot.appendChild(box);
         document.body.appendChild(pinRoot);
         pinNav = new APL.Nav({
@@ -60,15 +61,16 @@
         pinNav.setTiles(keys);
     }
     function paintDots() {
+        if (pinDots.children.length !== pinLen) pinDots.innerHTML = new Array(pinLen + 1).join("<i></i>");
         var d = pinDots.children;
-        for (var i = 0; i < 4; i++) d[i].classList.toggle("is-on", i < entered.length);
+        for (var i = 0; i < pinLen; i++) d[i].classList.toggle("is-on", i < entered.length);
     }
     function press(c) {
         if (c === "<") { entered = entered.slice(0, -1); paintDots(); return; }
-        if (entered.length >= 4) return;
+        if (entered.length >= pinLen) return;
         entered += c;
         paintDots();
-        if (entered.length < 4) return;
+        if (entered.length < pinLen) return;
         var pin = entered, spec = pinSpec;
         setTimeout(function () {
             if (spec !== pinSpec) return;
@@ -77,12 +79,14 @@
             entered = ""; paintDots();
         }, 160);
     }
-    /* spec: { title, check(pin) -> bool, done(pin), cancel() } */
+    /* spec: { title, sub, length (4 by default, up to 8), check(pin) -> bool, done(pin), cancel() } */
     function askPin(spec) {
         if (!pinRoot) buildPin();
         pinSpec = spec;
         entered = "";
+        pinLen = Math.max(4, Math.min(8, spec.length || 4));
         pinTitle.textContent = spec.title;
+        pinSub.textContent = spec.sub || "";
         paintDots();
         pinDots.classList.remove("is-wrong");
         pinRoot.classList.add("is-open");
@@ -225,4 +229,13 @@
         changePin: function () { guard(function () { newPin(); }); }, guard: guard
     };
     APL.routines = { goodNight: goodNight, nightOn: nightOn };
+    /* The PIN pad for other modules (vault.js: apps behind a secret code) */
+    APL.pinPad = askPin;
+    APL.pinPad.close = function () { var s = pinSpec; closePin(); if (s && s.cancel) s.cancel(); };
+    APL.pinPad.isOpen = function () { return !!pinSpec; };
+    APL.pinPad.hash = function (salt, pin) {
+        var h = 0x811c9dc5, s = salt + ":" + pin;
+        for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul ? Math.imul(h, 0x01000193) : (h * 0x01000193) | 0; }
+        return (h >>> 0).toString(16);
+    };
 })(window);

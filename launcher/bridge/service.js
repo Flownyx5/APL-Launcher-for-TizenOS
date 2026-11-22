@@ -245,7 +245,7 @@ function withPort(fn) {
 function stopLater() {
     clearTimeout(idle);
     // Stays while the launcher is in front or the screen sleeps on it, to bring it back at wake-up
-    if (launcherFront || sleeping || waking || inArt || vetroWake.busy || (idleApps && idleApps.minutes > 0) || (homeGuard && homeGuard.on) || (follow && follow.on) || (remote && remote.server)) return;
+    if (launcherFront || sleeping || waking || inArt || vetroWake.busy || (idleApps && idleApps.minutes > 0) || (homeGuard && homeGuard.on) || (follow && follow.on) || (remote && remote.server) || (vault && vault.ids.length)) return;
     idle = setTimeout(function () {
         try { tizen.application.getCurrentApplication().exit(); } catch (e) {}
     }, IDLE_MS);
@@ -300,6 +300,10 @@ function onMessage(data, attached) {
     if (field(data, "vetro") === "wake") { wakeVetro(); stopLater(); return; }
     var ic = field(data, "idle");
     if (ic) { idleConfig(ic); return; }
+    var vc = field(data, "vault");
+    if (vc) { vaultConfig(vc); return; }
+    var va = field(data, "vaultAllow");
+    if (va) { vaultAllow(va); return; }
     if (field(data, "home") === "wanted") { homeGuard.wanted = true; homeGuard.wantedAt = Date.now(); homeGuard.seenAt = 0; return; }
     var front = field(data, "front"), focus = field(data, "focus");
     if (focus) {                        // the launcher has the keys ("1"), or something over it took them ("0")
@@ -311,7 +315,7 @@ function onMessage(data, attached) {
     if (front) {                        // the launcher came in front ("1") or left it ("0"), repeated every 15 s
         var was = frontNow();
         launcherFront = front === "1";
-        if (launcherFront) { frontAt = Date.now(); if (!was) homeGuard.wanted = false; }
+        if (launcherFront) { frontAt = Date.now(); if (!was) homeGuard.wanted = false; vault.pending = null; }
         if (!launcherFront) { hiddenAt = Date.now(); checkSleep(SLEEP_CHECKS); }
         stopLater();
         return;
@@ -325,7 +329,9 @@ function onMessage(data, attached) {
                                          homeGuard: { on: homeGuard.on, back: homeGuard.back, last: homeGuard.last, fromStart: homeGuard.fromStart,
                                                       how: homeGuard.how, fails: homeGuard.fails, wanted: homeGuard.wanted, snaps: homeGuard.snaps,
                                                       front: frontNow(), focused: focused, asleep: homeGuard.asleep || 0, pm: homeGuard.pm || "" },
-                                         follow: { on: follow.on, switches: follow.switches, last: follow.last, error: follow.error, state: follow.state, checks: follow.checks } }), attached);
+                                         follow: { on: follow.on, switches: follow.switches, last: follow.last, error: follow.error, state: follow.state, checks: follow.checks },
+                                         vault: { apps: vault.ids.length, ms: vault.ms, allowed: Object.keys(vault.allow).filter(function (k) { return vault.allow[k] > Date.now(); }).length,
+                                                  stops: vault.stops, last: vault.last, app: vault.pending ? vault.pending.id : "" } }), attached);
         return;
     }
     if (++requestsSeen <= 20) note("request " + id + ": " + method + " " + path.split("?")[0] + (attached ? " (port attached)" : ""));
@@ -547,16 +553,16 @@ var IDLE_RESPAWN_MS = 15 * 60000;
    start after the install): Return to the Launcher on, as the launcher's own default. */
 var CONFIG_FILES = [(process.env.HOME || "/home/owner") + "/apps_rw/APLauncher/data/bridge-config.json",
                     "/opt/usr/home/owner/apps_rw/APLauncher/data/bridge-config.json", "/tmp/apl-bridge-config.json"];
-function saveConfig(json) {
+function saveConfig(json, name) {
     for (var i = 0; i < CONFIG_FILES.length; i++) {
-        try { fs.writeFileSync(CONFIG_FILES[i], json); return; } catch (e) {}
+        try { fs.writeFileSync(name ? CONFIG_FILES[i].replace("bridge-config", name) : CONFIG_FILES[i], json); return; } catch (e) {}
     }
 }
-function loadConfig() {
+function loadConfig(name) {
     for (var i = 0; i < CONFIG_FILES.length; i++) {
-        try { return fs.readFileSync(CONFIG_FILES[i], "utf8"); } catch (e) {}
+        try { return fs.readFileSync(name ? CONFIG_FILES[i].replace("bridge-config", name) : CONFIG_FILES[i], "utf8"); } catch (e) {}
     }
-    return JSON.stringify({ minutes: 0, homeReturn: true });
+    return name ? "" : JSON.stringify({ minutes: 0, homeReturn: true });
 }
 function idleConfig(json, fromFile) {
     var c = {};
@@ -601,6 +607,7 @@ function homeGuardConfig(on) {
     homeGuard.on = !!on;
     if (homeGuard.on && !homeGuard.timer) homeGuard.timer = setInterval(homeGuardTick, HOME_GUARD_MS);
     if (!homeGuard.on && homeGuard.timer) { clearInterval(homeGuard.timer); homeGuard.timer = null; homeGuard.steps = null; }
+    vaultTimer();
 }
 /* In front for real: said less than 50 s ago (the launcher repeats it every 15 s while it is shown, and
    a hidden launcher is frozen, so it stops saying it). */
@@ -610,11 +617,12 @@ function hubFree(app) { homeGuard.seenAt = 0; if (app && !HOME_APPS.test(app)) h
 
 /* The launcher opened again, the way Vetro's Home rule does (app_launcher, as root), or through the
    app framework. "return" tells it this is not a press on Home (two of those open the App Switcher). */
-function launchSelf(asRoot) {
-    if (asRoot) { shell("app_launcher -s " + APP_ID + " apl_action return >/dev/null 2>&1", function () {}); return; }
+function launchSelf(asRoot, action) {
+    action = action || "return";
+    if (asRoot) { shell("app_launcher -s " + APP_ID + " apl_action " + action + " >/dev/null 2>&1", function () {}); return; }
     try {
         var ctl = new tizen.ApplicationControl("http://tizen.org/appcontrol/operation/default", null, null, null,
-                                               [new tizen.ApplicationControlData("apl_action", ["return"])]);
+                                               [new tizen.ApplicationControlData("apl_action", [action])]);
         tizen.application.launchAppControl(ctl, APP_ID, function () {}, function () {
             try { tizen.application.launch(APP_ID, function () {}, function () {}); } catch (e) {}
         });
@@ -728,6 +736,7 @@ function homeGuardTick() {
         }
         homeGuard.silent = 0;
         var app = vconfValue(out, "current_fullscreen_appid") || "", pm = vconfValue(out, "memory/pm/state");
+        vaultSeen(app, pm);
         if (homeGuard.steps) { stepCheck(app); return; }
         if (frontNow()) { homeGuard.seenAt = 0; return; }
         if (pm && pm !== "1") {                                          // going to sleep: left alone
@@ -747,6 +756,67 @@ function homeGuardTick() {
         snap("full", "front " + app);
         bringBack("full");
     });
+}
+
+/* ---------- apps behind the secret code (the launcher's vault.js) ----------
+   A locked or hidden app opened from outside the launcher (Samsung's Smart Hub, a phone app, a voice
+   command) is seen in front the same way as Samsung's home: the launcher comes back over it and asks for
+   the code ("vault:<app>"); the code typed, the launcher opens the app again. The launcher tells the bridge
+   each app it opened itself after the code (vaultAllow), for as long as "Ask for the Code Again" says; that
+   time counts from the moment the app left the front (a two-hour film is never stopped). The screen asleep:
+   every app asks again. The list is kept next to the bridge's settings, so it holds from the screen's start. */
+var VAULT_GAP_MS = 6000;
+var vault = { ids: [], ms: 5 * 60000, allow: {}, timer: null, busy: false, pending: null, stops: 0, last: "", app: "", appSince: 0, odd: false };
+function vaultConfig(json, fromFile) {
+    var c = {};
+    try { c = JSON.parse(json); } catch (e) { return; }
+    vault.ids = (c.ids || []).filter(function (id) { return typeof id === "string" && /^[A-Za-z0-9_.-]+$/.test(id); });
+    var ms = parseInt(c.ms, 10);
+    vault.ms = isNaN(ms) ? 5 * 60000 : Math.max(10000, Math.min(12 * 3600000, ms));
+    if (!fromFile) saveConfig(JSON.stringify({ ids: vault.ids, ms: vault.ms }), "bridge-vault");
+    vaultTimer();
+    stopLater();
+}
+function vaultAllow(json) {
+    var c = {};
+    try { c = JSON.parse(json); } catch (e) { return; }
+    if (typeof c.id !== "string" || !/^[A-Za-z0-9_.-]+$/.test(c.id)) return;
+    var ms = parseInt(c.ms, 10);
+    vault.allow[c.id] = Date.now() + (isNaN(ms) ? vault.ms : Math.max(10000, Math.min(12 * 3600000, ms)));
+    if (vault.pending && vault.pending.id === c.id) vault.pending = null;
+}
+/* Its own look at the front only while Return to the Launcher is off (otherwise homeGuardTick reads it) */
+function vaultTimer() {
+    var want = vault.ids.length > 0 && !homeGuard.on;
+    if (want && !vault.timer) vault.timer = setInterval(vaultTick, HOME_GUARD_MS);
+    if (!want && vault.timer) { clearInterval(vault.timer); vault.timer = null; }
+}
+function vaultTick() {
+    if (!vault.ids.length || sleeping || waking || vault.busy || frontNow()) return;
+    // The same app in front for a minute: one look every 2.4 s
+    if (vault.app && Date.now() - vault.appSince > 60000 && (vault.odd = !vault.odd)) return;
+    vault.busy = true;
+    shell("vconftool get memory/appfw/current_fullscreen_appid 2>/dev/null; vconftool get memory/pm/state 2>/dev/null", function (out) {
+        vault.busy = false;
+        if (out) vaultSeen(vconfValue(out, "current_fullscreen_appid") || "", vconfValue(out, "memory/pm/state"));
+    });
+}
+function vaultSeen(app, pm) {
+    if (!vault.ids.length) return;
+    if (pm && pm !== "1") { vault.allow = {}; vault.pending = null; return; }        // going to sleep: the code again after
+    if (app !== vault.app) { vault.app = app; vault.appSince = Date.now(); }
+    // Not a protected app in front (the launcher came back): the next time starts from the first way again
+    if (!app || app === APP_ID || frontNow() || vault.ids.indexOf(app) === -1) { vault.pending = null; return; }
+    var now = Date.now();
+    if ((vault.allow[app] || 0) > now) { vault.allow[app] = Math.max(vault.allow[app], now + vault.ms); return; }   // opened with the code: kept
+    var p = vault.pending;
+    if (p && p.id === app && now - p.at < VAULT_GAP_MS) return;
+    vault.pending = { id: app, at: now, tries: p && p.id === app ? p.tries + 1 : 1 };
+    vault.stops++;
+    vault.last = clock() + " " + app;
+    note("protected app in front, the code asked: " + app);
+    // The launcher over it, asking for the code: through the app framework first, then as root
+    launchSelf(vault.pending.tries > 1, "vault:" + app);
 }
 
 /* ---------- the remote in your hand ----------
@@ -933,6 +1003,8 @@ function start() {
     if (!configLoaded) {                      // the launcher's last settings: Return to the Launcher from power-on
         configLoaded = true;
         idleConfig(loadConfig(), true);
+        var savedVault = loadConfig("bridge-vault");
+        if (savedVault) vaultConfig(savedVault, true);
         homeGuard.fromStart = homeGuard.on;
     }
     stopLater();
@@ -1134,4 +1206,4 @@ module.exports.onStart = function () { start(); openLauncher(LAUNCH_TRIES); if (
 // Some environments run the script without calling onStart
 try { start(); openLauncher(LAUNCH_TRIES); if (isBooting()) wakeVetro(); } catch (e) {}
 module.exports.onRequest = function () { start(); };
-module.exports.onExit = function () { clearTimeout(idle); clearInterval(ticking); ticking = null; port = null; stopRemote(); if (idleApps.timer) clearInterval(idleApps.timer); if (homeGuard.timer) clearInterval(homeGuard.timer); if (follow.timer) clearInterval(follow.timer); };
+module.exports.onExit = function () { clearTimeout(idle); clearInterval(ticking); ticking = null; port = null; stopRemote(); if (idleApps.timer) clearInterval(idleApps.timer); if (homeGuard.timer) clearInterval(homeGuard.timer); if (follow.timer) clearInterval(follow.timer); if (vault.timer) clearInterval(vault.timer); };
